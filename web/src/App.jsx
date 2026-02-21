@@ -1,16 +1,18 @@
 import { useState } from 'react';
-import { LayoutList, BarChart2, Home } from 'lucide-react';
+import { LayoutList, BarChart2, Home, Settings } from 'lucide-react';
 import clsx from 'clsx';
 import Timeline from './components/Timeline.jsx';
 import ActivityChart from './components/ActivityChart.jsx';
 import TrendChart from './components/TrendChart.jsx';
 import TopDevices from './components/TopDevices.jsx';
 import AccessoryList from './components/AccessoryList.jsx';
+import Setup from './components/Setup.jsx';
 
 const TABS = [
   { id: 'timeline',    label: 'Timeline',    icon: LayoutList },
   { id: 'dashboard',  label: 'Dashboard',   icon: BarChart2 },
   { id: 'accessories',label: 'Accessories', icon: Home },
+  { id: 'setup',      label: 'Setup',       icon: Settings },
 ];
 
 export default function App() {
@@ -60,6 +62,7 @@ export default function App() {
         )}
 
         {tab === 'accessories' && <AccessoryList />}
+        {tab === 'setup' && <Setup />}
       </main>
     </div>
   );
