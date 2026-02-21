@@ -15,6 +15,9 @@ import { startSubscribers } from './subscriber.js';
 const PAIRINGS_FILE = process.env.PAIRINGS_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/pairings.json' : './data/pairings.json');
 
+const ROOMS_FILE = process.env.ROOMS_FILE
+  || (process.env.NODE_ENV === 'production' ? '/app/data/rooms.json' : './data/rooms.json');
+
 const PORT = Number(process.env.API_PORT ?? 3001);
 const DISCOVER_IFACE = process.env.DISCOVER_IFACE || null;
 const RESCAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
@@ -39,6 +42,25 @@ function savePairings(p) {
 }
 
 // ---------------------------------------------------------------------------
+// Room store helpers  (accessoryId → roomName)
+// ---------------------------------------------------------------------------
+
+function loadRooms() {
+  if (existsSync(ROOMS_FILE)) {
+    try {
+      return JSON.parse(readFileSync(ROOMS_FILE, 'utf8'));
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function saveRooms(r) {
+  writeFileSync(ROOMS_FILE, JSON.stringify(r, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // 1. Start HomeKit subscribers
 // ---------------------------------------------------------------------------
 
@@ -47,7 +69,7 @@ const pairedCount = Object.keys(pairings).length;
 
 if (pairedCount > 0) {
   console.log(`[init] Loaded ${pairedCount} pairing(s) from ${PAIRINGS_FILE}`);
-  startSubscribers(pairings);
+  startSubscribers(pairings, loadRooms());
 } else {
   console.warn(`[init] No pairings found — use the Setup tab in the web UI to discover and pair accessories.`);
 }
@@ -165,7 +187,7 @@ app.post('/api/setup/pair', async (req, res) => {
     if (item) { item.paired = true; item.alreadyPaired = true; }
 
     // Start subscriber for the newly paired device
-    startSubscribers({ [deviceId]: updatedPairings[deviceId] });
+    startSubscribers({ [deviceId]: updatedPairings[deviceId] }, loadRooms());
 
     console.log(`[setup] Paired successfully: ${cached.name}`);
     res.json({ success: true, name: cached.name });
@@ -224,8 +246,69 @@ app.delete('/api/setup/pairing/:deviceId', (req, res) => {
   res.json({ success: true, name });
 });
 
+// PATCH /api/setup/room  { accessoryId, roomName }
+// Sets or clears the room assignment for an accessory in rooms.json.
+app.patch('/api/setup/room', (req, res) => {
+  const { accessoryId, roomName } = req.body ?? {};
+  if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
+
+  const rooms = loadRooms();
+  if (roomName && roomName.trim()) {
+    rooms[accessoryId] = roomName.trim();
+  } else {
+    delete rooms[accessoryId];
+  }
+  saveRooms(rooms);
+  console.log(`[setup] Room for ${accessoryId} set to ${roomName?.trim() || '(cleared)'}`);
+  res.json({ success: true });
+});
+
+// GET /api/setup/rooms — return all room assignments
+app.get('/api/setup/rooms', (_req, res) => {
+  res.json(loadRooms());
+});
+
 // ---------------------------------------------------------------------------
-// Event / stats endpoints (unchanged)
+// Data management endpoints (delete history)
+// ---------------------------------------------------------------------------
+
+// DELETE /api/data/accessory  { accessoryId }
+// Removes all event_logs rows for one accessory and its room assignment.
+// accessoryId can contain colons (e.g. "AA:BB:CC:DD:EE:FF:2") so we use
+// the request body rather than a URL param to avoid encoding issues.
+app.delete('/api/data/accessory', async (req, res) => {
+  const { accessoryId } = req.body ?? {};
+  if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
+  try {
+    const result = await pool.query(
+      'DELETE FROM event_logs WHERE accessory_id = $1', [accessoryId]
+    );
+    const rooms = loadRooms();
+    delete rooms[accessoryId];
+    saveRooms(rooms);
+    console.log(`[data] Deleted ${result.rowCount} event(s) for accessory ${accessoryId}`);
+    res.json({ success: true, deleted: result.rowCount });
+  } catch (err) {
+    console.error('[data] /api/data/accessory error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/data/all — truncate event_logs and clear rooms.json
+app.delete('/api/data/all', async (_req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM event_logs');
+    saveRooms({});
+    console.log(`[data] Wiped all data — ${result.rowCount} event(s) deleted`);
+    res.json({ success: true, deleted: result.rowCount });
+  } catch (err) {
+    console.error('[data] /api/data/all error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Event / stats endpoints
 // ---------------------------------------------------------------------------
 
 app.get('/api/events', async (req, res) => {
@@ -276,8 +359,16 @@ app.get('/api/accessories', async (_req, res) => {
       ORDER BY accessory_id, last_seen DESC
     `);
 
+    const rooms = loadRooms();
+
+    // Overlay saved room names onto DB rows (room in DB may be stale or null)
+    const dbRows = result.rows.map((r) => ({
+      ...r,
+      room_name: rooms[r.accessory_id] ?? r.room_name,
+    }));
+
     // Build a set of known accessory_ids from the DB
-    const seenIds = new Set(result.rows.map((r) => r.accessory_id));
+    const seenIds = new Set(dbRows.map((r) => r.accessory_id));
 
     // Merge in paired devices that haven't fired an event yet
     const currentPairings = loadPairings();
@@ -286,12 +377,13 @@ app.get('/api/accessories', async (_req, res) => {
       .map(([id, p]) => ({
         accessory_id:   id,
         accessory_name: p.name,
-        room_name:      null,
+        room_name:      rooms[id] ?? null,
         service_type:   null,
+        category:       p.category ?? null,
         last_seen:      null,
       }));
 
-    res.json([...result.rows, ...neverSeen]);
+    res.json([...dbRows, ...neverSeen]);
   } catch (err) {
     console.error('[api] /api/accessories error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
