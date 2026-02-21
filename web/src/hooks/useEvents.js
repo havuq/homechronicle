@@ -23,6 +23,10 @@ export function useEvents(filters = {}, page = 1) {
   return useQuery({
     queryKey: ['events', filters, page],
     queryFn: () => fetchJson(`${BASE}/events?${qs}`),
+    // Poll every 10s on page 1 so new events surface automatically.
+    // Higher pages are historical — no need to poll.
+    refetchInterval: page === 1 ? 10_000 : false,
+    refetchIntervalInBackground: false,
   });
 }
 
