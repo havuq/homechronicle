@@ -1,0 +1,19 @@
+{
+  "name": "homekit-listener",
+  "version": "1.0.0",
+  "description": "HomeKit event listener and REST API",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "discover": "node src/discover.js",
+    "pair": "node src/pairing.js",
+    "seed": "node src/seed.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "hap-controller": "^0.10.2",
+    "pg": "^8.12.0",
+    "cors": "^2.8.5"
+  }
+}
