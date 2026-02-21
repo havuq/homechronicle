@@ -67,7 +67,7 @@ function connectAccessory(deviceId, pairing, retryDelayMs) {
 
   const client = new HttpClient(deviceId, address, port, longTermData);
 
-  client.getAccessories().then((accessories) => {
+  client.getAccessories().then(async (accessories) => {
     // Build a map of "aid.iid" → { serviceType, characteristicName, childName }
     // Using the composite key avoids iid collisions when a bridge has multiple
     // child accessories that each start their iid numbering from 1.
@@ -81,64 +81,66 @@ function connectAccessory(deviceId, pairing, retryDelayMs) {
       return;
     }
 
-    // Subscribe to value-change events
-    client.subscribeCharacteristics(watchedKeys).then((sub) => {
-      console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
-
-      // Handle a HAP event payload — registered on both 'event' and 'change'
-      // because different hap-controller versions use different event names.
-      const handleEvent = async (event) => {
-        const changes = event?.characteristics ?? (Array.isArray(event) ? event : [event]);
-        for (const change of changes) {
-          // Diagnostic: log every raw event so we can see what's arriving
-          const key  = `${change.aid}.${change.iid}`;
-          const meta = iidMeta.get(key);
-          if (!meta) {
-            console.log(`[event-skip] ${accessoryName} aid=${change.aid} iid=${change.iid} value=${change.value} (not in watched list)`);
-            continue;
-          }
-
-          // For bridges, use the child accessory's name; fall back to bridge name
-          const effectiveName = meta.childName || accessoryName;
-          // For bridges, suffix the deviceId with the aid so each child is distinct
-          const effectiveId = change.aid > 1 ? `${deviceId}:${change.aid}` : deviceId;
-
-          try {
-            await insertEvent({
-              accessoryId:    effectiveId,
-              accessoryName:  effectiveName,
-              roomName:       null,  // HAP protocol doesn't expose room names; populated later if needed
-              serviceType:    meta.serviceType,
-              characteristic: meta.characteristicName,
-              oldValue:       null,  // hap-controller events only provide new value
-              newValue:       String(change.value),
-              rawIid:         change.iid,
-            });
-            console.log(`[event] ${effectiveName} → ${meta.characteristicName}: ${change.value}`);
-          } catch (err) {
-            console.error(`[subscriber] DB insert failed:`, err.message);
-          }
+    // HAP events are emitted on the client instance itself (HttpClient extends
+    // EventEmitter). subscribeCharacteristics() returns Promise<void|null> —
+    // NOT an EventEmitter — so .on() must be called on `client`, not on the
+    // return value.
+    const handleEvent = async (event) => {
+      const changes = event?.characteristics ?? (Array.isArray(event) ? event : [event]);
+      for (const change of changes) {
+        const key  = `${change.aid}.${change.iid}`;
+        const meta = iidMeta.get(key);
+        if (!meta) {
+          console.log(`[event-skip] ${accessoryName} aid=${change.aid} iid=${change.iid} value=${change.value} (not in watched list)`);
+          continue;
         }
-      };
 
-      // Register on both event names — hap-controller v0.10.x uses 'event',
-      // some builds use 'change'. Duplicate delivery is harmless because the
-      // meta lookup only matches known characteristics.
-      sub.on('event', handleEvent);
-      sub.on('change', handleEvent);
+        // For bridges, use the child accessory's name; fall back to bridge name
+        const effectiveName = meta.childName || accessoryName;
+        // For bridges, suffix the deviceId with the aid so each child is distinct
+        const effectiveId = change.aid > 1 ? `${deviceId}:${change.aid}` : deviceId;
 
-      sub.on('close', () => {
-        console.warn(`[subscriber] ${accessoryName}: connection closed, reconnecting in ${retryDelayMs / 1000}s`);
-        setTimeout(() => {
-          const nextDelay = Math.min(retryDelayMs * 2, RECONNECT_MAX_MS);
-          connectAccessory(deviceId, pairing, nextDelay);
-        }, retryDelayMs);
-      });
+        try {
+          await insertEvent({
+            accessoryId:    effectiveId,
+            accessoryName:  effectiveName,
+            roomName:       null,  // HAP protocol doesn't expose room names
+            serviceType:    meta.serviceType,
+            characteristic: meta.characteristicName,
+            oldValue:       null,  // hap-controller events only provide new value
+            newValue:       String(change.value),
+            rawIid:         change.iid,
+          });
+          console.log(`[event] ${effectiveName} → ${meta.characteristicName}: ${change.value}`);
+        } catch (err) {
+          console.error(`[subscriber] DB insert failed:`, err.message);
+        }
+      }
+    };
 
-    }).catch((err) => {
+    client.on('event', handleEvent);
+
+    // 'event-disconnect' fires when the HAP subscription connection drops.
+    // The argument is the previously-subscribed list — pass it straight back
+    // to resubscribe without needing to rebuild the key list.
+    client.on('event-disconnect', async (formerSubscribes) => {
+      console.warn(`[subscriber] ${accessoryName}: disconnected, resubscribing…`);
+      try {
+        await client.subscribeCharacteristics(formerSubscribes);
+        console.log(`[subscriber] ${accessoryName}: resubscribed to ${formerSubscribes.length} characteristic(s)`);
+      } catch (err) {
+        console.error(`[subscriber] ${accessoryName}: resubscribe failed:`, err.message);
+        scheduleReconnect(deviceId, pairing, retryDelayMs);
+      }
+    });
+
+    try {
+      await client.subscribeCharacteristics(watchedKeys);
+      console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
+    } catch (err) {
       console.error(`[subscriber] ${accessoryName}: subscribe failed:`, err.message);
       scheduleReconnect(deviceId, pairing, retryDelayMs);
-    });
+    }
 
   }).catch((err) => {
     console.error(`[subscriber] ${accessoryName}: getAccessories failed:`, err.message);
