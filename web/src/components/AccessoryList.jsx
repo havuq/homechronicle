@@ -42,7 +42,7 @@ export default function AccessoryList() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-900 truncate">{accessory.accessory_name}</div>
                     <div className="text-xs text-gray-400 mt-0.5">
-                      {accessory.service_type ?? 'Unknown type'}
+                      {accessory.service_type ?? 'Paired — waiting for first event'}
                       {accessory.last_seen && (
                         <span className="ml-2">
                           · last seen {formatDistanceToNow(new Date(accessory.last_seen), { addSuffix: true })}
