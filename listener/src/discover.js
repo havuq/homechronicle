@@ -12,9 +12,16 @@ import { IPDiscovery } from 'hap-controller';
 
 const SCAN_DURATION_MS = 10_000;
 
-console.log(`Scanning for HomeKit accessories for ${SCAN_DURATION_MS / 1000}s...\n`);
+// Allow overriding the network interface via env var or CLI arg.
+// On macOS with a VPN active, dnssd may bind to the wrong interface.
+// Usage: DISCOVER_IFACE=en0 node src/discover.js
+const iface = process.env.DISCOVER_IFACE || null;
 
-const discovery = new IPDiscovery();
+console.log(`Scanning for HomeKit accessories for ${SCAN_DURATION_MS / 1000}s...`);
+if (iface) console.log(`Using interface: ${iface}`);
+console.log('');
+
+const discovery = new IPDiscovery(iface);
 const found = new Map();
 
 discovery.on('serviceUp', (service) => {

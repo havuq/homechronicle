@@ -13,8 +13,12 @@
 import { IPDiscovery, HttpClient } from 'hap-controller';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
-const PAIRINGS_FILE = '/app/data/pairings.json';
+// When running locally (outside Docker), save pairings here instead of /app/data
+const PAIRINGS_FILE = process.env.PAIRINGS_FILE
+  || (process.env.NODE_ENV === 'production' ? '/app/data/pairings.json' : './data/pairings.json');
+
 const SCAN_TIMEOUT_MS = 15_000;
+const iface = process.env.DISCOVER_IFACE || null;
 
 const [, , deviceId, pin] = process.argv;
 
@@ -44,7 +48,7 @@ function savePairings(pairings) {
 console.log(`Looking for accessory: ${deviceId}`);
 console.log(`Scanning for up to ${SCAN_TIMEOUT_MS / 1000}s...\n`);
 
-const discovery = new IPDiscovery();
+const discovery = new IPDiscovery(iface);
 let paired = false;
 
 discovery.on('serviceUp', async (service) => {
