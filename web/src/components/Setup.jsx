@@ -32,6 +32,66 @@ function loadSavedPins() {
   catch { return {}; }
 }
 
+// ---------------------------------------------------------------------------
+// BridgeChildrenRow — lazily loads and displays child accessories of a bridge.
+// Lives outside Setup so it can call useQuery without conditional hook rules.
+// ---------------------------------------------------------------------------
+function BridgeChildrenRow({ bridgeId, isExpanded, roomInputs, onRoomChange, onRoomBlur }) {
+  const { data: children = [], isLoading, isError } = useQuery({
+    queryKey: ['bridge-children', bridgeId],
+    queryFn: () => fetchJson(`/api/setup/bridge-children/${encodeURIComponent(bridgeId)}`),
+    enabled: isExpanded,
+    staleTime: 5 * 60 * 1000, // 5 min — bridge topology rarely changes
+  });
+
+  if (!isExpanded) return null;
+
+  if (isLoading) {
+    return (
+      <div className="ml-9 mt-2 pb-2 flex items-center gap-1.5 text-xs text-gray-400">
+        <Loader size={11} className="animate-spin" /> Querying bridge…
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="ml-9 mt-2 pb-2 text-xs text-red-400">
+        Could not load child devices — is the bridge reachable?
+      </div>
+    );
+  }
+  if (children.length === 0) {
+    return (
+      <div className="ml-9 mt-2 pb-2 text-xs text-gray-400 italic">
+        No child devices found on this bridge.
+      </div>
+    );
+  }
+
+  return (
+    <div className="ml-9 mt-2 space-y-1.5 pb-2 border-l-2 border-gray-100 pl-3">
+      {children.map((child) => (
+        <div key={child.childId} className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+          <span className="text-xs text-gray-700 flex-1 truncate min-w-0">{child.name}</span>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <MapPin size={9} className="text-gray-300 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Room…"
+              value={roomInputs[child.childId] ?? ''}
+              onChange={(e) => onRoomChange(child.childId, e.target.value)}
+              onBlur={() => onRoomBlur(child.childId)}
+              onKeyDown={(e) => e.key === 'Enter' && onRoomBlur(child.childId)}
+              className="text-xs border border-gray-200 rounded px-2 py-0.5 w-28 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Setup() {
   const queryClient = useQueryClient();
 
@@ -47,6 +107,9 @@ export default function Setup() {
 
   // Room inputs (deviceId → room string)
   const [roomInputs, setRoomInputs] = useState({});
+
+  // Which bridges have their child-device list expanded
+  const [expandedBridges, setExpandedBridges] = useState(new Set());
 
   // Help modal
   const [helpDevice, setHelpDevice] = useState(null);
@@ -376,6 +439,23 @@ export default function Setup() {
                           className="text-xs border border-gray-200 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
                         />
                       </div>
+                      {/* Bridge child-device toggle */}
+                      {acc.category === 2 && (
+                        <button
+                          onClick={() => setExpandedBridges((s) => {
+                            const next = new Set(s);
+                            next.has(acc.id) ? next.delete(acc.id) : next.add(acc.id);
+                            return next;
+                          })}
+                          className="mt-1.5 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                        >
+                          <ChevronDown
+                            size={11}
+                            className={clsx('transition-transform duration-200', expandedBridges.has(acc.id) && 'rotate-180')}
+                          />
+                          {expandedBridges.has(acc.id) ? 'Hide' : 'Show'} child devices
+                        </button>
+                      )}
                     </div>
 
                     {isConfirming ? (
@@ -409,6 +489,16 @@ export default function Setup() {
                       </div>
                     )}
                   </div>
+                  {/* Bridge children — rendered below the flex row, inside the card */}
+                  {acc.category === 2 && (
+                    <BridgeChildrenRow
+                      bridgeId={acc.id}
+                      isExpanded={expandedBridges.has(acc.id)}
+                      roomInputs={roomInputs}
+                      onRoomChange={(id, val) => setRoomInputs((r) => ({ ...r, [id]: val }))}
+                      onRoomBlur={handleRoomBlur}
+                    />
+                  )}
                 </div>
               );
             })}
