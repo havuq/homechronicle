@@ -331,6 +331,11 @@ export default function Setup() {
                       <div className="text-xs text-gray-400">
                         {CATEGORY_LABELS[acc.category] ?? 'Unknown'} · {acc.address}
                       </div>
+                      {acc.category === 2 && (
+                        <div className="text-xs text-blue-600 mt-0.5 font-medium">
+                          Bridge — one PIN logs all connected accessories
+                        </div>
+                      )}
                     </div>
 
                     {/* Per-device PIN field */}
@@ -339,7 +344,7 @@ export default function Setup() {
                         <div className="relative">
                           <input
                             type="text"
-                            placeholder={hasSavedPin ? '(saved)' : 'Device PIN'}
+                            placeholder={hasSavedPin ? '(saved)' : acc.category === 2 ? 'Bridge PIN' : 'Device PIN'}
                             value={pinOverrides[acc.id] ?? ''}
                             onChange={(e) => {
                               const val = e.target.value;

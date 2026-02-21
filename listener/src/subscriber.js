@@ -55,30 +55,39 @@ function connectAccessory(deviceId, pairing, retryDelayMs) {
   const client = new HttpClient(deviceId, address, port, longTermData);
 
   client.getAccessories().then((accessories) => {
-    // Build a map of iid → { serviceType, characteristicName } for quick lookup
+    // Build a map of "aid.iid" → { serviceType, characteristicName, childName }
+    // Using the composite key avoids iid collisions when a bridge has multiple
+    // child accessories that each start their iid numbering from 1.
     const iidMeta = buildIidMetaMap(accessories);
 
-    // Collect iids we care about
-    const watchedIids = [...iidMeta.keys()].filter((iid) => iidMeta.get(iid) !== null);
+    // subscribeCharacteristics() expects an array of "aid.iid" strings
+    const watchedKeys = [...iidMeta.keys()];
 
-    if (watchedIids.length === 0) {
+    if (watchedKeys.length === 0) {
       console.log(`[subscriber] ${accessoryName}: no watched characteristics found`);
       return;
     }
 
     // Subscribe to value-change events
-    client.subscribeCharacteristics(watchedIids).then((sub) => {
-      console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedIids.length} characteristic(s)`);
+    client.subscribeCharacteristics(watchedKeys).then((sub) => {
+      console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
 
       sub.on('event', async (event) => {
         for (const change of event.characteristics ?? []) {
-          const meta = iidMeta.get(change.iid);
+          // Events include both aid and iid — use composite key for lookup
+          const key  = `${change.aid}.${change.iid}`;
+          const meta = iidMeta.get(key);
           if (!meta) continue;
+
+          // For bridges, use the child accessory's name; fall back to bridge name
+          const effectiveName = meta.childName || accessoryName;
+          // For bridges, suffix the deviceId with the aid so each child is distinct
+          const effectiveId = change.aid > 1 ? `${deviceId}:${change.aid}` : deviceId;
 
           try {
             await insertEvent({
-              accessoryId:    deviceId,
-              accessoryName,
+              accessoryId:    effectiveId,
+              accessoryName:  effectiveName,
               roomName:       null,  // HAP protocol doesn't expose room names; populated later if needed
               serviceType:    meta.serviceType,
               characteristic: meta.characteristicName,
@@ -86,7 +95,7 @@ function connectAccessory(deviceId, pairing, retryDelayMs) {
               newValue:       String(change.value),
               rawIid:         change.iid,
             });
-            console.log(`[event] ${accessoryName} → ${meta.characteristicName}: ${change.value}`);
+            console.log(`[event] ${effectiveName} → ${meta.characteristicName}: ${change.value}`);
           } catch (err) {
             console.error(`[subscriber] DB insert failed:`, err.message);
           }
@@ -120,14 +129,23 @@ function scheduleReconnect(deviceId, pairing, retryDelayMs) {
 
 /**
  * Walk the HAP accessories object and return a Map of:
- *   iid (number) → { serviceType, characteristicName } | null
+ *   "aid.iid" → { serviceType, characteristicName, childName }
  *
- * null means the iid exists but is not in WATCHED_CHARACTERISTICS.
+ * Using the composite "aid.iid" key avoids collisions when a bridge exposes
+ * multiple child accessories that each start their iid namespace from 1.
+ * childName is the child accessory's Name characteristic value (null for
+ * standalone non-bridge accessories where the pairing name is used instead).
  */
 function buildIidMetaMap(accessories) {
   const map = new Map();
 
   for (const acc of accessories?.accessories ?? []) {
+    // Try to extract the child accessory's name from its AccessoryInformation service
+    // UUID 3E = AccessoryInformation, UUID 23 = Name characteristic
+    const infoService = acc.services?.find((s) => shortUuid(s.type) === '3E');
+    const nameProp    = infoService?.characteristics?.find((c) => shortUuid(c.type) === '23');
+    const childName   = nameProp?.value ?? null;
+
     for (const service of acc.services ?? []) {
       const serviceType = shortUuid(service.type);
 
@@ -136,7 +154,12 @@ function buildIidMetaMap(accessories) {
         const charName = WATCHED_CHARACTERISTICS.get(charType) ?? null;
 
         if (charName) {
-          map.set(char.iid, { serviceType, characteristicName: charName });
+          // "aid.iid" is globally unique across all accessories in a bridge
+          map.set(`${acc.aid}.${char.iid}`, {
+            serviceType,
+            characteristicName: charName,
+            childName,  // null for single non-bridge accessories
+          });
         }
       }
     }
