@@ -1,0 +1,24 @@
+# Environment
+.env
+
+# HomeKit pairing keys — never commit these
+listener/data/pairings.json
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+web/dist/
+web/.vite/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes / local data
+postgres-data/
