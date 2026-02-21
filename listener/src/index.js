@@ -211,6 +211,43 @@ app.post('/api/setup/pair', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// UUID helper (mirrors shortUuid in subscriber.js)
+// ---------------------------------------------------------------------------
+
+function shortUuid(uuid = '') {
+  const match = uuid.match(/^0*([0-9A-Fa-f]+)-/);
+  return match ? match[1].toUpperCase() : uuid.toUpperCase();
+}
+
+// GET /api/setup/bridge-children/:deviceId
+// Returns all child accessories exposed by a paired bridge.
+// Each entry: { childId: "bridgeId:aid", name, aid }
+app.get('/api/setup/bridge-children/:deviceId', async (req, res) => {
+  const { deviceId } = req.params;
+  const currentPairings = loadPairings();
+  const pairing = currentPairings[deviceId];
+  if (!pairing) return res.status(404).json({ error: 'Pairing not found' });
+
+  try {
+    const client = new HttpClient(deviceId, pairing.address, pairing.port, pairing.longTermData);
+    const result = await client.getAccessories();
+    const children = [];
+    for (const acc of result?.accessories ?? []) {
+      if (acc.aid === 1) continue; // skip the bridge root itself
+      const infoService = acc.services?.find((s) => shortUuid(s.type) === '3E');
+      const nameProp    = infoService?.characteristics?.find((c) => shortUuid(c.type) === '23');
+      const name        = nameProp?.value ?? `Device ${acc.aid}`;
+      children.push({ childId: `${deviceId}:${acc.aid}`, name, aid: acc.aid });
+    }
+    console.log(`[setup] bridge-children: ${pairing.name} → ${children.length} child(ren)`);
+    res.json(children);
+  } catch (err) {
+    console.error(`[setup] bridge-children error for ${deviceId}:`, err.message);
+    res.status(500).json({ error: 'Could not query bridge: ' + err.message });
+  }
+});
+
 // GET /api/setup/pairings — list currently paired devices
 app.get('/api/setup/pairings', (_req, res) => {
   const currentPairings = loadPairings();
