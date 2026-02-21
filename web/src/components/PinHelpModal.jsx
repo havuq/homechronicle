@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Tag, Package, Smartphone, QrCode, LifeBuoy, AlertTriangle } from 'lucide-react';
+import { X, Tag, Package, Smartphone, QrCode, LifeBuoy, AlertTriangle, Server } from 'lucide-react';
 import clsx from 'clsx';
 
 // Category-specific tips for where the PIN is most likely located
@@ -19,6 +19,40 @@ const CATEGORY_TIPS = {
   19: { label: 'Air Purifier', tip: 'Check the bottom of the unit or the back panel near the power socket.' },
   26: { label: 'Speaker', tip: 'Look on the bottom of the speaker or inside the packaging materials.' },
   32: { label: 'TV / Apple TV', tip: 'Apple TV shows the pairing code on-screen during setup. For smart TVs, check the manufacturer\'s app.' },
+};
+
+// Step shown first for Bridge (category 2) devices
+const HOMEBRIDGE_STEP = {
+  id: 'homebridge',
+  icon: Server,
+  title: 'Find your Homebridge PIN',
+  color: 'green',
+  content: () => (
+    <div className="space-y-3">
+      <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 text-sm text-green-800">
+        <span className="font-medium">This is a Bridge.</span> Pairing once gives HomeChronicle
+        access to <em>all</em> the accessories connected through it — no individual device PINs needed.
+      </div>
+      <p className="text-sm text-gray-700 font-medium">How to find the Homebridge PIN:</p>
+      <ul className="text-sm text-gray-600 space-y-1.5 list-none">
+        {[
+          'Open the Homebridge web UI (usually http://homebridge.local or http://<NAS-IP>:8581)',
+          'Look for the QR code icon in the top navigation bar — the 8-digit PIN is printed below the QR code',
+          'Or go to Settings → HomeKit → Setup Code',
+          'The format is always XXX-XX-XXX (e.g. 031-45-154)',
+        ].map((step) => (
+          <li key={step} className="flex items-start gap-2">
+            <span className="mt-0.5 text-green-500 text-xs">▸</span>
+            {step}
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-gray-400">
+        Other bridge software (like Home Assistant or HOOBS) shows the PIN similarly — look for
+        the HomeKit integration settings or a QR code in the dashboard.
+      </p>
+    </div>
+  ),
 };
 
 const STEPS = [
@@ -220,7 +254,9 @@ const COLOR_MAP = {
 };
 
 export default function PinHelpModal({ deviceName, category, onClose }) {
-  const [open, setOpen] = useState(new Set(['device'])); // first step open by default
+  const isbridge = category === 2;
+  // For bridges, open the Homebridge step by default; otherwise open the physical device step
+  const [open, setOpen] = useState(new Set([isbridge ? 'homebridge' : 'device']));
 
   function toggle(id) {
     setOpen((prev) => {
@@ -255,7 +291,7 @@ export default function PinHelpModal({ deviceName, category, onClose }) {
 
         {/* Scrollable steps */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-2">
-          {STEPS.map(({ id, icon: Icon, title, color, content }) => {
+          {(isbridge ? [HOMEBRIDGE_STEP, ...STEPS] : STEPS).map(({ id, icon: Icon, title, color, content }) => {
             const isOpen = open.has(id);
             return (
               <div key={id} className="border border-gray-200 rounded-xl overflow-hidden">
