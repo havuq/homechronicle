@@ -185,6 +185,18 @@ export default function Setup() {
         </button>
       </div>
 
+      {/* PIN info — shown at top so new users see it immediately */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600 space-y-1">
+        <p>
+          <strong>About setup PINs:</strong> Each accessory needs its 8-digit code (format:{' '}
+          <code className="bg-gray-100 px-1 rounded text-xs">111-22-333</code>) to pair for the first time.
+          PINs are saved automatically after a successful pairing.
+        </p>
+        <p className="text-xs text-gray-400">
+          Can't find a PIN? Click the "Can't find PIN?" link next to any device for step-by-step help.
+        </p>
+      </div>
+
       {data?.cachedAt && (
         <p className="text-xs text-gray-400">
           Last scan: {formatDistanceToNow(new Date(data.cachedAt), { addSuffix: true })} · auto-rescans every hour
@@ -399,17 +411,6 @@ export default function Setup() {
         </div>
       )}
 
-      {/* PIN info footer */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600 space-y-1">
-        <p>
-          <strong>About setup PINs:</strong> Each accessory needs its 8-digit code (format:{' '}
-          <code className="bg-gray-100 px-1 rounded text-xs">111-22-333</code>) to pair for the first time.
-          PINs are saved automatically after a successful pairing.
-        </p>
-        <p className="text-xs text-gray-400">
-          Can't find a PIN? Click the "Can't find PIN?" link next to any device for step-by-step help.
-        </p>
-      </div>
     </div>
   );
 }
