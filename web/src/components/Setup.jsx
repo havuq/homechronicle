@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, CheckCircle, Circle, Loader, Wifi, Lock, ChevronsRight } from 'lucide-react';
+import { RefreshCw, CheckCircle, Circle, Loader, Wifi, Lock, ChevronsRight, HelpCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
+import PinHelpModal from './PinHelpModal.jsx';
 
 const CATEGORY_LABELS = {
   1: 'Other', 2: 'Bridge', 3: 'Fan', 4: 'Garage', 5: 'Lightbulb',
@@ -19,6 +20,14 @@ async function fetchJson(url, options) {
   return data;
 }
 
+// ---------------------------------------------------------------------------
+// PIN vault — persists entered PINs in localStorage so they survive refresh
+// ---------------------------------------------------------------------------
+function loadSavedPins() {
+  try { return JSON.parse(localStorage.getItem('hc_pins') ?? '{}'); }
+  catch { return {}; }
+}
+
 export default function Setup() {
   const queryClient = useQueryClient();
 
@@ -27,9 +36,13 @@ export default function Setup() {
   const [selected, setSelected]       = useState(new Set()); // selected device IDs
   const [bulkProgress, setBulkProgress] = useState(null);    // {total, done, results[]}
 
-  // Per-device override PINs (for accessories needing a different PIN)
+  // Per-device override PINs + persistent vault
   const [pinOverrides, setPinOverrides] = useState({});
+  const [savedPins, setSavedPins]       = useState(loadSavedPins);
   const [pairingStatus, setPairingStatus] = useState({});
+
+  // Help modal
+  const [helpDevice, setHelpDevice] = useState(null); // { name, category }
 
   const { data, isLoading } = useQuery({
     queryKey: ['setup', 'discovered'],
@@ -51,6 +64,18 @@ export default function Setup() {
   const paired   = accessories.filter((a) => a.alreadyPaired);
   const unpaired = accessories.filter((a) => !a.alreadyPaired && pairingStatus[a.id]?.state !== 'success');
   const scanning = scanMutation.isPending;
+
+  // Persist a PIN to localStorage for a specific device
+  function savePin(id, pin) {
+    const next = { ...savedPins, [id]: pin };
+    setSavedPins(next);
+    localStorage.setItem('hc_pins', JSON.stringify(next));
+  }
+
+  // The PIN to actually use when pairing a device (override > saved > bulk)
+  function resolvePin(id) {
+    return pinOverrides[id]?.trim() || savedPins[id]?.trim() || bulkPin.trim();
+  }
 
   // Toggle selection of a single device
   function toggleSelect(id) {
@@ -79,6 +104,8 @@ export default function Setup() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId, pin }),
       });
+      // Save PIN to vault on success
+      savePin(deviceId, pin);
       setPairingStatus((s) => ({
         ...s, [deviceId]: { state: 'success', message: `Paired — now logging ${result.name}` }
       }));
@@ -91,8 +118,7 @@ export default function Setup() {
     }
   }
 
-  // Pair all selected devices sequentially with the bulk PIN
-  // (or per-device override if set)
+  // Pair all selected devices sequentially
   async function handleBulkPair() {
     const ids = [...selected];
     if (!ids.length) return;
@@ -101,10 +127,10 @@ export default function Setup() {
 
     for (let i = 0; i < ids.length; i++) {
       const id  = ids[i];
-      const pin = (pinOverrides[id]?.trim()) || bulkPin.trim();
+      const pin = resolvePin(id);
       if (!pin) {
         setPairingStatus((s) => ({
-          ...s, [id]: { state: 'error', message: 'No PIN — enter a PIN above or override per device' }
+          ...s, [id]: { state: 'error', message: 'No PIN — enter a PIN above or set one for this device' }
         }));
         setBulkProgress((p) => ({ ...p, done: i + 1, results: [...p.results, { id, ok: false }] }));
         continue;
@@ -127,6 +153,15 @@ export default function Setup() {
 
   return (
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-6">
+
+      {/* Help modal */}
+      {helpDevice && (
+        <PinHelpModal
+          deviceName={helpDevice.name}
+          category={helpDevice.category}
+          onClose={() => setHelpDevice(null)}
+        />
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -174,8 +209,8 @@ export default function Setup() {
           <div>
             <p className="text-sm font-medium text-blue-900">Pair multiple at once</p>
             <p className="text-xs text-blue-700 mt-0.5">
-              Enter a shared PIN, select the accessories that use it, then click Pair Selected.
-              Devices with a different PIN can be overridden individually below.
+              Enter a shared PIN for accessories that use the same code, then select them and click Pair Selected.
+              Devices with a different PIN can be set individually below.
             </p>
           </div>
 
@@ -184,7 +219,7 @@ export default function Setup() {
               <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" />
               <input
                 type="text"
-                placeholder="Shared PIN (e.g. 111-22-333)"
+                placeholder="Shared PIN  (e.g. 111-22-333)"
                 value={bulkPin}
                 onChange={(e) => setBulkPin(e.target.value)}
                 disabled={isBulkPairing}
@@ -266,6 +301,9 @@ export default function Setup() {
               const isSuccess = status?.state === 'success';
               const isError   = status?.state === 'error';
               const isChecked = selected.has(acc.id);
+              // Show the device-specific PIN (override or saved), not the shared bulk PIN
+              const devicePin = pinOverrides[acc.id] ?? savedPins[acc.id] ?? '';
+              const hasSavedPin = !!savedPins[acc.id] && !pinOverrides[acc.id];
 
               return (
                 <div key={acc.id} className={clsx('px-4 py-3', isChecked && 'bg-blue-50/50')}>
@@ -295,16 +333,37 @@ export default function Setup() {
                       </div>
                     </div>
 
-                    {/* Per-device PIN override */}
+                    {/* Per-device PIN field */}
                     {!isSuccess && (
-                      <input
-                        type="text"
-                        placeholder="Override PIN"
-                        value={pinOverrides[acc.id] ?? ''}
-                        onChange={(e) => setPinOverrides((p) => ({ ...p, [acc.id]: e.target.value }))}
-                        disabled={isPairing}
-                        className="w-32 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 placeholder-gray-300"
-                      />
+                      <div className="flex flex-col items-end gap-0.5">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder={hasSavedPin ? '(saved)' : 'Device PIN'}
+                            value={pinOverrides[acc.id] ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPinOverrides((p) => ({ ...p, [acc.id]: val }));
+                              // Save to vault as user types (only if non-empty)
+                              if (val.trim()) savePin(acc.id, val.trim());
+                            }}
+                            disabled={isPairing}
+                            className={clsx(
+                              'w-32 px-2 py-1 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 placeholder-gray-300',
+                              hasSavedPin
+                                ? 'border-green-300 bg-green-50 placeholder-green-400'
+                                : 'border-gray-200'
+                            )}
+                          />
+                        </div>
+                        <button
+                          onClick={() => setHelpDevice({ name: acc.name, category: acc.category })}
+                          className="flex items-center gap-0.5 text-xs text-gray-400 hover:text-blue-500 transition-colors"
+                        >
+                          <HelpCircle size={10} />
+                          Can't find PIN?
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -313,7 +372,9 @@ export default function Setup() {
                     <p className="mt-1.5 ml-10 text-xs text-green-600">{status.message}</p>
                   )}
                   {isError && (
-                    <p className="mt-1.5 ml-10 text-xs text-red-500">{status.message}</p>
+                    <div className="mt-2 ml-10 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                      <p className="text-xs text-red-700">{status.message}</p>
+                    </div>
                   )}
                 </div>
               );
@@ -333,11 +394,16 @@ export default function Setup() {
         </div>
       )}
 
-      {/* PIN help */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600">
-        <strong>Finding PINs:</strong> Check the label on each device, or open Apple Home →
-        long-press accessory → ⚙️ → Accessory Information → Setup Code.
-        Format: <code className="bg-gray-100 px-1 rounded text-xs">111-22-333</code>
+      {/* PIN info footer */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-600 space-y-1">
+        <p>
+          <strong>About setup PINs:</strong> Each accessory needs its 8-digit code (format:{' '}
+          <code className="bg-gray-100 px-1 rounded text-xs">111-22-333</code>) to pair for the first time.
+          PINs are saved automatically after a successful pairing.
+        </p>
+        <p className="text-xs text-gray-400">
+          Can't find a PIN? Click the "Can't find PIN?" link next to any device for step-by-step help.
+        </p>
       </div>
     </div>
   );
