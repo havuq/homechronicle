@@ -8,6 +8,43 @@
 import { HttpClient } from 'hap-controller';
 import { insertEvent } from './db.js';
 
+// Maps short HAP service UUID → human-readable label stored in the DB.
+// This must match the keys expected by getServiceIcon() in web/src/lib/icons.js.
+const SERVICE_TYPE_LABELS = new Map([
+  ['43',  'Lightbulb'],
+  ['49',  'Switch'],
+  ['47',  'Outlet'],
+  ['40',  'Fan'],
+  ['B7',  'Fan'],              // FanV2
+  ['41',  'GarageDoorOpener'],
+  ['45',  'LockMechanism'],
+  ['4A',  'Thermostat'],
+  ['7E',  'SecuritySystem'],
+  ['85',  'MotionSensor'],
+  ['80',  'ContactSensor'],
+  ['86',  'OccupancySensor'],
+  ['8A',  'TemperatureSensor'],
+  ['82',  'HumiditySensor'],
+  ['84',  'LightSensor'],
+  ['8D',  'AirQualitySensor'],
+  ['83',  'LeakSensor'],
+  ['87',  'SmokeSensor'],
+  ['7F',  'CarbonMonoxideSensor'],
+  ['97',  'CarbonDioxideSensor'],
+  ['81',  'Door'],
+  ['8B',  'Window'],
+  ['8C',  'WindowCovering'],
+  ['BB',  'AirPurifier'],
+  ['BC',  'HeaterCooler'],
+  ['BD',  'HumidifierDehumidifier'],
+  ['CF',  'IrrigationSystem'],
+  ['D0',  'Valve'],
+  ['96',  'Battery'],
+  ['110', 'Camera'],
+  ['121', 'Doorbell'],
+  ['D8',  'Television'],
+]);
+
 // Characteristics worth logging. Keys are the HAP characteristic type UUIDs
 // (short form). Values are human-readable names stored in the DB.
 const WATCHED_CHARACTERISTICS = new Map([
@@ -53,14 +90,15 @@ const RECONNECT_MAX_MS  = 60_000;
  * Start subscribers for all entries in the pairings map.
  *
  * @param {Record<string, object>} pairings - content of pairings.json
+ * @param {Record<string, string>} rooms    - content of rooms.json (accessoryId → roomName)
  */
-export function startSubscribers(pairings) {
+export function startSubscribers(pairings, rooms = {}) {
   for (const [deviceId, pairing] of Object.entries(pairings)) {
-    connectAccessory(deviceId, pairing, RECONNECT_BASE_MS);
+    connectAccessory(deviceId, pairing, rooms, RECONNECT_BASE_MS);
   }
 }
 
-function connectAccessory(deviceId, pairing, retryDelayMs) {
+function connectAccessory(deviceId, pairing, rooms, retryDelayMs) {
   const { name: accessoryName, address, port, longTermData } = pairing;
 
   console.log(`[subscriber] Connecting to ${accessoryName} (${address}:${port})`);
@@ -104,7 +142,7 @@ function connectAccessory(deviceId, pairing, retryDelayMs) {
           await insertEvent({
             accessoryId:    effectiveId,
             accessoryName:  effectiveName,
-            roomName:       null,  // HAP protocol doesn't expose room names
+            roomName:       rooms[effectiveId] ?? null,  // from rooms.json; HAP doesn't expose rooms
             serviceType:    meta.serviceType,
             characteristic: meta.characteristicName,
             oldValue:       null,  // hap-controller events only provide new value
@@ -130,7 +168,7 @@ function connectAccessory(deviceId, pairing, retryDelayMs) {
         console.log(`[subscriber] ${accessoryName}: resubscribed to ${formerSubscribes.length} characteristic(s)`);
       } catch (err) {
         console.error(`[subscriber] ${accessoryName}: resubscribe failed:`, err.message);
-        scheduleReconnect(deviceId, pairing, retryDelayMs);
+        scheduleReconnect(deviceId, pairing, rooms, retryDelayMs);
       }
     });
 
@@ -139,19 +177,19 @@ function connectAccessory(deviceId, pairing, retryDelayMs) {
       console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
     } catch (err) {
       console.error(`[subscriber] ${accessoryName}: subscribe failed:`, err.message);
-      scheduleReconnect(deviceId, pairing, retryDelayMs);
+      scheduleReconnect(deviceId, pairing, rooms, retryDelayMs);
     }
 
   }).catch((err) => {
     console.error(`[subscriber] ${accessoryName}: getAccessories failed:`, err.message);
-    scheduleReconnect(deviceId, pairing, retryDelayMs);
+    scheduleReconnect(deviceId, pairing, rooms, retryDelayMs);
   });
 }
 
-function scheduleReconnect(deviceId, pairing, retryDelayMs) {
+function scheduleReconnect(deviceId, pairing, rooms, retryDelayMs) {
   const nextDelay = Math.min(retryDelayMs * 2, RECONNECT_MAX_MS);
   console.log(`[subscriber] ${pairing.name}: retrying in ${nextDelay / 1000}s`);
-  setTimeout(() => connectAccessory(deviceId, pairing, nextDelay), retryDelayMs);
+  setTimeout(() => connectAccessory(deviceId, pairing, rooms, nextDelay), retryDelayMs);
 }
 
 /**
@@ -174,7 +212,8 @@ function buildIidMetaMap(accessories) {
     const childName   = nameProp?.value ?? null;
 
     for (const service of acc.services ?? []) {
-      const serviceType = shortUuid(service.type);
+      const shortType  = shortUuid(service.type);
+      const serviceType = SERVICE_TYPE_LABELS.get(shortType) ?? shortType;
 
       for (const char of service.characteristics ?? []) {
         const charType = shortUuid(char.type);
