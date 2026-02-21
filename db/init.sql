@@ -1,4 +1,4 @@
--- HomeKit Event Log — database schema
+-- HomeChronicle — database schema
 -- This file runs automatically when the postgres container first starts.
 
 CREATE TABLE IF NOT EXISTS event_logs (
