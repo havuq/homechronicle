@@ -34,6 +34,10 @@ export function useAccessories() {
   return useQuery({
     queryKey: ['accessories'],
     queryFn: () => fetchJson(`${BASE}/accessories`),
+    // Poll every 15s so room assignments and new first-event accessories appear
+    // without a manual reload. Longer than events (10s) since metadata changes less often.
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 }
 

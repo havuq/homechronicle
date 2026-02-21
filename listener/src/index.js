@@ -385,30 +385,49 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
+// Helper: extract the top-level bridge MAC from an accessory_id.
+// "AA:BB:CC:DD:EE:FF:3" → "AA:BB:CC:DD:EE:FF"   (bridge child)
+// "AA:BB:CC:DD:EE:FF"   → "AA:BB:CC:DD:EE:FF"   (bridge or standalone)
+function parentBridgeId(id) {
+  const parts = id.split(':');
+  return parts.length > 6 ? parts.slice(0, 6).join(':') : id;
+}
+
 app.get('/api/accessories', async (_req, res) => {
   try {
-    // Accessories that have logged at least one event
+    // One row per accessory: latest name/room/service_type + last_seen + event count.
+    // GROUP BY instead of DISTINCT ON so we can add COUNT(*) cheaply.
     const result = await pool.query(`
-      SELECT DISTINCT ON (accessory_id)
-        accessory_id, accessory_name, room_name, service_type,
-        MAX(timestamp) OVER (PARTITION BY accessory_id) AS last_seen
+      SELECT
+        accessory_id,
+        accessory_name,
+        room_name,
+        service_type,
+        MAX(timestamp)  AS last_seen,
+        COUNT(*)::int   AS event_count
       FROM event_logs
-      ORDER BY accessory_id, last_seen DESC
+      GROUP BY accessory_id, accessory_name, room_name, service_type
+      ORDER BY last_seen DESC
     `);
 
-    const rooms = loadRooms();
+    const rooms           = loadRooms();
+    const currentPairings = loadPairings();
 
-    // Overlay saved room names onto DB rows (room in DB may be stale or null)
-    const dbRows = result.rows.map((r) => ({
-      ...r,
-      room_name: rooms[r.accessory_id] ?? r.room_name,
-    }));
+    // Overlay rooms.json + bridge metadata (address, pairedAt) onto DB rows
+    const dbRows = result.rows.map((r) => {
+      const bridgePairing = currentPairings[parentBridgeId(r.accessory_id)];
+      return {
+        ...r,
+        room_name:   rooms[r.accessory_id]     ?? r.room_name,
+        address:     bridgePairing?.address     ?? null,
+        paired_at:   bridgePairing?.pairedAt    ?? null,
+      };
+    });
 
     // Build a set of known accessory_ids from the DB
     const seenIds = new Set(dbRows.map((r) => r.accessory_id));
 
-    // Merge in paired devices that haven't fired an event yet
-    const currentPairings = loadPairings();
+    // Merge in paired bridges that haven't fired any event yet
     const neverSeen = Object.entries(currentPairings)
       .filter(([id]) => !seenIds.has(id))
       .map(([id, p]) => ({
@@ -418,6 +437,9 @@ app.get('/api/accessories', async (_req, res) => {
         service_type:   null,
         category:       p.category ?? null,
         last_seen:      null,
+        event_count:    0,
+        address:        p.address  ?? null,
+        paired_at:      p.pairedAt ?? null,
       }));
 
     res.json([...dbRows, ...neverSeen]);
