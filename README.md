@@ -6,6 +6,11 @@ Apple's Home app shows you the current state of your accessories — this shows 
 
 ## Features
 
+- **In-app Setup** — discover accessories on your network, enter PINs, and pair directly from the browser — no CLI required
+- **Bulk pairing** — select multiple accessories, enter a shared PIN, and pair them all at once with a progress bar
+- **Homebridge / bridge support** — pair a Homebridge instance once to log all its child accessories automatically
+- **PIN vault** — PINs saved in the browser after first use; green indicator when a saved PIN is already on file
+- **PIN help guide** — per-device step-by-step modal covering physical label, packaging, QR code, manufacturer app, and support contact
 - **Timeline** — scrollable event feed grouped by day, with filters for room, accessory name, and date range
 - **Dashboard** — bar chart of activity by hour, 7-day trend line, top active devices
 - **Accessories** — list of all paired devices with last-seen timestamps
