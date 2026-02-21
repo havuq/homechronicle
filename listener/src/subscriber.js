@@ -28,8 +28,21 @@ const WATCHED_CHARACTERISTICS = new Map([
   // Security system
   ['66',   'SecuritySystemCurrentState'],
   ['67',   'SecuritySystemTargetState'],
-  // Brightness (nice to have)
+  // Brightness / colour (smart bulbs)
   ['8',    'Brightness'],
+  ['C0',   'ColorTemperature'],
+  ['13',   'Hue'],
+  ['2F',   'Saturation'],
+  // Appliances / fans / purifiers (Homebridge plugins)
+  ['B0',   'Active'],
+  ['AB',   'FilterLifeLevel'],
+  ['95',   'AirQuality'],
+  ['75',   'VOCDensity'],
+  ['76',   'PM2_5Density'],
+  ['64',   'CurrentAmbientLightLevel'],
+  // Battery
+  ['68',   'StatusLowBattery'],
+  ['5B',   'BatteryLevel'],
 ]);
 
 // Milliseconds before attempting reconnect after a lost connection
@@ -72,12 +85,18 @@ function connectAccessory(deviceId, pairing, retryDelayMs) {
     client.subscribeCharacteristics(watchedKeys).then((sub) => {
       console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
 
-      sub.on('event', async (event) => {
-        for (const change of event.characteristics ?? []) {
-          // Events include both aid and iid — use composite key for lookup
+      // Handle a HAP event payload — registered on both 'event' and 'change'
+      // because different hap-controller versions use different event names.
+      const handleEvent = async (event) => {
+        const changes = event?.characteristics ?? (Array.isArray(event) ? event : [event]);
+        for (const change of changes) {
+          // Diagnostic: log every raw event so we can see what's arriving
           const key  = `${change.aid}.${change.iid}`;
           const meta = iidMeta.get(key);
-          if (!meta) continue;
+          if (!meta) {
+            console.log(`[event-skip] ${accessoryName} aid=${change.aid} iid=${change.iid} value=${change.value} (not in watched list)`);
+            continue;
+          }
 
           // For bridges, use the child accessory's name; fall back to bridge name
           const effectiveName = meta.childName || accessoryName;
@@ -100,7 +119,13 @@ function connectAccessory(deviceId, pairing, retryDelayMs) {
             console.error(`[subscriber] DB insert failed:`, err.message);
           }
         }
-      });
+      };
+
+      // Register on both event names — hap-controller v0.10.x uses 'event',
+      // some builds use 'change'. Duplicate delivery is harmless because the
+      // meta lookup only matches known characteristics.
+      sub.on('event', handleEvent);
+      sub.on('change', handleEvent);
 
       sub.on('close', () => {
         console.warn(`[subscriber] ${accessoryName}: connection closed, reconnecting in ${retryDelayMs / 1000}s`);
