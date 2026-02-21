@@ -36,7 +36,7 @@ function loadSavedPins() {
 // BridgeChildrenRow — lazily loads and displays child accessories of a bridge.
 // Lives outside Setup so it can call useQuery without conditional hook rules.
 // ---------------------------------------------------------------------------
-function BridgeChildrenRow({ bridgeId, isExpanded, roomInputs, onRoomChange, onRoomBlur }) {
+function BridgeChildrenRow({ bridgeId, isExpanded, roomInputs, savedRooms = {}, onRoomChange, onRoomBlur }) {
   const { data: children = [], isLoading, isError } = useQuery({
     queryKey: ['bridge-children', bridgeId],
     queryFn: () => fetchJson(`/api/setup/bridge-children/${encodeURIComponent(bridgeId)}`),
@@ -79,7 +79,7 @@ function BridgeChildrenRow({ bridgeId, isExpanded, roomInputs, onRoomChange, onR
             <input
               type="text"
               placeholder="Room…"
-              value={roomInputs[child.childId] ?? ''}
+              value={roomInputs[child.childId] ?? savedRooms[child.childId] ?? ''}
               onChange={(e) => onRoomChange(child.childId, e.target.value)}
               onBlur={() => onRoomBlur(child.childId)}
               onKeyDown={(e) => e.key === 'Enter' && onRoomBlur(child.childId)}
@@ -132,11 +132,11 @@ export default function Setup() {
     staleTime: Infinity,
   });
 
-  // Rooms saved on the server
+  // Rooms saved on the server (used as display fallback; NOT synced into roomInputs
+  // state to avoid clobbering in-progress edits when the query refetches after a save)
   const { data: savedRooms = {} } = useQuery({
     queryKey: ['setup', 'rooms'],
     queryFn: () => fetchJson('/api/setup/rooms'),
-    onSuccess: (rooms) => setRoomInputs(rooms),
   });
 
   // All accessories known to the DB (for Danger Zone list)
@@ -495,6 +495,7 @@ export default function Setup() {
                       bridgeId={acc.id}
                       isExpanded={expandedBridges.has(acc.id)}
                       roomInputs={roomInputs}
+                      savedRooms={savedRooms}
                       onRoomChange={(id, val) => setRoomInputs((r) => ({ ...r, [id]: val }))}
                       onRoomBlur={handleRoomBlur}
                     />
