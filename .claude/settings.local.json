@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(file:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(/usr/bin/git:*)",
+      "Bash(brew list:*)",
+      "Bash(npm view:*)",
+      "Bash(python3:*)",
+      "Bash(node -e:*)",
+      "Bash(sudo xcodebuild:*)",
+      "Bash(git --version)",
+      "Bash(gh auth status:*)",
+      "Bash(git config:*)",
+      "Bash(git branch:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial commit — HomeKit Event Log\n\nDocker + web stack for capturing and visualizing HomeKit accessory\nstate changes. Includes Node.js HAP listener, PostgreSQL storage,\nExpress REST API, and React + Vite dashboard with timeline, charts,\nand accessory list.\nEOF\n\\)\")"
+    ]
+  }
+}

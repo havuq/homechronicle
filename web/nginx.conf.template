@@ -1,0 +1,20 @@
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # React SPA — serve index.html for any non-file route
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy /api/* to the listener.
+    # LISTENER_HOST is injected at container start via envsubst:
+    #   - local dev (bridge network): "listener"  (Docker DNS)
+    #   - NAS (host network):         "127.0.0.1"
+    location /api/ {
+        proxy_pass http://${LISTENER_HOST}:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
