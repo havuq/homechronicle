@@ -22,7 +22,11 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
-        <h1 className="text-lg font-semibold text-gray-900">HomeChronicle</h1>
+        <img src="/icon.png" alt="HomeChronicle" className="h-8 w-8 rounded-lg flex-shrink-0" />
+        <div>
+          <h1 className="text-lg font-semibold text-gray-900 leading-tight">HomeChronicle</h1>
+          <p className="text-xs text-gray-400 leading-tight">Event Logging for Apple HomeKit</p>
+        </div>
         <span className="flex-1" />
         <nav className="flex gap-1">
           {TABS.map(({ id, label, icon: Icon }) => (
