@@ -6,6 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "dev": "DISCOVER_IFACE=en0 DATABASE_URL=postgresql://homekit:changeme@localhost:5432/homekit_events node src/index.js",
     "discover": "node src/discover.js",
     "pair": "node src/pairing.js",
     "seed": "node src/seed.js"
