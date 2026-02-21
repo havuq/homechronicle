@@ -45,8 +45,6 @@ services:
       - "3000:80"
     networks:
       - internal
-    depends_on:
-      - listener
 
 volumes:
   postgres-data:
