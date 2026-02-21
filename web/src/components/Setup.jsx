@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, CheckCircle, Circle, Loader, Wifi, Lock, ChevronsRight, HelpCircle } from 'lucide-react';
+import { RefreshCw, CheckCircle, Circle, Loader, Wifi, Lock, ChevronsRight, HelpCircle, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
 import PinHelpModal from './PinHelpModal.jsx';
@@ -44,6 +44,9 @@ export default function Setup() {
   // Help modal
   const [helpDevice, setHelpDevice] = useState(null); // { name, category }
 
+  // Delete confirmation — holds the deviceId pending confirmation
+  const [confirmDelete, setConfirmDelete] = useState(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ['setup', 'discovered'],
     queryFn: () => fetchJson('/api/setup/discovered'),
@@ -57,6 +60,23 @@ export default function Setup() {
       queryClient.setQueryData(['setup', 'discovered'], data);
       setSelected(new Set());
       setBulkProgress(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (deviceId) =>
+      fetchJson(`/api/setup/pairing/${encodeURIComponent(deviceId)}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setConfirmDelete(null);
+      // Refresh both the discovered list and accessories queries
+      queryClient.invalidateQueries({ queryKey: ['setup', 'discovered'] });
+      queryClient.invalidateQueries({ queryKey: ['accessories'] });
+      // Trigger a fresh scan so the device moves back to "available" list
+      scanMutation.mutate();
+    },
+    onError: (err) => {
+      setConfirmDelete(null);
+      console.error('Delete failed:', err.message);
     },
   });
 
@@ -275,18 +295,54 @@ export default function Setup() {
             Paired ({paired.length})
           </h3>
           <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
-            {paired.map((acc) => (
-              <div key={acc.id} className="flex items-center gap-3 px-4 py-3">
-                <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 truncate">{acc.name}</div>
-                  <div className="text-xs text-gray-400">
-                    {CATEGORY_LABELS[acc.category] ?? 'Unknown'} · {acc.address}
+            {paired.map((acc) => {
+              const isConfirming = confirmDelete === acc.id;
+              const isDeleting   = deleteMutation.isPending && confirmDelete === acc.id;
+              return (
+                <div key={acc.id} className="flex items-center gap-3 px-4 py-3">
+                  <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 truncate">{acc.name}</div>
+                    <div className="text-xs text-gray-400">
+                      {CATEGORY_LABELS[acc.category] ?? 'Unknown'} · {acc.address}
+                    </div>
                   </div>
+
+                  {isConfirming ? (
+                    /* Inline confirmation */
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-gray-500">Remove?</span>
+                      <button
+                        onClick={() => deleteMutation.mutate(acc.id)}
+                        disabled={isDeleting}
+                        className="text-xs px-2 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      >
+                        {isDeleting ? 'Removing…' : 'Yes, remove'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(null)}
+                        disabled={isDeleting}
+                        className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    /* Normal state */
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Logging</span>
+                      <button
+                        onClick={() => setConfirmDelete(acc.id)}
+                        title="Remove pairing"
+                        className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">Logging</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

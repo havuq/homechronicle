@@ -203,6 +203,27 @@ app.get('/api/setup/pairings', (_req, res) => {
   res.json(list);
 });
 
+// DELETE /api/setup/pairing/:deviceId — remove a pairing
+app.delete('/api/setup/pairing/:deviceId', (req, res) => {
+  const { deviceId } = req.params;
+  const currentPairings = loadPairings();
+
+  if (!currentPairings[deviceId]) {
+    return res.status(404).json({ error: 'Pairing not found' });
+  }
+
+  const name = currentPairings[deviceId].name;
+  delete currentPairings[deviceId];
+  savePairings(currentPairings);
+
+  // Also update the discovery cache so the device shows as unpaired
+  const cached = discoveryCache.find((s) => s.id === deviceId);
+  if (cached) { cached.paired = false; cached.alreadyPaired = false; }
+
+  console.log(`[setup] Removed pairing for ${name} (${deviceId})`);
+  res.json({ success: true, name });
+});
+
 // ---------------------------------------------------------------------------
 // Event / stats endpoints (unchanged)
 // ---------------------------------------------------------------------------
@@ -246,6 +267,7 @@ app.get('/api/events', async (req, res) => {
 
 app.get('/api/accessories', async (_req, res) => {
   try {
+    // Accessories that have logged at least one event
     const result = await pool.query(`
       SELECT DISTINCT ON (accessory_id)
         accessory_id, accessory_name, room_name, service_type,
@@ -253,7 +275,23 @@ app.get('/api/accessories', async (_req, res) => {
       FROM event_logs
       ORDER BY accessory_id, last_seen DESC
     `);
-    res.json(result.rows);
+
+    // Build a set of known accessory_ids from the DB
+    const seenIds = new Set(result.rows.map((r) => r.accessory_id));
+
+    // Merge in paired devices that haven't fired an event yet
+    const currentPairings = loadPairings();
+    const neverSeen = Object.entries(currentPairings)
+      .filter(([id]) => !seenIds.has(id))
+      .map(([id, p]) => ({
+        accessory_id:   id,
+        accessory_name: p.name,
+        room_name:      null,
+        service_type:   null,
+        last_seen:      null,
+      }));
+
+    res.json([...result.rows, ...neverSeen]);
   } catch (err) {
     console.error('[api] /api/accessories error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
