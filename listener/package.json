@@ -1,7 +1,7 @@
 {
-  "name": "homekit-listener",
+  "name": "homechronicle-listener",
   "version": "1.0.0",
-  "description": "HomeKit event listener and REST API",
+  "description": "Event Logging for Apple HomeKit",
   "type": "module",
   "main": "src/index.js",
   "scripts": {

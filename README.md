@@ -1,6 +1,6 @@
-# HomeKit Event Log
+# HomeChronicle
 
-A self-hosted dashboard that captures every state change from your HomeKit accessories and displays them in a searchable, filterable timeline with activity charts.
+Event Logging for Apple HomeKit — a self-hosted dashboard that captures every state change from your HomeKit accessories and displays them in a searchable, filterable timeline with activity charts.
 
 Apple's Home app shows you the current state of your accessories — this shows you everything that *happened* and when.
 
@@ -35,8 +35,8 @@ Apple's Home app shows you the current state of your accessories — this shows 
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/havuq/homekit-eventlog.git
-cd homekit-eventlog
+git clone https://github.com/havuq/homechronicle.git
+cd homechronicle
 cp .env.example .env
 # Edit .env — change POSTGRES_PASSWORD at minimum
 ```
@@ -126,7 +126,7 @@ The listener exposes a REST API on port 3001 (proxied through the web container 
 ## Project Structure
 
 ```
-homekit-eventlog/
+homechronicle/
 ├── docker-compose.yml           # Production stack
 ├── docker-compose.override.yml  # Local dev overrides (macOS)
 ├── .env.example                 # Environment variable template
