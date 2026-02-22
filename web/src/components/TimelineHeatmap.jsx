@@ -16,17 +16,33 @@ function cellBg(intensity) {
 
 /**
  * Compact heatmap panel for the Timeline page.
- * Sits between the filter bar and the event list.
- * Calls onHoverCell(accessoryName, hour) / onHoverEnd() so the parent
- * can highlight matching timeline rows.
+ *
+ * Hover a cell  → highlights matching events in the current view (no scroll).
+ * Click a cell  → collapses the heatmap, locks the highlight, scrolls to
+ *                 the first matching event so it's fully visible.
+ *
+ * Props:
+ *   open         — bool
+ *   onToggle     — fn()
+ *   onHoverCell  — fn(name, hour)  — hover starts; just highlight in place
+ *   onHoverEnd   — fn()            — hover ends; clear transient highlight
+ *   onClickCell  — fn(name, hour)  — click; scroll + lock highlight
+ *   lockedCell   — { accessoryName, hour } | null — cell locked by a click
  */
-export default function TimelineHeatmap({ open, onToggle, onHoverCell, onHoverEnd }) {
+export default function TimelineHeatmap({
+  open,
+  onToggle,
+  onHoverCell,
+  onHoverEnd,
+  onClickCell,
+  lockedCell = null,
+}) {
   const { data = [], isLoading } = useHeatmap();
   const hasData = !isLoading && data.length > 0;
 
   return (
     <div className="bg-white border-b border-gray-200">
-      {/* Collapse / expand toggle — full-width button, content centered to match timeline */}
+      {/* Collapse / expand toggle */}
       <button
         onClick={onToggle}
         disabled={!hasData && !isLoading}
@@ -47,13 +63,20 @@ export default function TimelineHeatmap({ open, onToggle, onHoverCell, onHoverEn
         </div>
       </button>
 
-      {/* Grid — only mounted when open and has data */}
-      {open && hasData && <HeatmapGrid data={data} onHoverCell={onHoverCell} onHoverEnd={onHoverEnd} />}
+      {open && hasData && (
+        <HeatmapGrid
+          data={data}
+          onHoverCell={onHoverCell}
+          onHoverEnd={onHoverEnd}
+          onClickCell={onClickCell}
+          lockedCell={lockedCell}
+        />
+      )}
     </div>
   );
 }
 
-function HeatmapGrid({ data, onHoverCell, onHoverEnd }) {
+function HeatmapGrid({ data, onHoverCell, onHoverEnd, onClickCell, lockedCell }) {
   const deviceMap = {};
   for (const row of data) {
     if (!deviceMap[row.accessory_name]) deviceMap[row.accessory_name] = new Array(24).fill(0);
@@ -68,7 +91,7 @@ function HeatmapGrid({ data, onHoverCell, onHoverEnd }) {
   return (
     <div className="max-w-2xl mx-auto px-4 pb-3">
       <p className="text-[10px] text-gray-400 mb-2">
-        Hover a cell to highlight matching events below · last 7 days
+        Hover to highlight matching events · click to jump
       </p>
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ minWidth: LABEL + 24 * (CELL + GAP) }}>
@@ -94,34 +117,47 @@ function HeatmapGrid({ data, onHoverCell, onHoverEnd }) {
               >
                 {name}
               </div>
-              {hours.map((count, h) => (
-                <div
-                  key={h}
-                  title={count > 0 ? `${name} — ${h}:00 — ${count} event${count !== 1 ? 's' : ''}` : undefined}
-                  style={{
-                    width: CELL,
-                    height: CELL,
-                    marginRight: GAP,
-                    flexShrink: 0,
-                    borderRadius: 2,
-                    backgroundColor: cellBg(count / maxCount),
-                    cursor: count > 0 ? 'pointer' : 'default',
-                    transition: 'transform 0.1s, box-shadow 0.1s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (count > 0) {
-                      e.currentTarget.style.transform = 'scale(1.35)';
-                      e.currentTarget.style.boxShadow = '0 0 0 1.5px #3b82f6';
-                      onHoverCell(name, h);
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = '';
-                    e.currentTarget.style.boxShadow = '';
-                    onHoverEnd();
-                  }}
-                />
-              ))}
+              {hours.map((count, h) => {
+                const isLocked = lockedCell?.accessoryName === name && lockedCell?.hour === h;
+                return (
+                  <div
+                    key={h}
+                    title={count > 0 ? `${name} — ${h}:00 — ${count} event${count !== 1 ? 's' : ''} · click to jump` : undefined}
+                    style={{
+                      width: CELL,
+                      height: CELL,
+                      marginRight: GAP,
+                      flexShrink: 0,
+                      borderRadius: 2,
+                      backgroundColor: cellBg(count / maxCount),
+                      cursor: count > 0 ? 'pointer' : 'default',
+                      transition: 'transform 0.1s, box-shadow 0.1s',
+                      // Locked cells get an orange ring instead of blue
+                      boxShadow: isLocked ? '0 0 0 2px #f97316' : undefined,
+                      transform: isLocked ? 'scale(1.35)' : undefined,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (count > 0) {
+                        if (!isLocked) {
+                          e.currentTarget.style.transform = 'scale(1.35)';
+                          e.currentTarget.style.boxShadow = '0 0 0 1.5px #3b82f6';
+                        }
+                        onHoverCell(name, h);
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isLocked) {
+                        e.currentTarget.style.transform = '';
+                        e.currentTarget.style.boxShadow = '';
+                      }
+                      onHoverEnd();
+                    }}
+                    onClick={() => {
+                      if (count > 0) onClickCell(name, h);
+                    }}
+                  />
+                );
+              })}
             </div>
           ))}
 

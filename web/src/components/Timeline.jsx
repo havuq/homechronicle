@@ -66,8 +66,12 @@ export default function Timeline() {
   const [filters, setFilters]         = useState({});
   const [page, setPage]               = useState(1);
   const [heatmapOpen, setHeatmapOpen] = useState(false);
-  const [hoveredCell, setHoveredCell] = useState(null); // { accessoryName, hour } | null
+  const [hoveredCell, setHoveredCell] = useState(null); // transient: cleared on mouse-leave
+  const [lockedCell,  setLockedCell]  = useState(null); // persistent: set by click, cleared by re-click
   const scrollRef                     = useRef(null);
+
+  // The cell used for dim/highlight logic — prefer locked over hovered
+  const activeCell = lockedCell ?? hoveredCell;
 
   const { data, isLoading, isError } = useEvents(filters, page);
   const { data: patternData }        = useDevicePatterns();
@@ -154,15 +158,30 @@ export default function Timeline() {
     setPage(1);
   }
 
-  /**
-   * Scroll fix: iterate the SAME per-day grouping used during render so that
-   * group[0].id always matches a data-scene-id attribute in the DOM.
-   * Then use scrollIntoView so the browser handles the offset math.
-   */
+  /** Hover: highlight visible events only. No scroll — avoids mouse-leave side effects. */
   function handleHoverCell(name, hour) {
     setHoveredCell({ accessoryName: name, hour });
+  }
+
+  /**
+   * Click: lock the highlight, collapse the heatmap, then scroll to the first
+   * matching event. Clicking the same cell a second time unlocks it.
+   */
+  function handleClickCell(name, hour) {
+    const isAlreadyLocked = lockedCell?.accessoryName === name && lockedCell?.hour === hour;
+
+    if (isAlreadyLocked) {
+      setLockedCell(null);
+      return;
+    }
+
+    setLockedCell({ accessoryName: name, hour });
+    setHeatmapOpen(false); // collapse so the event has room to show
+
     if (!visibleEvents.length || !scrollRef.current) return;
 
+    // Use the same per-day grouping as the DOM render so group[0].id
+    // always matches a data-scene-id attribute.
     let firstMatchId = null;
     outer:
     for (const [, dayEvents] of groupByDay(visibleEvents)) {
@@ -177,10 +196,11 @@ export default function Timeline() {
     }
 
     if (firstMatchId) {
-      requestAnimationFrame(() => {
+      // Small delay so the heatmap collapse animation finishes before scroll
+      setTimeout(() => {
         const el = scrollRef.current?.querySelector(`[data-scene-id="${firstMatchId}"]`);
-        el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 120);
     }
   }
 
@@ -192,10 +212,27 @@ export default function Timeline() {
 
       <TimelineHeatmap
         open={heatmapOpen}
-        onToggle={() => setHeatmapOpen((o) => !o)}
+        onToggle={() => { setHeatmapOpen((o) => !o); setLockedCell(null); }}
         onHoverCell={handleHoverCell}
         onHoverEnd={() => setHoveredCell(null)}
+        onClickCell={handleClickCell}
+        lockedCell={lockedCell}
       />
+
+      {/* Locked-cell banner — shows when a heatmap cell has been clicked */}
+      {lockedCell && (
+        <div className="max-w-2xl mx-auto w-full px-4 py-1.5 flex items-center gap-2">
+          <span className="text-xs text-orange-500 font-medium">
+            Showing {lockedCell.accessoryName} at {lockedCell.hour}:00
+          </span>
+          <button
+            onClick={() => setLockedCell(null)}
+            className="text-[10px] text-gray-400 hover:text-gray-600 underline ml-1"
+          >
+            clear
+          </button>
+        </div>
+      )}
 
       {/* Muted devices banner */}
       {muted.size > 0 && (
@@ -253,7 +290,7 @@ export default function Timeline() {
                       key={group[0].id}
                       events={group}
                       eventMetaMap={eventMetaMap}
-                      hoveredCell={hoveredCell}
+                      hoveredCell={activeCell}
                       onMute={mute}
                     />
                   ))}
