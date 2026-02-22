@@ -1,6 +1,8 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { format, startOfDay } from 'date-fns';
-import { ChevronLeft, ChevronRight, VolumeX, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, VolumeX, X, Loader2 } from 'lucide-react';
+
+const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
 import { useEvents, useDevicePatterns } from '../hooks/useEvents.js';
 import { useMutedDevices } from '../hooks/useMutedDevices.js';
 import { formatGap } from '../lib/icons.js';
@@ -68,7 +70,9 @@ export default function Timeline() {
   const [heatmapOpen, setHeatmapOpen] = useState(false);
   const [hoveredCell, setHoveredCell] = useState(null); // transient: cleared on mouse-leave
   const [lockedCell,  setLockedCell]  = useState(null); // persistent: set by click, cleared by re-click
+  const [isJumping,   setIsJumping]   = useState(false);
   const scrollRef                     = useRef(null);
+  const pendingJumpId                 = useRef(null);   // event id to scroll to after page loads
 
   // The cell used for dim/highlight logic — prefer locked over hovered
   const activeCell = lockedCell ?? hoveredCell;
@@ -151,6 +155,19 @@ export default function Timeline() {
     return map;
   }, [visibleEvents, anomalyMap]);
 
+  // ── Scroll-after-page-change ───────────────────────────────────────────────
+  // When handleClickCell navigates to a different page, it stores the target
+  // event id in pendingJumpId. This effect fires whenever the loaded data
+  // changes and scrolls as soon as the element appears in the DOM.
+  useEffect(() => {
+    if (!pendingJumpId.current || !scrollRef.current || isLoading) return;
+    const el = scrollRef.current.querySelector(`[data-scene-id="${pendingJumpId.current}"]`);
+    if (el) {
+      pendingJumpId.current = null;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [data, isLoading]);
+
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   function handleFilterChange(newFilters) {
@@ -164,10 +181,12 @@ export default function Timeline() {
   }
 
   /**
-   * Click: lock the highlight, collapse the heatmap, then scroll to the first
-   * matching event. Clicking the same cell a second time unlocks it.
+   * Click: lock the highlight, collapse the heatmap, ask the server which
+   * page the most recent match lives on, navigate there, then scroll to it.
+   * The useEffect above handles the scroll once the page data loads.
+   * Clicking the same cell a second time unlocks it.
    */
-  function handleClickCell(name, hour) {
+  async function handleClickCell(name, hour) {
     const isAlreadyLocked = lockedCell?.accessoryName === name && lockedCell?.hour === hour;
 
     if (isAlreadyLocked) {
@@ -176,31 +195,39 @@ export default function Timeline() {
     }
 
     setLockedCell({ accessoryName: name, hour });
-    setHeatmapOpen(false); // collapse so the event has room to show
+    setHeatmapOpen(false);
+    setIsJumping(true);
 
-    if (!visibleEvents.length || !scrollRef.current) return;
+    try {
+      const qs = new URLSearchParams({ accessory: name, hour, limit: 50 });
+      if (filters.room) qs.set('room', filters.room);
+      if (filters.from) qs.set('from', filters.from);
+      if (filters.to)   qs.set('to',   filters.to);
 
-    // Use the same per-day grouping as the DOM render so group[0].id
-    // always matches a data-scene-id attribute.
-    let firstMatchId = null;
-    outer:
-    for (const [, dayEvents] of groupByDay(visibleEvents)) {
-      for (const group of groupIntoScenes(dayEvents)) {
-        if (group.some(
-          (e) => e.accessory_name === name && new Date(e.timestamp).getHours() === hour
-        )) {
-          firstMatchId = group[0].id;
-          break outer;
-        }
+      const res   = await fetch(`${API_BASE}/events/jump?${qs}`);
+      const { page: targetPage, eventId } = await res.json();
+
+      if (!eventId) return; // no match in DB
+
+      pendingJumpId.current = eventId;
+
+      if (targetPage && targetPage !== page) {
+        // Navigate to the right page — useEffect scrolls after data loads
+        setPage(targetPage);
+      } else {
+        // Already on the correct page — scroll immediately after heatmap collapses
+        setTimeout(() => {
+          const el = scrollRef.current?.querySelector(`[data-scene-id="${eventId}"]`);
+          if (el) {
+            pendingJumpId.current = null;
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 120);
       }
-    }
-
-    if (firstMatchId) {
-      // Small delay so the heatmap collapse animation finishes before scroll
-      setTimeout(() => {
-        const el = scrollRef.current?.querySelector(`[data-scene-id="${firstMatchId}"]`);
-        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 120);
+    } catch (err) {
+      console.error('[timeline] jump failed:', err);
+    } finally {
+      setIsJumping(false);
     }
   }
 
@@ -222,15 +249,24 @@ export default function Timeline() {
       {/* Locked-cell banner — shows when a heatmap cell has been clicked */}
       {lockedCell && (
         <div className="max-w-2xl mx-auto w-full px-4 py-1.5 flex items-center gap-2">
-          <span className="text-xs text-orange-500 font-medium">
-            Showing {lockedCell.accessoryName} at {lockedCell.hour}:00
+          {isJumping
+            ? <Loader2 size={11} className="text-orange-400 animate-spin flex-shrink-0" />
+            : <span className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
+          }
+          <span className="text-xs text-orange-500 font-medium truncate">
+            {isJumping
+              ? `Finding ${lockedCell.accessoryName} at ${lockedCell.hour}:00…`
+              : `${lockedCell.accessoryName} · ${lockedCell.hour}:00`
+            }
           </span>
-          <button
-            onClick={() => setLockedCell(null)}
-            className="text-[10px] text-gray-400 hover:text-gray-600 underline ml-1"
-          >
-            clear
-          </button>
+          {!isJumping && (
+            <button
+              onClick={() => setLockedCell(null)}
+              className="text-[10px] text-gray-400 hover:text-gray-600 underline ml-auto flex-shrink-0"
+            >
+              clear
+            </button>
+          )}
         </div>
       )}
 
