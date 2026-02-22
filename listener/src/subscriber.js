@@ -86,6 +86,11 @@ const WATCHED_CHARACTERISTICS = new Map([
 const RECONNECT_BASE_MS = 5_000;
 const RECONNECT_MAX_MS  = 60_000;
 
+// In-memory cache of last-seen values: "deviceId:aid.iid" → value string.
+// Used to populate old_value on each event so the UI can show before→after.
+// Survives reconnects within the same process; cleared on restart.
+const valueCache = new Map();
+
 /**
  * Start subscribers for all entries in the pairings map.
  *
@@ -138,6 +143,19 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs) {
         // For bridges, suffix the deviceId with the aid so each child is distinct
         const effectiveId = change.aid > 1 ? `${deviceId}:${change.aid}` : deviceId;
 
+        // Look up (and then update) the cached previous value for this characteristic
+        const cacheKey = `${effectiveId}:${change.aid}.${change.iid}`;
+        const oldValue = valueCache.get(cacheKey) ?? null;
+        const newValue = String(change.value);
+        valueCache.set(cacheKey, newValue);
+
+        // Skip inserting if the value hasn't actually changed
+        // (some accessories re-broadcast the same value on reconnect)
+        if (oldValue !== null && oldValue === newValue) {
+          console.log(`[event-skip] ${effectiveName} → ${meta.characteristicName}: unchanged (${newValue})`);
+          continue;
+        }
+
         try {
           await insertEvent({
             accessoryId:    effectiveId,
@@ -145,8 +163,8 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs) {
             roomName:       rooms[effectiveId] ?? null,  // from rooms.json; HAP doesn't expose rooms
             serviceType:    meta.serviceType,
             characteristic: meta.characteristicName,
-            oldValue:       null,  // hap-controller events only provide new value
-            newValue:       String(change.value),
+            oldValue,
+            newValue,
             rawIid:         change.iid,
           });
           console.log(`[event] ${effectiveName} → ${meta.characteristicName}: ${change.value}`);

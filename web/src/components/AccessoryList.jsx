@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from 'date-fns';
 import { useAccessories } from '../hooks/useEvents.js';
 import { getServiceIcon } from '../lib/icons.js';
+import { getRoomColor } from '../lib/roomColors.js';
 import { Network } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -64,12 +65,31 @@ export default function AccessoryList() {
 
   return (
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-6">
-      {Object.entries(byRoom).sort().map(([room, items]) => (
+      {Object.entries(byRoom)
+        .sort(([a], [b]) => {
+          if (a === 'No room') return 1;
+          if (b === 'No room') return -1;
+          return a.localeCompare(b);
+        })
+        .map(([room, items]) => {
+        const roomColor = getRoomColor(room === 'No room' ? null : room);
+        return (
         <div key={room}>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
-            {room}
-          </h2>
-          <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+          <div className="flex items-center gap-2 mb-2">
+            {roomColor && (
+              <span
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: roomColor.dot }}
+              />
+            )}
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              {room}
+            </h2>
+          </div>
+          <div
+            className="bg-white rounded-xl shadow-sm divide-y divide-gray-100 overflow-hidden"
+            style={roomColor ? { borderLeft: `3px solid ${roomColor.dot}` } : {}}
+          >
             {items.map((accessory) => {
               const parts      = accessory.accessory_id.split(':');
               const isBridge   = parts.length === 6 && (accessory.category === 2 || !accessory.last_seen);
@@ -135,7 +155,8 @@ export default function AccessoryList() {
             })}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
