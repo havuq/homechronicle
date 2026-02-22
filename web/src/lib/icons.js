@@ -46,6 +46,46 @@ export function getServiceIcon(serviceType) {
   return SERVICE_ICONS[serviceType] ?? Home;
 }
 
+/**
+ * Returns before → after strings for numeric/enum characteristics where
+ * showing the transition adds value. Returns null when not applicable.
+ */
+export function describeBeforeAfter(characteristic, oldValue, newValue) {
+  if (oldValue == null || oldValue === '' || String(oldValue) === String(newValue)) return null;
+  switch (characteristic) {
+    case 'Brightness':
+    case 'Volume':
+      return { from: `${Math.round(oldValue)}%`, to: `${Math.round(newValue)}%` };
+    case 'Saturation':
+      return { from: `${parseFloat(oldValue).toFixed(0)}%`, to: `${parseFloat(newValue).toFixed(0)}%` };
+    case 'CurrentTemperature':
+    case 'TargetTemperature':
+      return { from: `${parseFloat(oldValue).toFixed(1)}°C`, to: `${parseFloat(newValue).toFixed(1)}°C` };
+    case 'CurrentRelativeHumidity':
+      return { from: `${parseFloat(oldValue).toFixed(0)}%`, to: `${parseFloat(newValue).toFixed(0)}%` };
+    case 'Hue':
+      return { from: `${parseFloat(oldValue).toFixed(0)}°`, to: `${parseFloat(newValue).toFixed(0)}°` };
+    case 'ColorTemperature':
+      return { from: `${Math.round(oldValue)} mired`, to: `${Math.round(newValue)} mired` };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Formats a millisecond gap into a human-readable string.
+ * Returns null for gaps under 2 minutes (not worth displaying).
+ */
+export function formatGap(ms) {
+  if (ms < 2 * 60_000) return null;
+  const totalMin = Math.round(ms / 60_000);
+  const h        = Math.floor(totalMin / 60);
+  const m        = totalMin % 60;
+  if (h === 0)  return `${m}m`;
+  if (m === 0)  return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
 /** Returns a human-readable description of a characteristic change */
 export function describeChange(characteristic, newValue) {
   switch (characteristic) {
