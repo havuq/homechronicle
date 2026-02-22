@@ -6,6 +6,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { networkInterfaces } from 'os';
 import express from 'express';
 import cors from 'cors';
 import { IPDiscovery, HttpClient } from 'hap-controller';
@@ -19,8 +20,23 @@ const ROOMS_FILE = process.env.ROOMS_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/rooms.json' : './data/rooms.json');
 
 const PORT = Number(process.env.API_PORT ?? 3001);
-const DISCOVER_IFACE = process.env.DISCOVER_IFACE || null;
 const RESCAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+// Resolve the mDNS network interface.
+// If DISCOVER_IFACE is set but doesn't exist on this machine, log the
+// available interfaces and fall back to null (= let the OS choose).
+const DISCOVER_IFACE = (() => {
+  const requested = process.env.DISCOVER_IFACE || null;
+  if (!requested) return null;
+  const available = Object.keys(networkInterfaces());
+  if (available.includes(requested)) return requested;
+  console.warn(
+    `[discovery] Interface '${requested}' not found on this machine.\n` +
+    `            Available: ${available.join(', ')}\n` +
+    `            Set DISCOVER_IFACE to one of the above, or unset it to auto-select.`
+  );
+  return null; // fall back — dnssd will pick the default interface
+})();
 
 // ---------------------------------------------------------------------------
 // Pairing store helpers
@@ -81,18 +97,28 @@ if (pairedCount > 0) {
 let discoveryCache = []; // last scan results
 
 function runDiscoveryScan() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const found = new Map();
-    const discovery = new IPDiscovery(DISCOVER_IFACE);
+    let discovery;
+
+    try {
+      discovery = new IPDiscovery(DISCOVER_IFACE);
+    } catch (err) {
+      return reject(err);
+    }
 
     discovery.on('serviceUp', (service) => {
       if (!found.has(service.id)) found.set(service.id, service);
     });
 
-    discovery.start();
+    try {
+      discovery.start();
+    } catch (err) {
+      return reject(err);
+    }
 
     setTimeout(() => {
-      discovery.stop();
+      try { discovery.stop(); } catch { /* ignore stop errors */ }
       const currentPairings = loadPairings();
       discoveryCache = [...found.values()].map((s) => ({
         id:       s.id,
@@ -109,9 +135,16 @@ function runDiscoveryScan() {
   });
 }
 
+function safeDiscoveryScan() {
+  return runDiscoveryScan().catch((err) => {
+    console.warn(`[discovery] Scan skipped: ${err.message}`);
+    return [];
+  });
+}
+
 // Run initial scan in background, then repeat hourly
-runDiscoveryScan();
-setInterval(runDiscoveryScan, RESCAN_INTERVAL_MS);
+safeDiscoveryScan();
+setInterval(safeDiscoveryScan, RESCAN_INTERVAL_MS);
 
 // ---------------------------------------------------------------------------
 // 3. REST API
@@ -144,7 +177,12 @@ app.post('/api/setup/scan', async (_req, res) => {
     res.json({ accessories: results, cachedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[setup] Scan error:', err.message);
-    res.status(500).json({ error: 'Scan failed: ' + err.message });
+    // Return a partial result with current cache so UI doesn't break
+    res.status(200).json({
+      accessories: discoveryCache,
+      cachedAt: new Date().toISOString(),
+      warning: `mDNS scan failed: ${err.message}. Check DISCOVER_IFACE setting.`,
+    });
   }
 });
 
