@@ -423,6 +423,74 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
+// GET /api/events/jump
+// Finds the most recent event matching a device + hour bucket (from the
+// heatmap) and tells the client which page it lives on so the timeline
+// can navigate directly to it.
+//
+// Query params:
+//   accessory — exact accessory_name match
+//   hour      — 0–23 (UTC hour)
+//   limit     — page size to calculate page number (default 50)
+//   room, from, to — same optional filters as /api/events
+//
+// Response: { page: number, eventId: string } | { page: null, eventId: null }
+app.get('/api/events/jump', async (req, res) => {
+  const { accessory, hour, limit = '50', room, from, to } = req.query;
+
+  if (!accessory || hour === undefined) {
+    return res.status(400).json({ error: 'accessory and hour are required' });
+  }
+
+  const pageSize = Math.min(200, Math.max(1, parseInt(limit, 10)));
+  const hourInt  = parseInt(hour, 10);
+
+  try {
+    // ── Step 1: find the most recent event for this device+hour ──────────
+    const matchParams     = [accessory, hourInt];
+    const matchConditions = [
+      `accessory_name = $1`,
+      `EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC') = $2`,
+    ];
+    if (room) { matchParams.push(room); matchConditions.push(`room_name = $${matchParams.length}`); }
+    if (from) { matchParams.push(from); matchConditions.push(`timestamp >= $${matchParams.length}`); }
+    if (to)   { matchParams.push(to);   matchConditions.push(`timestamp <= $${matchParams.length}`); }
+
+    const matchResult = await pool.query(
+      `SELECT id, timestamp FROM event_logs
+       WHERE ${matchConditions.join(' AND ')}
+       ORDER BY timestamp DESC LIMIT 1`,
+      matchParams
+    );
+
+    if (!matchResult.rows.length) return res.json({ page: null, eventId: null });
+
+    const { id: eventId, timestamp } = matchResult.rows[0];
+
+    // ── Step 2: count events newer than this one (same non-device filters) ─
+    // This mirrors the ORDER BY timestamp DESC used in /api/events so the
+    // page number calculation is consistent.
+    const countParams     = [timestamp];
+    const countConditions = [`timestamp > $1`];
+    if (room) { countParams.push(room); countConditions.push(`room_name = $${countParams.length}`); }
+    if (from) { countParams.push(from); countConditions.push(`timestamp >= $${countParams.length}`); }
+    if (to)   { countParams.push(to);   countConditions.push(`timestamp <= $${countParams.length}`); }
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) AS newer FROM event_logs WHERE ${countConditions.join(' AND ')}`,
+      countParams
+    );
+
+    const newer = parseInt(countResult.rows[0].newer, 10);
+    const page  = Math.floor(newer / pageSize) + 1;
+
+    res.json({ page, eventId: String(eventId) });
+  } catch (err) {
+    console.error('[api] /api/events/jump error:', err.message ?? err.stack ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Helper: extract the top-level bridge MAC from an accessory_id.
 // "AA:BB:CC:DD:EE:FF:3" → "AA:BB:CC:DD:EE:FF"   (bridge child)
 // "AA:BB:CC:DD:EE:FF"   → "AA:BB:CC:DD:EE:FF"   (bridge or standalone)
