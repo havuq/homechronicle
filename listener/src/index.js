@@ -176,7 +176,7 @@ app.post('/api/setup/scan', async (_req, res) => {
     const results = await runDiscoveryScan();
     res.json({ accessories: results, cachedAt: new Date().toISOString() });
   } catch (err) {
-    console.error('[setup] Scan error:', err.message);
+    console.error('[setup] Scan error:', err.message ?? err.stack ?? err);
     // Return a partial result with current cache so UI doesn't break
     res.status(200).json({
       accessories: discoveryCache,
@@ -230,7 +230,7 @@ app.post('/api/setup/pair', async (req, res) => {
     console.log(`[setup] Paired successfully: ${cached.name}`);
     res.json({ success: true, name: cached.name });
   } catch (err) {
-    console.error(`[setup] Pairing failed for ${deviceId}:`, err.message);
+    console.error(`[setup] Pairing failed for ${deviceId}:`, err.message ?? err.stack ?? err);
     const msg = err.message ?? '';
     let friendly = 'Pairing failed: ' + err.message;
     if (msg.includes('0x02') || /authentication/i.test(msg))
@@ -281,7 +281,7 @@ app.get('/api/setup/bridge-children/:deviceId', async (req, res) => {
     console.log(`[setup] bridge-children: ${pairing.name} → ${children.length} child(ren)`);
     res.json(children);
   } catch (err) {
-    console.error(`[setup] bridge-children error for ${deviceId}:`, err.message);
+    console.error(`[setup] bridge-children error for ${deviceId}:`, err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Could not query bridge: ' + err.message });
   }
 });
@@ -364,7 +364,7 @@ app.delete('/api/data/accessory', async (req, res) => {
     console.log(`[data] Deleted ${result.rowCount} event(s) for accessory ${accessoryId}`);
     res.json({ success: true, deleted: result.rowCount });
   } catch (err) {
-    console.error('[data] /api/data/accessory error:', err.message);
+    console.error('[data] /api/data/accessory error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -377,7 +377,7 @@ app.delete('/api/data/all', async (_req, res) => {
     console.log(`[data] Wiped all data — ${result.rowCount} event(s) deleted`);
     res.json({ success: true, deleted: result.rowCount });
   } catch (err) {
-    console.error('[data] /api/data/all error:', err.message);
+    console.error('[data] /api/data/all error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -418,7 +418,7 @@ app.get('/api/events', async (req, res) => {
 
     res.json({ total, page, limit, pages: Math.ceil(total / limit), events: dataResult.rows });
   } catch (err) {
-    console.error('[api] /api/events error:', err.message);
+    console.error('[api] /api/events error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -482,7 +482,7 @@ app.get('/api/accessories', async (_req, res) => {
 
     res.json([...dbRows, ...neverSeen]);
   } catch (err) {
-    console.error('[api] /api/accessories error:', err.message);
+    console.error('[api] /api/accessories error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -542,7 +542,7 @@ app.get('/api/stats/heatmap', async (_req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
-    console.error('[api] /api/stats/heatmap error:', err.message);
+    console.error('[api] /api/stats/heatmap error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -562,7 +562,7 @@ app.get('/api/stats/device-patterns', async (_req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
-    console.error('[api] /api/stats/device-patterns error:', err.message);
+    console.error('[api] /api/stats/device-patterns error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

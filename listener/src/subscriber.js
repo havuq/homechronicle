@@ -169,7 +169,7 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs) {
           });
           console.log(`[event] ${effectiveName} → ${meta.characteristicName}: ${change.value}`);
         } catch (err) {
-          console.error(`[subscriber] DB insert failed:`, err.message);
+          console.error(`[subscriber] DB insert failed:`, err.message ?? err.stack ?? err);
         }
       }
     };
@@ -185,7 +185,7 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs) {
         await client.subscribeCharacteristics(formerSubscribes);
         console.log(`[subscriber] ${accessoryName}: resubscribed to ${formerSubscribes.length} characteristic(s)`);
       } catch (err) {
-        console.error(`[subscriber] ${accessoryName}: resubscribe failed:`, err.message);
+        console.error(`[subscriber] ${accessoryName}: resubscribe failed:`, err.message ?? err.stack ?? err);
         scheduleReconnect(deviceId, pairing, rooms, retryDelayMs);
       }
     });
@@ -194,12 +194,12 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs) {
       await client.subscribeCharacteristics(watchedKeys);
       console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
     } catch (err) {
-      console.error(`[subscriber] ${accessoryName}: subscribe failed:`, err.message);
+      console.error(`[subscriber] ${accessoryName}: subscribe failed:`, err.message ?? err.stack ?? err);
       scheduleReconnect(deviceId, pairing, rooms, retryDelayMs);
     }
 
   }).catch((err) => {
-    console.error(`[subscriber] ${accessoryName}: getAccessories failed:`, err.message);
+    console.error(`[subscriber] ${accessoryName}: getAccessories failed:`, err.message ?? err.stack ?? err);
     scheduleReconnect(deviceId, pairing, rooms, retryDelayMs);
   });
 }
