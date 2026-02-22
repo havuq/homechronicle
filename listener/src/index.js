@@ -489,6 +489,46 @@ app.get('/api/stats/top-devices', async (_req, res) => {
   }
 });
 
+// GET /api/stats/heatmap — events per device per hour of day, last 7 days
+// Returns [{accessory_name, hour, count}]
+app.get('/api/stats/heatmap', async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT accessory_name,
+             EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS hour,
+             COUNT(*)::int AS count
+      FROM event_logs
+      WHERE timestamp >= NOW() - INTERVAL '7 days'
+      GROUP BY accessory_name, hour
+      ORDER BY accessory_name, hour
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('[api] /api/stats/heatmap error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/stats/device-patterns — per-device per-hour totals, last 30 days
+// Returns [{accessory_name, hour, total_count}] — client divides by 30 for daily avg
+app.get('/api/stats/device-patterns', async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT accessory_name,
+             EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS hour,
+             COUNT(*)::int AS total_count
+      FROM event_logs
+      WHERE timestamp >= NOW() - INTERVAL '30 days'
+      GROUP BY accessory_name, hour
+      ORDER BY accessory_name, hour
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('[api] /api/stats/device-patterns error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', paired: Object.keys(loadPairings()).length });
 });

@@ -67,3 +67,21 @@ export function useTopDevices() {
     refetchInterval: 60_000,
   });
 }
+
+export function useHeatmap() {
+  return useQuery({
+    queryKey: ['stats', 'heatmap'],
+    queryFn: () => fetchJson(`${BASE}/stats/heatmap`),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useDevicePatterns() {
+  return useQuery({
+    queryKey: ['stats', 'device-patterns'],
+    queryFn: () => fetchJson(`${BASE}/stats/device-patterns`),
+    staleTime: 300_000,
+    refetchInterval: 300_000,
+  });
+}

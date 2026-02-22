@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { LayoutList, BarChart2, Home, Settings } from 'lucide-react';
 import clsx from 'clsx';
 import Timeline from './components/Timeline.jsx';
 import ActivityChart from './components/ActivityChart.jsx';
 import TrendChart from './components/TrendChart.jsx';
 import TopDevices from './components/TopDevices.jsx';
+import HeatmapLane from './components/HeatmapLane.jsx';
 import AccessoryList from './components/AccessoryList.jsx';
 import Setup from './components/Setup.jsx';
 
@@ -16,13 +17,25 @@ const TABS = [
 ];
 
 export default function App() {
-  const [tab, setTab] = useState('timeline');
+  const [tab, setTab]           = useState('timeline');
+  const [iconBroken, setIconBroken] = useState(false);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
-        <img src="/icon.png" alt="HomeChronicle" className="h-8 w-8 rounded-lg flex-shrink-0" />
+        {iconBroken ? (
+          <div className="h-8 w-8 rounded-lg flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
+            <Home size={16} className="text-white" />
+          </div>
+        ) : (
+          <img
+            src="/icon.png"
+            alt=""
+            className="h-8 w-8 rounded-lg flex-shrink-0"
+            onError={() => setIconBroken(true)}
+          />
+        )}
         <div>
           <h1 className="text-lg font-semibold text-gray-900 leading-tight">HomeChronicle</h1>
           <p className="text-xs text-gray-400 leading-tight">Event Logging for Apple HomeKit</p>
@@ -61,6 +74,9 @@ export default function App() {
             </div>
             <div className="bg-white rounded-xl shadow-sm p-5">
               <TopDevices />
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <HeatmapLane />
             </div>
           </div>
         )}

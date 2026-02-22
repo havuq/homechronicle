@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "homechronicle-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd web && node_modules/.bin/vite --port 5173 --host"],
+      "port": 5173
+    }
+  ]
+}
