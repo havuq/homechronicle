@@ -598,29 +598,111 @@ app.get('/api/stats/hourly', async (_req, res) => {
   }
 });
 
-app.get('/api/stats/daily', async (_req, res) => {
+app.get('/api/stats/daily', async (req, res) => {
+  const days = Math.min(365, Math.max(7, parseInt(req.query.days ?? '30', 10)));
   try {
     const result = await pool.query(`
       SELECT DATE(timestamp AT TIME ZONE 'UTC') AS day, COUNT(*) AS count
-      FROM event_logs WHERE timestamp >= NOW() - INTERVAL '90 days'
+      FROM event_logs WHERE timestamp >= NOW() - INTERVAL '${days} days'
       GROUP BY day ORDER BY day
     `);
     res.json(result.rows);
   } catch (err) {
+    console.error('[api] /api/stats/daily error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 app.get('/api/stats/top-devices', async (_req, res) => {
   try {
+    // Group by accessory_name only (not room_name) to avoid duplicate rows when
+    // the same device has events logged under different room values.
+    // LATERAL join fetches the most-recent accessory_id, room_name and
+    // service_type in a single pass so we can apply the rooms.json overlay.
     const result = await pool.query(`
-      SELECT accessory_name, room_name, COUNT(*) AS event_count
-      FROM event_logs WHERE timestamp >= NOW() - INTERVAL '7 days'
-      GROUP BY accessory_name, room_name
-      ORDER BY event_count DESC LIMIT 10
+      SELECT
+        counts.accessory_name,
+        counts.event_count,
+        latest.accessory_id,
+        latest.room_name,
+        latest.service_type
+      FROM (
+        SELECT accessory_name, COUNT(*)::int AS event_count
+        FROM event_logs
+        WHERE timestamp >= NOW() - INTERVAL '7 days'
+        GROUP BY accessory_name
+        ORDER BY event_count DESC
+        LIMIT 10
+      ) counts
+      JOIN LATERAL (
+        SELECT accessory_id, room_name, service_type
+        FROM event_logs
+        WHERE accessory_name = counts.accessory_name
+        ORDER BY timestamp DESC
+        LIMIT 1
+      ) latest ON true
+      ORDER BY counts.event_count DESC
+    `);
+    const rooms = loadRooms();
+    const rows = result.rows.map((r) => ({
+      ...r,
+      room_name: rooms[r.accessory_id] ?? rooms[parentBridgeId(r.accessory_id)] ?? r.room_name,
+    }));
+    res.json(rows);
+  } catch (err) {
+    console.error('[api] /api/stats/top-devices error:', err.message ?? err.stack ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/stats/rooms?days=7
+// Returns [{room_name, count}] sorted by count desc, with rooms.json overlay applied.
+app.get('/api/stats/rooms', async (req, res) => {
+  const days = Math.min(90, Math.max(1, parseInt(req.query.days ?? '7', 10)));
+  try {
+    const result = await pool.query(`
+      SELECT accessory_id, room_name, COUNT(*)::int AS count
+      FROM event_logs
+      WHERE timestamp >= NOW() - INTERVAL '${days} days'
+      GROUP BY accessory_id, room_name
+    `);
+    const rooms = loadRooms();
+    const totals = {};
+    for (const row of result.rows) {
+      const name = rooms[row.accessory_id]
+                ?? rooms[parentBridgeId(row.accessory_id)]
+                ?? row.room_name;
+      if (!name) continue;
+      totals[name] = (totals[name] ?? 0) + row.count;
+    }
+    const sorted = Object.entries(totals)
+      .map(([room_name, count]) => ({ room_name, count }))
+      .sort((a, b) => b.count - a.count);
+    res.json(sorted);
+  } catch (err) {
+    console.error('[api] /api/stats/rooms error:', err.message ?? err.stack ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/stats/weekday
+// Returns [{day_of_week (0=Sun…6=Sat), hour, count}] for last 90 days.
+// Used to show a Mon–Sun × hour activity heatmap.
+app.get('/api/stats/weekday', async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        EXTRACT(DOW  FROM timestamp AT TIME ZONE 'UTC')::int AS day_of_week,
+        EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS hour,
+        COUNT(*)::int AS count
+      FROM event_logs
+      WHERE timestamp >= NOW() - INTERVAL '90 days'
+      GROUP BY day_of_week, hour
+      ORDER BY day_of_week, hour
     `);
     res.json(result.rows);
   } catch (err) {
+    console.error('[api] /api/stats/weekday error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
