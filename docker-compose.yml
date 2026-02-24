@@ -48,6 +48,12 @@ services:
       - "3000:80"
     networks:
       - my-network
+    # Route Nginx API proxy to the host-networked listener.
+    # host-gateway resolves to the Docker bridge gateway (i.e. the NAS host).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      LISTENER_HOST: host.docker.internal
 
 volumes:
   postgres-data:
