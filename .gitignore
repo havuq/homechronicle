@@ -1,5 +1,6 @@
 # Environment
 .env
+.claude/
 
 # HomeKit pairing keys — never commit these
 listener/data/pairings.json
