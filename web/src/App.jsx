@@ -2,10 +2,13 @@ import { useState, useRef } from 'react';
 import { LayoutList, BarChart2, Home, Settings } from 'lucide-react';
 import clsx from 'clsx';
 import Timeline from './components/Timeline.jsx';
+import StatsCards from './components/StatsCards.jsx';
 import ActivityChart from './components/ActivityChart.jsx';
 import TrendChart from './components/TrendChart.jsx';
 import TopDevices from './components/TopDevices.jsx';
 import HeatmapLane from './components/HeatmapLane.jsx';
+import RoomChart from './components/RoomChart.jsx';
+import WeekdayHeatmap from './components/WeekdayHeatmap.jsx';
 import AccessoryList from './components/AccessoryList.jsx';
 import Setup from './components/Setup.jsx';
 
@@ -17,7 +20,7 @@ const TABS = [
 ];
 
 export default function App() {
-  const [tab, setTab]           = useState('timeline');
+  const [tab, setTab]               = useState('timeline');
   const [iconBroken, setIconBroken] = useState(false);
 
   return (
@@ -65,19 +68,41 @@ export default function App() {
         {tab === 'timeline' && <Timeline />}
 
         {tab === 'dashboard' && (
-          <div className="max-w-3xl mx-auto py-6 px-4 space-y-8">
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <ActivityChart />
-            </div>
+          <div className="max-w-5xl mx-auto py-6 px-4 space-y-4">
+
+            {/* KPI cards row */}
+            <StatsCards />
+
+            {/* Full-width trend chart */}
             <div className="bg-white rounded-xl shadow-sm p-5">
               <TrendChart />
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <TopDevices />
+
+            {/* 2-col: hourly activity + room breakdown */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <ActivityChart />
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <RoomChart />
+              </div>
             </div>
+
+            {/* 2-col: top devices + weekday heatmap */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <TopDevices />
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-5">
+                <WeekdayHeatmap />
+              </div>
+            </div>
+
+            {/* Full-width per-device heatmap */}
             <div className="bg-white rounded-xl shadow-sm p-5">
               <HeatmapLane />
             </div>
+
           </div>
         )}
 

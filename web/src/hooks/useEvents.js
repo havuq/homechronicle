@@ -23,8 +23,6 @@ export function useEvents(filters = {}, page = 1) {
   return useQuery({
     queryKey: ['events', filters, page],
     queryFn: () => fetchJson(`${BASE}/events?${qs}`),
-    // Poll every 10s on page 1 so new events surface automatically.
-    // Higher pages are historical — no need to poll.
     refetchInterval: page === 1 ? 10_000 : false,
     refetchIntervalInBackground: false,
   });
@@ -34,8 +32,6 @@ export function useAccessories() {
   return useQuery({
     queryKey: ['accessories'],
     queryFn: () => fetchJson(`${BASE}/accessories`),
-    // Poll every 15s so room assignments and new first-event accessories appear
-    // without a manual reload. Longer than events (10s) since metadata changes less often.
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
   });
@@ -50,10 +46,10 @@ export function useHourlyStats() {
   });
 }
 
-export function useDailyStats() {
+export function useDailyStats(days = 30) {
   return useQuery({
-    queryKey: ['stats', 'daily'],
-    queryFn: () => fetchJson(`${BASE}/stats/daily`),
+    queryKey: ['stats', 'daily', days],
+    queryFn: () => fetchJson(`${BASE}/stats/daily?days=${days}`),
     staleTime: 60_000,
     refetchInterval: 60_000,
   });
@@ -65,6 +61,24 @@ export function useTopDevices() {
     queryFn: () => fetchJson(`${BASE}/stats/top-devices`),
     staleTime: 60_000,
     refetchInterval: 60_000,
+  });
+}
+
+export function useRoomStats(days = 7) {
+  return useQuery({
+    queryKey: ['stats', 'rooms', days],
+    queryFn: () => fetchJson(`${BASE}/stats/rooms?days=${days}`),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useWeekdayStats() {
+  return useQuery({
+    queryKey: ['stats', 'weekday'],
+    queryFn: () => fetchJson(`${BASE}/stats/weekday`),
+    staleTime: 300_000,
+    refetchInterval: 300_000,
   });
 }
 
