@@ -19,7 +19,6 @@ services:
 
   listener:
     image: ghcr.io/havuq/homechronicle/listener:latest
-    build: ./listener          # kept so `docker compose build` still works locally
     restart: unless-stopped
     # network_mode: host is required so the container can reach HomeKit accessories
     # via mDNS (multicast UDP on port 5353). This means the container shares the
@@ -38,10 +37,6 @@ services:
 
   web:
     image: ghcr.io/havuq/homechronicle/web:latest
-    build:                     # kept so `docker compose build` still works locally
-      context: ./web
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3001}
     restart: unless-stopped
     ports:
       - "3000:80"
