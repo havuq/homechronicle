@@ -2,18 +2,37 @@
 
 Event Logging for Apple HomeKit — a self-hosted dashboard that captures every state change from your HomeKit accessories and displays them in a searchable, filterable timeline with activity charts.
 
-Apple's Home app shows you the current state of your accessories — this shows you everything that *happened* and when.
+Apple's Home app shows you the current state of your accessories — HomeChronicle shows you everything that *happened* and when.
 
 ## Features
 
+### Setup & Pairing
 - **In-app Setup** — discover accessories on your network, enter PINs, and pair directly from the browser — no CLI required
 - **Bulk pairing** — select multiple accessories, enter a shared PIN, and pair them all at once with a progress bar
-- **Homebridge / bridge support** — pair a Homebridge instance once to log all its child accessories automatically
+- **Homebridge / bridge support** — pair a Homebridge instance once to log all its child accessories automatically; expand any bridge in Setup to see and configure each child device
 - **PIN vault** — PINs saved in the browser after first use; green indicator when a saved PIN is already on file
 - **PIN help guide** — per-device step-by-step modal covering physical label, packaging, QR code, manufacturer app, and support contact
-- **Timeline** — scrollable event feed grouped by day, with filters for room, accessory name, and date range
-- **Dashboard** — bar chart of activity by hour, 7-day trend line, top active devices
-- **Accessories** — list of all paired devices with last-seen timestamps
+- **Room assignment** — assign room names to each accessory (and individual bridge children) directly in Setup; rooms persist and appear across all views
+
+### Timeline
+- **Live event feed** — scrollable timeline grouped by day, auto-refreshes every 10 seconds
+- **Filters** — filter by room, accessory name, characteristic type, and date range
+- **Service type labels** — events show human-readable type labels (Lightbulb, MotionSensor, Lock, etc.) instead of raw HAP UUIDs
+
+### Accessories
+- **Live list** — all paired devices with room grouping, auto-refreshes every 15 seconds
+- **Activity dots** — green (active < 1h), yellow (active < 24h), grey (older/never)
+- **Bridge info** — bridge rows show IP address and time since pairing
+- **Child device attribution** — each child shows "via Homebridge XYZ" so you know which bridge it came from
+- **Event counts** — total logged events shown per accessory
+
+### Dashboard
+- **Hourly activity chart** — bar chart of events by hour of day (last 30 days)
+- **7-day trend** — daily event count trend line
+- **Top devices** — most active accessories in the last 7 days
+
+### Data Management
+- **Danger Zone** — collapsible section in Setup to delete history for individual accessories or wipe all event data
 - **Always-on** — runs 24/7 in Docker; no phone required
 - **Non-destructive** — pairs alongside Apple Home without disrupting it
 
@@ -32,10 +51,10 @@ Apple's Home app shows you the current state of your accessories — this shows 
 ## Requirements
 
 - Docker + Docker Compose
-- HomeKit accessories on the same local network
-- The 8-digit PIN for each accessory you want to pair
+- HomeKit accessories on the same local network (or a Homebridge instance)
+- The 8-digit setup PIN for each accessory or bridge you want to pair
 
-## Quick Start
+## Installation
 
 ### 1. Clone and configure
 
@@ -43,36 +62,11 @@ Apple's Home app shows you the current state of your accessories — this shows 
 git clone https://github.com/havuq/homechronicle.git
 cd homechronicle
 cp .env.example .env
-# Edit .env — change POSTGRES_PASSWORD at minimum
 ```
 
-### 2. Start Postgres
+Open `.env` and change `POSTGRES_PASSWORD` to something secure. The other defaults are fine to leave as-is.
 
-```bash
-docker compose up postgres -d
-```
-
-### 3. Discover accessories on your network
-
-```bash
-docker compose run --rm listener node src/discover.js
-```
-
-This scans for 10 seconds and prints all HomeKit accessories it finds. Note the **Device ID** for each one you want to pair.
-
-### 4. Pair each accessory
-
-```bash
-docker compose run --rm listener node src/pairing.js "<device-id>" "<pin>"
-# Example:
-docker compose run --rm listener node src/pairing.js "AA:BB:CC:DD:EE:FF" "111-22-333"
-```
-
-Devices already paired with Apple Home can be paired here simultaneously — HomeKit allows multiple controllers. The PIN is the same code used when you first added the device to Apple Home (also visible in the Home app under accessory settings).
-
-Repeat for each accessory. Keys are saved to `listener/data/pairings.json`.
-
-### 5. Start everything
+### 2. Start the stack
 
 ```bash
 docker compose up -d
@@ -80,53 +74,88 @@ docker compose up -d
 
 Open **http://localhost:3000** (or replace `localhost` with your server's IP).
 
-### 6. Restart listener after pairing new devices
+### 3. Pair your accessories
 
-```bash
-docker compose restart listener
-```
+1. Open the app and go to the **Setup** tab
+2. Click **Rescan Network** — the app scans for 10 seconds and lists every HomeKit accessory it finds
+3. Enter the 8-digit PIN for each accessory you want to pair (format: `111-22-333`)
+   - Can't find a PIN? Click **Can't find PIN?** next to any device for step-by-step help
+   - For Homebridge: the PIN is in the Homebridge UI under the QR code
+4. Select one or more accessories and click **Pair Selected**
+5. Once paired, events start flowing immediately — check the **Timeline** tab
 
-## Local Development (macOS)
+> **Tip:** Devices already paired with Apple Home can be paired here simultaneously. HomeKit allows multiple controllers and the same PIN works.
 
-`network_mode: host` doesn't work on Docker Desktop for Mac, so a `docker-compose.override.yml` is included that switches to bridge networking for local testing.
+### 4. Assign room names (optional)
 
-To seed the database with fake events for UI development:
-
-```bash
-docker compose run --rm listener node src/seed.js
-```
-
-Then bring up the full stack:
-
-```bash
-docker compose up -d
-```
+In Setup → Paired Devices, type a room name next to each device and press Enter. For Homebridge bridges, click **Show child devices** to assign rooms to individual accessories under the bridge.
 
 ## NAS Deployment (Synology / QNAP)
 
-Copy the project to your NAS (do **not** copy `docker-compose.override.yml` — that's for local dev only). The base `docker-compose.yml` uses `network_mode: host` on the listener container, which is required for mDNS to work on Linux.
+The base `docker-compose.yml` uses `network_mode: host` on the listener container, which is required for mDNS HomeKit discovery to work on Linux hosts.
 
 ```bash
-# On the NAS:
-cp .env.example .env   # edit passwords
+# Copy the project to your NAS (do NOT copy docker-compose.override.yml)
+cp .env.example .env    # edit POSTGRES_PASSWORD
 docker compose up -d
-docker compose run --rm listener node src/discover.js
 ```
 
-If mDNS discovery fails, check that `avahi-daemon` is running on the NAS host, or add an mDNS repeater container to your stack.
+If mDNS discovery fails (Setup shows "No accessories found" after scanning):
+- Check that `avahi-daemon` is running on the NAS host
+- Or add an mDNS repeater container to your Compose stack
 
-## API
+## Troubleshooting
 
-The listener exposes a REST API on port 3001 (proxied through the web container at `/api`):
+**Setup shows "No accessories found" after scanning**
+- Make sure the listener container is on the same network segment as your accessories
+- On NAS: confirm `network_mode: host` is active (the override file must not be present)
+- The scan only lasts 10 seconds — some accessories respond slowly; try scanning again
+
+**Accessories paired but no events showing up**
+- Restart the listener: `docker compose restart listener`
+- Check logs for errors: `docker compose logs -f listener`
+- Verify the accessory is reachable: check the IP in Setup matches what your router shows
+- Some characteristics require explicit subscription — check the logs for `[event-skip]` lines showing unrecognised UUIDs
+
+**"Could not load child devices" on a bridge in Setup**
+- The bridge must be online and reachable when you expand it
+- Check the bridge IP in Setup matches your router's DHCP lease for that device
+- Homebridge may need a restart if it has crashed
+
+**Room names not appearing on the Accessories tab**
+- The Accessories tab auto-refreshes every 15 seconds — wait a moment after saving a room in Setup
+- If rooms never appear, restart the listener so it picks up the updated `rooms.json`
+
+**Events stopped flowing after the listener was restarted**
+- The listener re-subscribes to all paired accessories on startup — this is normal
+- If events still don't flow after a minute, check `docker compose logs listener` for connection errors
+
+**Pairing fails with "wrong PIN" error**
+- Double-check the PIN format: `111-22-333` (with dashes, not spaces)
+- For Homebridge, the PIN is shown in the Homebridge dashboard under the QR code — it may differ from individual accessory PINs
+- Try factory-resetting the accessory as a last resort (this will require re-adding to Apple Home too)
+
+## API Reference
+
+The listener exposes a REST API on port 3001, proxied through the web container at `/api`:
 
 | Endpoint | Description |
-|----------|-------------|
+|---|---|
 | `GET /api/events` | Paginated events. Params: `page`, `limit`, `room`, `accessory`, `characteristic`, `from`, `to` |
-| `GET /api/accessories` | All known accessories with last-seen time |
+| `GET /api/accessories` | All accessories with last-seen time, event count, room, and bridge info |
 | `GET /api/stats/hourly` | Event count by hour of day (last 30 days) |
 | `GET /api/stats/daily` | Event count by day (last 90 days) |
 | `GET /api/stats/top-devices` | Most active accessories (last 7 days) |
 | `GET /api/health` | Health check + paired device count |
+| `GET /api/setup/discovered` | Cached mDNS scan results with pairing status |
+| `POST /api/setup/scan` | Trigger a new mDNS scan |
+| `POST /api/setup/pair` | Pair a device by ID and PIN |
+| `DELETE /api/setup/pairing/:deviceId` | Remove a pairing |
+| `GET /api/setup/bridge-children/:deviceId` | List child accessories of a paired bridge |
+| `PATCH /api/setup/room` | Set or clear a room assignment |
+| `GET /api/setup/rooms` | Get all saved room assignments |
+| `DELETE /api/data/accessory` | Delete all event history for one accessory |
+| `DELETE /api/data/all` | Wipe all event data |
 
 ## Project Structure
 
@@ -141,27 +170,27 @@ homechronicle/
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/
-│       ├── index.js             # Entry point + Express API
+│       ├── index.js             # Entry point + Express REST API
 │       ├── discover.js          # mDNS scanner CLI
 │       ├── pairing.js           # Pairing CLI
-│       ├── subscriber.js        # HAP event subscriptions
+│       ├── subscriber.js        # HAP event subscriptions + DB inserts
 │       ├── db.js                # PostgreSQL client
-│       └── seed.js              # Fake data for local dev
+│       └── seed.js              # Fake data generator
 └── web/                         # React + Vite frontend
     ├── Dockerfile
     ├── nginx.conf.template
     └── src/
         ├── App.jsx
-        ├── components/
-        ├── hooks/
-        └── lib/
+        ├── components/          # Timeline, AccessoryList, Dashboard, Setup
+        ├── hooks/               # useEvents, useAccessories, useStats
+        └── lib/                 # icons.js (SF Symbol → Lucide mappings)
 ```
 
 ## Security Notes
 
-- `listener/data/pairings.json` contains your HomeKit pairing keys — this file is gitignored and should never be committed or shared
+- `listener/data/pairings.json` contains your HomeKit pairing keys — gitignored, never commit or share this file
 - `.env` is gitignored; only `.env.example` is in the repo
-- The web UI and API are not authenticated — run behind a VPN or firewall, not exposed to the public internet
+- The web UI and API have no authentication — run behind a VPN or firewall, never expose to the public internet
 
 ## License
 

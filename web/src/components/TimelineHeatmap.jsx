@@ -96,18 +96,6 @@ function HeatmapGrid({ data, onHoverCell, onHoverEnd, onClickCell, lockedCell })
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ minWidth: LABEL + 24 * (CELL + GAP) }}>
 
-          {/* Hour labels */}
-          <div style={{ display: 'flex', marginLeft: LABEL, marginBottom: 3 }}>
-            {HOURS.map((h) => (
-              <div
-                key={h}
-                style={{ width: CELL, marginRight: GAP, flexShrink: 0, textAlign: 'center', fontSize: 9, color: '#94a3b8' }}
-              >
-                {h % 6 === 0 ? `${h}h` : ''}
-              </div>
-            ))}
-          </div>
-
           {/* Device rows */}
           {devices.map(([name, hours]) => (
             <div key={name} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
@@ -163,7 +151,7 @@ function HeatmapGrid({ data, onHoverCell, onHoverEnd, onClickCell, lockedCell })
 
           {/* Time-of-day axis */}
           <div style={{ display: 'flex', marginLeft: LABEL, marginTop: 3 }}>
-            {['12am', '6am', '12pm', '6pm', ''].map((label, i) => (
+            {['midnight', '6 am', 'noon', '6 pm', ''].map((label, i) => (
               <div key={i} style={{ width: 6 * (CELL + GAP), flexShrink: 0, fontSize: 9, color: '#94a3b8' }}>
                 {label}
               </div>

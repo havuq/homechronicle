@@ -85,7 +85,7 @@ const pairedCount = Object.keys(pairings).length;
 
 if (pairedCount > 0) {
   console.log(`[init] Loaded ${pairedCount} pairing(s) from ${PAIRINGS_FILE}`);
-  startSubscribers(pairings, loadRooms());
+  startSubscribers(pairings, loadRooms(), (id) => loadPairings()[id]);
 } else {
   console.warn(`[init] No pairings found — use the Setup tab in the web UI to discover and pair accessories.`);
 }
@@ -130,6 +130,25 @@ function runDiscoveryScan() {
         alreadyPaired: !!currentPairings[s.id],
       }));
       console.log(`[discovery] Scan complete — found ${discoveryCache.length} accessory/accessories`);
+
+      // Auto-refresh address/port for paired devices that moved.
+      // The long-term crypto keys are stable; only address/port can drift
+      // (e.g. after a device reboot or Homebridge restart).
+      let pairingsUpdated = false;
+      for (const [id, pairing] of Object.entries(currentPairings)) {
+        const seen = found.get(id);
+        if (!seen) continue; // not visible in this scan — skip
+        if (seen.address !== pairing.address || seen.port !== pairing.port) {
+          console.log(
+            `[discovery] ${pairing.name}: address updated ` +
+            `${pairing.address}:${pairing.port} → ${seen.address}:${seen.port} — pairing refreshed`
+          );
+          currentPairings[id] = { ...pairing, address: seen.address, port: seen.port };
+          pairingsUpdated = true;
+        }
+      }
+      if (pairingsUpdated) savePairings(currentPairings);
+
       resolve(discoveryCache);
     }, 10_000);
   });
@@ -225,7 +244,7 @@ app.post('/api/setup/pair', async (req, res) => {
     if (item) { item.paired = true; item.alreadyPaired = true; }
 
     // Start subscriber for the newly paired device
-    startSubscribers({ [deviceId]: updatedPairings[deviceId] }, loadRooms());
+    startSubscribers({ [deviceId]: updatedPairings[deviceId] }, loadRooms(), (id) => loadPairings()[id]);
 
     console.log(`[setup] Paired successfully: ${cached.name}`);
     res.json({ success: true, name: cached.name });
@@ -416,7 +435,18 @@ app.get('/api/events', async (req, res) => {
       params
     );
 
-    res.json({ total, page, limit, pages: Math.ceil(total / limit), events: dataResult.rows });
+    // Overlay room_name from rooms.json at serve time so:
+    //   • child devices inherit their bridge's room if they have no override
+    //   • events logged before a room was assigned still show the right room
+    const rooms = loadRooms();
+    const events = dataResult.rows.map((row) => ({
+      ...row,
+      room_name: rooms[row.accessory_id]
+               ?? rooms[parentBridgeId(row.accessory_id)]
+               ?? row.room_name,
+    }));
+
+    res.json({ total, page, limit, pages: Math.ceil(total / limit), events });
   } catch (err) {
     console.error('[api] /api/events error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
