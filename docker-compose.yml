@@ -9,13 +9,19 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # Bind port to localhost only so the host-networked listener container
+    # can reach postgres at 127.0.0.1:5432 without exposing it externally.
+    ports:
+      - "127.0.0.1:5432:5432"
     networks:
-      - internal
+      - my-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      # Give postgres time to initialise on first run before healthcheck fires.
+      start_period: 30s
 
   listener:
     image: ghcr.io/havuq/homechronicle/listener:latest
@@ -41,11 +47,11 @@ services:
     ports:
       - "3000:80"
     networks:
-      - internal
+      - my-network
 
 volumes:
   postgres-data:
 
 networks:
-  internal:
-    driver: bridge
+  my-network:
+    external: true
