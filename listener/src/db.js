@@ -49,4 +49,42 @@ export async function insertEvent(event) {
   );
 }
 
+/**
+ * Ensure the database schema exists.
+ * Safe to call on every startup — uses IF NOT EXISTS throughout.
+ * This removes the dependency on postgres init.sql running at container start.
+ */
+export async function migrateDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS event_logs (
+      id              BIGSERIAL PRIMARY KEY,
+      timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      accessory_id    TEXT        NOT NULL,
+      accessory_name  TEXT        NOT NULL,
+      room_name       TEXT,
+      service_type    TEXT,
+      characteristic  TEXT        NOT NULL,
+      old_value       TEXT,
+      new_value       TEXT        NOT NULL,
+      raw_iid         INT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_event_logs_timestamp
+      ON event_logs (timestamp DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_event_logs_accessory
+      ON event_logs (accessory_name);
+
+    CREATE INDEX IF NOT EXISTS idx_event_logs_room
+      ON event_logs (room_name);
+
+    CREATE INDEX IF NOT EXISTS idx_event_logs_char
+      ON event_logs (characteristic);
+
+    CREATE INDEX IF NOT EXISTS idx_event_logs_timestamp_trunc
+      ON event_logs (date_trunc('hour', timestamp));
+  `);
+  console.log('[db] Schema ready.');
+}
+
 export { pool };
