@@ -10,7 +10,7 @@ import { networkInterfaces } from 'os';
 import express from 'express';
 import cors from 'cors';
 import { IPDiscovery, HttpClient } from 'hap-controller';
-import { pool } from './db.js';
+import { pool, migrateDb } from './db.js';
 import { startSubscribers } from './subscriber.js';
 
 const PAIRINGS_FILE = process.env.PAIRINGS_FILE
@@ -78,6 +78,14 @@ function saveRooms(r) {
 
 // ---------------------------------------------------------------------------
 // 1. Start HomeKit subscribers
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// 0. Ensure database schema exists (safe on every boot via IF NOT EXISTS)
+// ---------------------------------------------------------------------------
+
+await migrateDb();
+
 // ---------------------------------------------------------------------------
 
 let pairings = loadPairings();
