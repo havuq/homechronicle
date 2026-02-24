@@ -94,16 +94,20 @@ const valueCache = new Map();
 /**
  * Start subscribers for all entries in the pairings map.
  *
- * @param {Record<string, object>} pairings - content of pairings.json
- * @param {Record<string, string>} rooms    - content of rooms.json (accessoryId → roomName)
+ * @param {Record<string, object>} pairings  - content of pairings.json
+ * @param {Record<string, string>} rooms     - content of rooms.json (accessoryId → roomName)
+ * @param {(id: string) => object|null} getPairing
+ *   Optional callback that returns the *current* pairing for a device ID.
+ *   Used so reconnects pick up a refreshed address/port if pairings.json
+ *   was updated (e.g. by a discovery scan) while we were backing off.
  */
-export function startSubscribers(pairings, rooms = {}) {
+export function startSubscribers(pairings, rooms = {}, getPairing = null) {
   for (const [deviceId, pairing] of Object.entries(pairings)) {
-    connectAccessory(deviceId, pairing, rooms, RECONNECT_BASE_MS);
+    connectAccessory(deviceId, pairing, rooms, RECONNECT_BASE_MS, getPairing);
   }
 }
 
-function connectAccessory(deviceId, pairing, rooms, retryDelayMs) {
+function connectAccessory(deviceId, pairing, rooms, retryDelayMs, getPairing = null) {
   const { name: accessoryName, address, port, longTermData } = pairing;
 
   console.log(`[subscriber] Connecting to ${accessoryName} (${address}:${port})`);
@@ -160,7 +164,10 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs) {
           await insertEvent({
             accessoryId:    effectiveId,
             accessoryName:  effectiveName,
-            roomName:       rooms[effectiveId] ?? null,  // from rooms.json; HAP doesn't expose rooms
+            // rooms.json stores child overrides keyed by effectiveId.
+            // If the child has no override, fall back to the top-level bridge entry
+            // so setting a room on the bridge automatically covers all its children.
+            roomName:       rooms[effectiveId] ?? (change.aid > 1 ? rooms[deviceId] : null) ?? null,
             serviceType:    meta.serviceType,
             characteristic: meta.characteristicName,
             oldValue,
@@ -186,7 +193,7 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs) {
         console.log(`[subscriber] ${accessoryName}: resubscribed to ${formerSubscribes.length} characteristic(s)`);
       } catch (err) {
         console.error(`[subscriber] ${accessoryName}: resubscribe failed:`, err.message ?? err.stack ?? err);
-        scheduleReconnect(deviceId, pairing, rooms, retryDelayMs);
+        scheduleReconnect(deviceId, pairing, rooms, retryDelayMs, getPairing);
       }
     });
 
@@ -195,19 +202,30 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs) {
       console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
     } catch (err) {
       console.error(`[subscriber] ${accessoryName}: subscribe failed:`, err.message ?? err.stack ?? err);
-      scheduleReconnect(deviceId, pairing, rooms, retryDelayMs);
+      scheduleReconnect(deviceId, pairing, rooms, retryDelayMs, getPairing);
     }
 
   }).catch((err) => {
     console.error(`[subscriber] ${accessoryName}: getAccessories failed:`, err.message ?? err.stack ?? err);
-    scheduleReconnect(deviceId, pairing, rooms, retryDelayMs);
+    scheduleReconnect(deviceId, pairing, rooms, retryDelayMs, getPairing);
   });
 }
 
-function scheduleReconnect(deviceId, pairing, rooms, retryDelayMs) {
+function scheduleReconnect(deviceId, pairing, rooms, retryDelayMs, getPairing = null) {
   const nextDelay = Math.min(retryDelayMs * 2, RECONNECT_MAX_MS);
   console.log(`[subscriber] ${pairing.name}: retrying in ${nextDelay / 1000}s`);
-  setTimeout(() => connectAccessory(deviceId, pairing, rooms, nextDelay), retryDelayMs);
+  setTimeout(() => {
+    // Re-read the pairing so reconnects pick up any address/port changes
+    // that occurred (e.g. from a discovery scan) while we were backing off.
+    const latestPairing = (getPairing && getPairing(deviceId)) ?? pairing;
+    if (latestPairing.address !== pairing.address || latestPairing.port !== pairing.port) {
+      console.log(
+        `[subscriber] ${pairing.name}: using refreshed address ` +
+        `${latestPairing.address}:${latestPairing.port}`
+      );
+    }
+    connectAccessory(deviceId, latestPairing, rooms, nextDelay, getPairing);
+  }, retryDelayMs);
 }
 
 /**

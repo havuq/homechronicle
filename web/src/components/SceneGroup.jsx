@@ -38,7 +38,7 @@ export default function SceneGroup({ events, eventMetaMap = {}, hoveredCell, onM
   // Heatmap highlight: does any event in this scene match the hovered cell?
   const anyMatch = hoveredCell && events.some(
     (e) => e.accessory_name === hoveredCell.accessoryName &&
-           new Date(e.timestamp).getHours() === hoveredCell.hour
+           new Date(e.timestamp).getUTCHours() === hoveredCell.hour
   );
   const highlight = hoveredCell ? (anyMatch ? 'highlighted' : 'dimmed') : 'normal';
 

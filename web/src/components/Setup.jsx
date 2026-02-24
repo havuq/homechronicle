@@ -36,7 +36,7 @@ function loadSavedPins() {
 // BridgeChildrenRow — lazily loads and displays child accessories of a bridge.
 // Lives outside Setup so it can call useQuery without conditional hook rules.
 // ---------------------------------------------------------------------------
-function BridgeChildrenRow({ bridgeId, isExpanded, roomInputs, savedRooms = {}, onRoomChange, onRoomBlur }) {
+function BridgeChildrenRow({ bridgeId, isExpanded, roomInputs, savedRooms = {}, bridgeRoom = '', onRoomChange, onRoomBlur, onApplyBridgeRoom }) {
   const { data: children = [], isLoading, isError } = useQuery({
     queryKey: ['bridge-children', bridgeId],
     queryFn: () => fetchJson(`/api/setup/bridge-children/${encodeURIComponent(bridgeId)}`),
@@ -68,26 +68,63 @@ function BridgeChildrenRow({ bridgeId, isExpanded, roomInputs, savedRooms = {}, 
     );
   }
 
+  // Children that have no saved room override of their own
+  const childIdsWithoutRoom = children
+    .filter((c) => !(savedRooms[c.childId]?.trim()) && !(roomInputs[c.childId]?.trim()))
+    .map((c) => c.childId);
+  const canApplyAll = bridgeRoom && childIdsWithoutRoom.length > 0;
+
   return (
-    <div className="ml-9 mt-2 space-y-1.5 pb-2 border-l-2 border-gray-100 pl-3">
-      {children.map((child) => (
-        <div key={child.childId} className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-          <span className="text-xs text-gray-700 flex-1 truncate min-w-0">{child.name}</span>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <MapPin size={9} className="text-gray-300 flex-shrink-0" />
-            <input
-              type="text"
-              placeholder="Room…"
-              value={roomInputs[child.childId] ?? savedRooms[child.childId] ?? ''}
-              onChange={(e) => onRoomChange(child.childId, e.target.value)}
-              onBlur={() => onRoomBlur(child.childId)}
-              onKeyDown={(e) => e.key === 'Enter' && onRoomBlur(child.childId)}
-              className="text-xs border border-gray-200 rounded px-2 py-0.5 w-28 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
-            />
-          </div>
+    <div className="ml-9 mt-2 pb-2 border-l-2 border-gray-100 pl-3 space-y-1.5">
+
+      {/* "Apply to all" helper — only shown when the bridge has a room and ≥1 child has none */}
+      {canApplyAll && (
+        <div className="flex items-center gap-1.5 pb-1">
+          <span className="text-xs text-gray-400 italic">
+            {childIdsWithoutRoom.length === children.length
+              ? 'No children have a room yet.'
+              : `${childIdsWithoutRoom.length} child${childIdsWithoutRoom.length !== 1 ? 'ren' : ''} without a room.`}
+          </span>
+          <button
+            onClick={() => onApplyBridgeRoom(bridgeId, childIdsWithoutRoom)}
+            className="text-xs text-blue-600 hover:text-blue-800 underline underline-offset-2 transition-colors"
+          >
+            Apply "{bridgeRoom}" to all
+          </button>
         </div>
-      ))}
+      )}
+
+      {children.map((child) => {
+        const childRoom    = roomInputs[child.childId] ?? savedRooms[child.childId] ?? '';
+        const isInheriting = !childRoom && !!bridgeRoom;
+        return (
+          <div key={child.childId} className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+            <span className="text-xs text-gray-700 flex-1 truncate min-w-0">{child.name}</span>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <MapPin size={9} className={isInheriting ? 'text-blue-300' : 'text-gray-300'} />
+              <input
+                type="text"
+                placeholder={bridgeRoom ? `Inherits: ${bridgeRoom}` : 'Room…'}
+                value={childRoom}
+                onChange={(e) => onRoomChange(child.childId, e.target.value)}
+                onBlur={() => onRoomBlur(child.childId)}
+                onKeyDown={(e) => e.key === 'Enter' && onRoomBlur(child.childId)}
+                className={clsx(
+                  'text-xs border rounded px-2 py-0.5 w-32 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300',
+                  isInheriting ? 'border-blue-200 bg-blue-50/40 placeholder-blue-300' : 'border-gray-200',
+                )}
+              />
+            </div>
+          </div>
+        );
+      })}
+
+      {bridgeRoom && (
+        <p className="text-[10px] text-gray-400 pt-0.5">
+          Children with no room set inherit the bridge room automatically.
+        </p>
+      )}
     </div>
   );
 }
@@ -232,6 +269,19 @@ export default function Setup() {
   function handleRoomBlur(deviceId) {
     const roomName = roomInputs[deviceId] ?? '';
     saveRoomMutation.mutate({ accessoryId: deviceId, roomName });
+  }
+
+  // Copies the bridge's room to every child that doesn't already have one.
+  // Called from BridgeChildrenRow's "Apply to all" button.
+  function handleApplyBridgeRoom(bridgeId, childIds) {
+    const bridgeRoom = roomInputs[bridgeId]?.trim() ?? savedRooms[bridgeId]?.trim() ?? '';
+    if (!bridgeRoom || !childIds.length) return;
+    setRoomInputs((prev) => {
+      const next = { ...prev };
+      childIds.forEach((id) => { next[id] = bridgeRoom; });
+      return next;
+    });
+    childIds.forEach((id) => saveRoomMutation.mutate({ accessoryId: id, roomName: bridgeRoom }));
   }
 
   async function pairOne(deviceId, pin) {
@@ -439,6 +489,12 @@ export default function Setup() {
                           className="text-xs border border-gray-200 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
                         />
                       </div>
+                      {/* Bridge room inheritance hint */}
+                      {acc.category === 2 && roomVal && (
+                        <p className="text-[10px] text-gray-400 mt-0.5 ml-3.5">
+                          Children without their own room inherit this.
+                        </p>
+                      )}
                       {/* Bridge child-device toggle */}
                       {acc.category === 2 && (
                         <button
@@ -496,8 +552,10 @@ export default function Setup() {
                       isExpanded={expandedBridges.has(acc.id)}
                       roomInputs={roomInputs}
                       savedRooms={savedRooms}
+                      bridgeRoom={roomInputs[acc.id]?.trim() ?? savedRooms[acc.id]?.trim() ?? ''}
                       onRoomChange={(id, val) => setRoomInputs((r) => ({ ...r, [id]: val }))}
                       onRoomBlur={handleRoomBlur}
+                      onApplyBridgeRoom={handleApplyBridgeRoom}
                     />
                   )}
                 </div>
