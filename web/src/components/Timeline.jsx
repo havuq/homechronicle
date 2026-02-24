@@ -141,7 +141,7 @@ export default function Timeline() {
           // ── Unusual time detection ───────────────────────────────────────
           const dp = anomalyMap[e.accessory_name];
           if (dp && dp.peakAvg >= 2) {
-            const hour = new Date(e.timestamp).getHours();
+            const hour = new Date(e.timestamp).getUTCHours();
             if ((dp.hours[hour] ?? 0) < 0.1) {
               meta.anomalyLabel = `unusual at ${hourLabel(hour)}`;
             }
@@ -255,8 +255,8 @@ export default function Timeline() {
           }
           <span className="text-xs text-orange-500 font-medium truncate">
             {isJumping
-              ? `Finding ${lockedCell.accessoryName} at ${lockedCell.hour}:00…`
-              : `${lockedCell.accessoryName} · ${lockedCell.hour}:00`
+              ? `Finding ${lockedCell.accessoryName} at ${lockedCell.hour}:00 UTC…`
+              : `${lockedCell.accessoryName} · ${lockedCell.hour}:00 UTC`
             }
           </span>
           {!isJumping && (

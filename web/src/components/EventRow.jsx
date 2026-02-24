@@ -32,7 +32,7 @@ export default function EventRow({ event, hoveredCell = null, meta = {}, onMute 
   // Heatmap highlight: does this event match the hovered cell?
   const isHighlighted = hoveredCell &&
     event.accessory_name === hoveredCell.accessoryName &&
-    ts.getHours() === hoveredCell.hour;
+    ts.getUTCHours() === hoveredCell.hour;
   const isDimmed = hoveredCell && !isHighlighted;
 
   // Third meta row is shown only when there's something worth displaying
