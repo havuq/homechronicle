@@ -3,7 +3,6 @@ import { useHeatmap } from '../hooks/useEvents.js';
 const CELL  = 22; // px — width & height of each hour cell
 const GAP   = 2;  // px — gap between cells
 const LABEL = 148; // px — device name column width
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 function cellColor(intensity) {
   if (intensity === 0) return 'rgba(226, 232, 240, 0.5)'; // empty — light gray
@@ -13,6 +12,17 @@ function cellColor(intensity) {
   const b = Math.round(254 - intensity * 82);
   return `rgb(${r},${g},${b})`;
 }
+
+// Rotate a 24-slot UTC hour array to local time
+function rotateToLocal(utcArr) {
+  const offsetHours = -new Date().getTimezoneOffset() / 60; // e.g. +10 for AEST, -5 for EST
+  return Array.from({ length: 24 }, (_, localH) => {
+    const utcH = ((localH - offsetHours) % 24 + 24) % 24;
+    return utcArr[Math.round(utcH)];
+  });
+}
+
+const AXIS_LABELS = ['midnight', '6 am', 'noon', '6 pm', ''];
 
 export default function HeatmapLane() {
   const { data = [], isLoading } = useHeatmap();
@@ -24,54 +34,36 @@ export default function HeatmapLane() {
     return <p className="text-sm text-gray-400 py-2">No data yet — events from the last 7 days will appear here.</p>;
   }
 
-  // Build per-device 24-hour arrays
+  // Build per-device 24-hour arrays (UTC from DB)
   const deviceMap = {};
   for (const row of data) {
     if (!deviceMap[row.accessory_name]) {
       deviceMap[row.accessory_name] = new Array(24).fill(0);
     }
-    deviceMap[row.accessory_name][row.hour] = row.count;
+    deviceMap[row.accessory_name][parseInt(row.hour, 10)] = parseInt(row.count, 10);
   }
 
-  // Sort devices by total event count descending
-  const devices = Object.entries(deviceMap).sort(
-    ([, a], [, b]) => b.reduce((s, v) => s + v, 0) - a.reduce((s, v) => s + v, 0)
-  );
+  // Sort by total event count descending, then rotate each to local time
+  const devices = Object.entries(deviceMap)
+    .sort(([, a], [, b]) => b.reduce((s, v) => s + v, 0) - a.reduce((s, v) => s + v, 0))
+    .map(([name, utcHours]) => [name, rotateToLocal(utcHours)]);
 
   const maxCount = Math.max(...devices.flatMap(([, hours]) => hours), 1);
 
-  const totalWidth  = LABEL + 24 * (CELL + GAP);
-  const rowHeight   = CELL + GAP;
+  const totalWidth = LABEL + 24 * (CELL + GAP);
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-700 mb-1">Activity Heatmap</h3>
-      <p className="text-xs text-gray-400 mb-4">Events per device per hour · last 7 days</p>
+      <div className="flex items-baseline justify-between mb-1">
+        <h3 className="text-sm font-semibold text-gray-700">Activity Heatmap</h3>
+        <span className="text-xs text-gray-400">last 7 days · local time</span>
+      </div>
+      <p className="text-xs text-gray-400 mb-4">Events per device per hour</p>
 
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ minWidth: totalWidth }}>
 
-          {/* Hour labels */}
-          <div style={{ display: 'flex', marginLeft: LABEL, marginBottom: 6 }}>
-            {HOURS.map((h) => (
-              <div
-                key={h}
-                style={{
-                  width:     CELL,
-                  marginRight: GAP,
-                  flexShrink: 0,
-                  textAlign: 'center',
-                  fontSize:  10,
-                  color:     '#94a3b8',
-                  lineHeight: 1,
-                }}
-              >
-                {h % 6 === 0 ? `${h}h` : ''}
-              </div>
-            ))}
-          </div>
-
-          {/* Device rows */}
+          {/* Device rows — no top hour label row */}
           {devices.map(([name, hours]) => (
             <div key={name} style={{ display: 'flex', alignItems: 'center', marginBottom: GAP }}>
               {/* Device name */}
@@ -99,7 +91,7 @@ export default function HeatmapLane() {
                 return (
                   <div
                     key={h}
-                    title={`${name} — ${h}:00 — ${count} event${count !== 1 ? 's' : ''}`}
+                    title={`${name} — ${h === 0 ? 'midnight' : h < 12 ? `${h}am` : h === 12 ? 'noon' : `${h - 12}pm`} — ${count} event${count !== 1 ? 's' : ''}`}
                     style={{
                       width:        CELL,
                       height:       CELL,
@@ -107,7 +99,6 @@ export default function HeatmapLane() {
                       flexShrink:   0,
                       borderRadius: 3,
                       backgroundColor: cellColor(intensity),
-                      cursor:       count > 0 ? 'default' : undefined,
                       transition:   'background-color 0.15s',
                     }}
                   />
@@ -116,9 +107,9 @@ export default function HeatmapLane() {
             </div>
           ))}
 
-          {/* AM / PM axis label */}
+          {/* Bottom axis: midnight / 6 am / noon / 6 pm */}
           <div style={{ display: 'flex', marginLeft: LABEL, marginTop: 4 }}>
-            {['12am', '6am', '12pm', '6pm', ''].map((label, i) => (
+            {AXIS_LABELS.map((label, i) => (
               <div
                 key={i}
                 style={{
