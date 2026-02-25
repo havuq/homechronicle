@@ -2,8 +2,8 @@
 .env
 .claude/
 
-# HomeKit pairing keys — never commit these
-listener/data/pairings.json
+# HomeKit local runtime data — never commit these
+listener/data/
 
 # Dependencies
 node_modules/
