@@ -20,5 +20,6 @@ CREATE INDEX idx_event_logs_accessory   ON event_logs (accessory_name);
 CREATE INDEX idx_event_logs_room        ON event_logs (room_name);
 CREATE INDEX idx_event_logs_char        ON event_logs (characteristic);
 
--- Stats queries group by hour/day
-CREATE INDEX idx_event_logs_timestamp_trunc ON event_logs (date_trunc('hour', timestamp));
+-- Stats queries group by hour/day in UTC.
+-- date_trunc(timestamptz) is not immutable; convert to UTC timestamp first.
+CREATE INDEX idx_event_logs_timestamp_trunc ON event_logs (date_trunc('hour', timestamp AT TIME ZONE 'UTC'));
