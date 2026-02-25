@@ -2,7 +2,9 @@
  * subscriber.js — connects to paired HomeKit accessories and subscribes
  * to characteristic value-change events.
  *
- * Exports: startSubscribers(pairings) → void
+ * Exports:
+ *   startSubscribers(pairings) → void
+ *   stopSubscriber(deviceId)   → void
  */
 
 import { HttpClient } from 'hap-controller';
@@ -83,8 +85,10 @@ const WATCHED_CHARACTERISTICS = new Map([
 ]);
 
 // Milliseconds before attempting reconnect after a lost connection
-const RECONNECT_BASE_MS = 5_000;
-const RECONNECT_MAX_MS  = 60_000;
+let reconnectBaseMs = Number.parseInt(process.env.RECONNECT_BASE_MS ?? '5000', 10);
+let reconnectMaxMs  = Number.parseInt(process.env.RECONNECT_MAX_MS ?? '60000', 10);
+if (!Number.isFinite(reconnectBaseMs) || reconnectBaseMs < 1) reconnectBaseMs = 5_000;
+if (!Number.isFinite(reconnectMaxMs) || reconnectMaxMs < reconnectBaseMs) reconnectMaxMs = 60_000;
 const RUN_CYCLE_NAME_REGEX = /(run leveling|run clean cycle)/i;
 const RUN_CYCLE_OFF_DELAY_MS = Number.parseInt(
   process.env.RUN_CYCLE_OFF_DELAY_MS ?? `${15 * 60_000}`,
@@ -96,6 +100,8 @@ const RUN_CYCLE_OFF_DELAY_MS = Number.parseInt(
 // Survives reconnects within the same process; cleared on restart.
 const valueCache = new Map();
 const delayedOffTimers = new Map();
+const subscriberSessions = new Map();
+let connectAccessoryImpl = connectAccessory;
 
 /**
  * Start subscribers for all entries in the pairings map.
@@ -109,16 +115,66 @@ const delayedOffTimers = new Map();
  */
 export function startSubscribers(pairings, rooms = {}, getPairing = null) {
   for (const [deviceId, pairing] of Object.entries(pairings)) {
-    connectAccessory(deviceId, pairing, rooms, RECONNECT_BASE_MS, getPairing);
+    startSubscriber(deviceId, pairing, rooms, getPairing);
   }
 }
 
-function connectAccessory(deviceId, pairing, rooms, retryDelayMs, getPairing = null) {
+export function startSubscriber(deviceId, pairing, rooms = {}, getPairing = null) {
+  stopSubscriber(deviceId);
+  const session = {
+    deviceId,
+    rooms,
+    getPairing,
+    retryDelayMs: reconnectBaseMs,
+    stopped: false,
+    reconnectTimeout: null,
+    client: null,
+    eventHandler: null,
+    disconnectHandler: null,
+  };
+  subscriberSessions.set(deviceId, session);
+  connectAccessoryImpl(session, pairing);
+}
+
+export function stopSubscriber(deviceId) {
+  const session = subscriberSessions.get(deviceId);
+  if (!session) return;
+
+  session.stopped = true;
+  if (session.reconnectTimeout) {
+    clearTimeout(session.reconnectTimeout);
+    session.reconnectTimeout = null;
+  }
+
+  if (session.client) {
+    if (session.eventHandler) session.client.off('event', session.eventHandler);
+    if (session.disconnectHandler) session.client.off('event-disconnect', session.disconnectHandler);
+    session.client = null;
+  }
+
+  for (const [timerKey, timeoutId] of delayedOffTimers.entries()) {
+    if (timerKey.startsWith(`${deviceId}:`)) {
+      clearTimeout(timeoutId);
+      delayedOffTimers.delete(timerKey);
+    }
+  }
+
+  for (const key of valueCache.keys()) {
+    if (key.startsWith(`${deviceId}:`)) valueCache.delete(key);
+  }
+
+  subscriberSessions.delete(deviceId);
+}
+
+function connectAccessory(session, pairing) {
+  if (session.stopped) return;
+  const { deviceId, rooms, getPairing } = session;
   const { name: accessoryName, address, port, longTermData } = pairing;
 
   console.log(`[subscriber] Connecting to ${accessoryName} (${address}:${port})`);
 
   const client = new HttpClient(deviceId, address, port, longTermData);
+  session.client = client;
 
   client.getAccessories().then(async (accessories) => {
     // Build a map of "aid.iid" → { serviceType, characteristicName, childName, componentName }
@@ -139,6 +195,7 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs, getPairing = n
     // NOT an EventEmitter — so .on() must be called on `client`, not on the
     // return value.
     const handleEvent = async (event) => {
+      if (session.stopped) return;
       const changes = event?.characteristics ?? (Array.isArray(event) ? event : [event]);
       for (const change of changes) {
         const key  = `${change.aid}.${change.iid}`;
@@ -232,40 +289,50 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs, getPairing = n
       }
     };
 
+    session.eventHandler = handleEvent;
     client.on('event', handleEvent);
 
     // 'event-disconnect' fires when the HAP subscription connection drops.
     // The argument is the previously-subscribed list — pass it straight back
     // to resubscribe without needing to rebuild the key list.
-    client.on('event-disconnect', async (formerSubscribes) => {
+    const disconnectHandler = async (formerSubscribes) => {
+      if (session.stopped) return;
       console.warn(`[subscriber] ${accessoryName}: disconnected, resubscribing…`);
       try {
         await client.subscribeCharacteristics(formerSubscribes);
         console.log(`[subscriber] ${accessoryName}: resubscribed to ${formerSubscribes.length} characteristic(s)`);
       } catch (err) {
         console.error(`[subscriber] ${accessoryName}: resubscribe failed:`, err.message ?? err.stack ?? err);
-        scheduleReconnect(deviceId, pairing, rooms, retryDelayMs, getPairing);
+        scheduleReconnect(session, pairing);
       }
-    });
+    };
+    session.disconnectHandler = disconnectHandler;
+    client.on('event-disconnect', disconnectHandler);
 
     try {
       await client.subscribeCharacteristics(watchedKeys);
+      session.retryDelayMs = reconnectBaseMs;
       console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
     } catch (err) {
       console.error(`[subscriber] ${accessoryName}: subscribe failed:`, err.message ?? err.stack ?? err);
-      scheduleReconnect(deviceId, pairing, rooms, retryDelayMs, getPairing);
+      scheduleReconnect(session, pairing);
     }
 
   }).catch((err) => {
     console.error(`[subscriber] ${accessoryName}: getAccessories failed:`, err.message ?? err.stack ?? err);
-    scheduleReconnect(deviceId, pairing, rooms, retryDelayMs, getPairing);
+    scheduleReconnect(session, pairing);
   });
 }
 
-function scheduleReconnect(deviceId, pairing, rooms, retryDelayMs, getPairing = null) {
-  const nextDelay = Math.min(retryDelayMs * 2, RECONNECT_MAX_MS);
+function scheduleReconnect(session, pairing) {
+  if (session.stopped) return;
+  const { deviceId, getPairing } = session;
+  const nextDelay = Math.min(session.retryDelayMs * 2, reconnectMaxMs);
+  session.retryDelayMs = nextDelay;
   console.log(`[subscriber] ${pairing.name}: retrying in ${nextDelay / 1000}s`);
-  setTimeout(() => {
+  session.reconnectTimeout = setTimeout(() => {
+    if (session.stopped) return;
+    session.reconnectTimeout = null;
     // Re-read the pairing so reconnects pick up any address/port changes
     // that occurred (e.g. from a discovery scan) while we were backing off.
     const latestPairing = (getPairing && getPairing(deviceId)) ?? pairing;
@@ -275,8 +342,8 @@ function scheduleReconnect(deviceId, pairing, rooms, retryDelayMs, getPairing = 
         `${latestPairing.address}:${latestPairing.port}`
       );
     }
-    connectAccessory(deviceId, latestPairing, rooms, nextDelay, getPairing);
-  }, retryDelayMs);
+    connectAccessoryImpl(session, latestPairing);
+  }, nextDelay);
 }
 
 /**
@@ -342,3 +409,26 @@ function shortUuid(uuid = '') {
   const match = uuid.match(/^0*([0-9A-Fa-f]+)-/);
   return match ? match[1].toUpperCase() : uuid.toUpperCase();
 }
+
+export const __testHooks = {
+  buildIidMetaMap,
+  scheduleReconnect,
+  getSession(deviceId) {
+    return subscriberSessions.get(deviceId) ?? null;
+  },
+  setReconnectWindow(baseMs, maxMs) {
+    reconnectBaseMs = baseMs;
+    reconnectMaxMs = maxMs;
+  },
+  setConnectAccessoryImpl(fn) {
+    connectAccessoryImpl = fn;
+  },
+  resetState() {
+    for (const [deviceId] of subscriberSessions) {
+      stopSubscriber(deviceId);
+    }
+    connectAccessoryImpl = connectAccessory;
+    reconnectBaseMs = 5_000;
+    reconnectMaxMs = 60_000;
+  },
+};

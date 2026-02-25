@@ -1,17 +1,18 @@
 /**
  * index.js — entry point.
  *
- * 1. Reads pairings.json and starts HomeKit subscribers.
+ * 1. Loads cached pairing/room metadata and starts HomeKit subscribers.
  * 2. Starts an Express REST API for the web frontend.
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { networkInterfaces } from 'os';
 import express from 'express';
 import cors from 'cors';
 import { IPDiscovery, HttpClient } from 'hap-controller';
-import { pool, migrateDb } from './db.js';
-import { startSubscribers } from './subscriber.js';
+import { pool, migrateDb, runRetentionSweep } from './db.js';
+import { startSubscribers, stopSubscriber } from './subscriber.js';
+import { JsonObjectStore } from './store.js';
+import { createEventsRouter, parentBridgeId, parseIntInRange } from './events-router.js';
 
 const PAIRINGS_FILE = process.env.PAIRINGS_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/pairings.json' : './data/pairings.json');
@@ -21,11 +22,30 @@ const ROOMS_FILE = process.env.ROOMS_FILE
 
 const PORT = Number(process.env.API_PORT ?? 3001);
 const RESCAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+const STORE_REFRESH_INTERVAL_MS = Number.parseInt(process.env.STORE_REFRESH_INTERVAL_MS ?? '30000', 10);
+const API_TOKEN = (process.env.API_TOKEN ?? '').trim();
 
-function parseIntInRange(value, fallback, min, max) {
-  const parsed = Number.parseInt(String(value ?? ''), 10);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.min(max, Math.max(min, parsed));
+const RETENTION_DAYS = Number.parseInt(process.env.RETENTION_DAYS ?? '365', 10);
+const RETENTION_SWEEP_MS = Number.parseInt(process.env.RETENTION_SWEEP_MS ?? `${24 * 60 * 60 * 1000}`, 10);
+const RETENTION_ARCHIVE = /^(1|true|yes|on)$/i.test(process.env.RETENTION_ARCHIVE ?? 'true');
+
+const pairingsStore = new JsonObjectStore(PAIRINGS_FILE, {});
+const roomsStore = new JsonObjectStore(ROOMS_FILE, {});
+
+function loadPairings() {
+  return pairingsStore.getSnapshot();
+}
+
+async function savePairings(pairings) {
+  await pairingsStore.write(pairings);
+}
+
+function loadRooms() {
+  return roomsStore.getSnapshot();
+}
+
+async function saveRooms(rooms) {
+  await roomsStore.write(rooms);
 }
 
 // Resolve the mDNS network interface.
@@ -45,63 +65,36 @@ const DISCOVER_IFACE = (() => {
 })();
 
 // ---------------------------------------------------------------------------
-// Pairing store helpers
+// 0. Ensure runtime state exists
 // ---------------------------------------------------------------------------
 
-function loadPairings() {
-  if (existsSync(PAIRINGS_FILE)) {
-    try {
-      return JSON.parse(readFileSync(PAIRINGS_FILE, 'utf8'));
-    } catch {
-      return {};
-    }
-  }
-  return {};
-}
+await migrateDb();
+await pairingsStore.init();
+await roomsStore.init();
 
-function savePairings(p) {
-  writeFileSync(PAIRINGS_FILE, JSON.stringify(p, null, 2));
-}
-
-// ---------------------------------------------------------------------------
-// Room store helpers  (accessoryId → roomName)
-// ---------------------------------------------------------------------------
-
-function loadRooms() {
-  if (existsSync(ROOMS_FILE)) {
-    try {
-      return JSON.parse(readFileSync(ROOMS_FILE, 'utf8'));
-    } catch {
-      return {};
-    }
-  }
-  return {};
-}
-
-function saveRooms(r) {
-  writeFileSync(ROOMS_FILE, JSON.stringify(r, null, 2));
+if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5_000) {
+  setInterval(() => {
+    void pairingsStore.refresh().catch((err) => {
+      console.warn('[store] pairings refresh failed:', err.message ?? err.stack ?? err);
+    });
+    void roomsStore.refresh().catch((err) => {
+      console.warn('[store] rooms refresh failed:', err.message ?? err.stack ?? err);
+    });
+  }, STORE_REFRESH_INTERVAL_MS);
 }
 
 // ---------------------------------------------------------------------------
 // 1. Start HomeKit subscribers
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// 0. Ensure database schema exists (safe on every boot via IF NOT EXISTS)
-// ---------------------------------------------------------------------------
-
-await migrateDb();
-
-// ---------------------------------------------------------------------------
-
-let pairings = loadPairings();
+const pairings = loadPairings();
 const pairedCount = Object.keys(pairings).length;
 
 if (pairedCount > 0) {
   console.log(`[init] Loaded ${pairedCount} pairing(s) from ${PAIRINGS_FILE}`);
-  startSubscribers(pairings, loadRooms(), (id) => loadPairings()[id]);
+  startSubscribers(pairings, loadRooms(), (id) => pairingsStore.getByKey(id));
 } else {
-  console.warn(`[init] No pairings found — use the Setup tab in the web UI to discover and pair accessories.`);
+  console.warn('[init] No pairings found — use the Setup tab in the web UI to discover and pair accessories.');
 }
 
 // ---------------------------------------------------------------------------
@@ -132,38 +125,42 @@ function runDiscoveryScan() {
     }
 
     setTimeout(() => {
-      try { discovery.stop(); } catch { /* ignore stop errors */ }
-      const currentPairings = loadPairings();
-      discoveryCache = [...found.values()].map((s) => ({
-        id:       s.id,
-        name:     s.name,
-        address:  s.address,
-        port:     s.port,
-        category: s.ci ?? null,
-        paired:   s.sf === 0 || !!currentPairings[s.id],
-        alreadyPaired: !!currentPairings[s.id],
-      }));
-      console.log(`[discovery] Scan complete — found ${discoveryCache.length} accessory/accessories`);
+      void (async () => {
+        try {
+          try { discovery.stop(); } catch { /* ignore stop errors */ }
+          await pairingsStore.refresh();
+          const currentPairings = loadPairings();
+          discoveryCache = [...found.values()].map((s) => ({
+            id: s.id,
+            name: s.name,
+            address: s.address,
+            port: s.port,
+            category: s.ci ?? null,
+            paired: s.sf === 0 || !!currentPairings[s.id],
+            alreadyPaired: !!currentPairings[s.id],
+          }));
+          console.log(`[discovery] Scan complete — found ${discoveryCache.length} accessory/accessories`);
 
-      // Auto-refresh address/port for paired devices that moved.
-      // The long-term crypto keys are stable; only address/port can drift
-      // (e.g. after a device reboot or Homebridge restart).
-      let pairingsUpdated = false;
-      for (const [id, pairing] of Object.entries(currentPairings)) {
-        const seen = found.get(id);
-        if (!seen) continue; // not visible in this scan — skip
-        if (seen.address !== pairing.address || seen.port !== pairing.port) {
-          console.log(
-            `[discovery] ${pairing.name}: address updated ` +
-            `${pairing.address}:${pairing.port} → ${seen.address}:${seen.port} — pairing refreshed`
-          );
-          currentPairings[id] = { ...pairing, address: seen.address, port: seen.port };
-          pairingsUpdated = true;
+          let pairingsUpdated = false;
+          for (const [id, pairing] of Object.entries(currentPairings)) {
+            const seen = found.get(id);
+            if (!seen) continue;
+            if (seen.address !== pairing.address || seen.port !== pairing.port) {
+              console.log(
+                `[discovery] ${pairing.name}: address updated ` +
+                `${pairing.address}:${pairing.port} -> ${seen.address}:${seen.port} — pairing refreshed`
+              );
+              currentPairings[id] = { ...pairing, address: seen.address, port: seen.port };
+              pairingsUpdated = true;
+            }
+          }
+          if (pairingsUpdated) await savePairings(currentPairings);
+
+          resolve(discoveryCache);
+        } catch (err) {
+          reject(err);
         }
-      }
-      if (pairingsUpdated) savePairings(currentPairings);
-
-      resolve(discoveryCache);
+      })();
     }, 10_000);
   });
 }
@@ -175,9 +172,38 @@ function safeDiscoveryScan() {
   });
 }
 
-// Run initial scan in background, then repeat hourly
 safeDiscoveryScan();
 setInterval(safeDiscoveryScan, RESCAN_INTERVAL_MS);
+
+// ---------------------------------------------------------------------------
+// 2b. Retention / archival sweep
+// ---------------------------------------------------------------------------
+
+async function runRetentionSweepSafe() {
+  if (!Number.isFinite(RETENTION_DAYS) || RETENTION_DAYS <= 0) {
+    return;
+  }
+  try {
+    const result = await runRetentionSweep({
+      retentionDays: RETENTION_DAYS,
+      archiveBeforeDelete: RETENTION_ARCHIVE,
+    });
+    if (result.deleted > 0 || result.archived > 0) {
+      console.log(
+        `[retention] cutoff=${result.cutoffDays}d archived=${result.archived} deleted=${result.deleted}`
+      );
+    }
+  } catch (err) {
+    console.error('[retention] sweep failed:', err.message ?? err.stack ?? err);
+  }
+}
+
+void runRetentionSweepSafe();
+if (Number.isFinite(RETENTION_SWEEP_MS) && RETENTION_SWEEP_MS >= 60_000) {
+  setInterval(() => {
+    void runRetentionSweepSafe();
+  }, RETENTION_SWEEP_MS);
+}
 
 // ---------------------------------------------------------------------------
 // 3. REST API
@@ -186,18 +212,24 @@ setInterval(safeDiscoveryScan, RESCAN_INTERVAL_MS);
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  if (!API_TOKEN) return next();
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
 
-// ---------------------------------------------------------------------------
+  const authHeader = req.get('authorization') ?? '';
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+  const providedToken = (req.get('x-api-token') ?? bearerMatch?.[1] ?? '').trim();
+
+  if (providedToken === API_TOKEN) return next();
+  return res.status(401).json({ error: 'Unauthorized' });
+});
+
 // Setup endpoints
-// ---------------------------------------------------------------------------
-
-// GET /api/setup/discovered — return cached discovery results immediately
-// POST /api/setup/scan — trigger a fresh scan (takes ~10s, waits for result)
 app.get('/api/setup/discovered', (_req, res) => {
   const currentPairings = loadPairings();
   const results = discoveryCache.map((s) => ({
     ...s,
-    paired:        s.alreadyPaired || !!currentPairings[s.id],
+    paired: s.alreadyPaired || !!currentPairings[s.id],
     alreadyPaired: !!currentPairings[s.id],
   }));
   res.json({ accessories: results, cachedAt: new Date().toISOString() });
@@ -210,7 +242,6 @@ app.post('/api/setup/scan', async (_req, res) => {
     res.json({ accessories: results, cachedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[setup] Scan error:', err.message ?? err.stack ?? err);
-    // Return a partial result with current cache so UI doesn't break
     res.status(200).json({
       accessories: discoveryCache,
       cachedAt: new Date().toISOString(),
@@ -219,15 +250,12 @@ app.post('/api/setup/scan', async (_req, res) => {
   }
 });
 
-// POST /api/setup/pair  { deviceId, pin }
 app.post('/api/setup/pair', async (req, res) => {
   const { deviceId, pin } = req.body ?? {};
-
   if (!deviceId || !pin) {
     return res.status(400).json({ error: 'deviceId and pin are required' });
   }
 
-  // Find in cache
   const cached = discoveryCache.find((s) => s.id === deviceId);
   if (!cached) {
     return res.status(404).json({
@@ -244,21 +272,19 @@ app.post('/api/setup/pair', async (req, res) => {
 
     const updatedPairings = loadPairings();
     updatedPairings[deviceId] = {
-      name:         cached.name,
-      address:      cached.address,
-      port:         cached.port,
-      category:     cached.category,
-      pairedAt:     new Date().toISOString(),
+      name: cached.name,
+      address: cached.address,
+      port: cached.port,
+      category: cached.category,
+      pairedAt: new Date().toISOString(),
       longTermData,
     };
-    savePairings(updatedPairings);
+    await savePairings(updatedPairings);
 
-    // Update cache to reflect new pairing
     const item = discoveryCache.find((s) => s.id === deviceId);
     if (item) { item.paired = true; item.alreadyPaired = true; }
 
-    // Start subscriber for the newly paired device
-    startSubscribers({ [deviceId]: updatedPairings[deviceId] }, loadRooms(), (id) => loadPairings()[id]);
+    startSubscribers({ [deviceId]: updatedPairings[deviceId] }, loadRooms(), (id) => pairingsStore.getByKey(id));
 
     console.log(`[setup] Paired successfully: ${cached.name}`);
     res.json({ success: true, name: cached.name });
@@ -269,7 +295,7 @@ app.post('/api/setup/pair', async (req, res) => {
     if (msg.includes('0x02') || /authentication/i.test(msg))
       friendly = 'Wrong PIN — double-check the code on the device label and try again.';
     else if (msg.includes('0x04') || /maxpeers/i.test(msg))
-      friendly = 'This device has reached its pairing limit. In Apple Home, long-press the accessory → remove it, then re-add it to free a slot, then try pairing here again.';
+      friendly = 'This device has reached its pairing limit. In Apple Home, long-press the accessory -> remove it, then re-add it to free a slot, then try pairing here again.';
     else if (msg.includes('0x05') || /maxtries/i.test(msg))
       friendly = 'Too many failed attempts — wait a few minutes before trying again.';
     else if (msg.includes('0x06') || /unavailable/i.test(msg))
@@ -282,18 +308,11 @@ app.post('/api/setup/pair', async (req, res) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// UUID helper (mirrors shortUuid in subscriber.js)
-// ---------------------------------------------------------------------------
-
 function shortUuid(uuid = '') {
   const match = uuid.match(/^0*([0-9A-Fa-f]+)-/);
   return match ? match[1].toUpperCase() : uuid.toUpperCase();
 }
 
-// GET /api/setup/bridge-children/:deviceId
-// Returns all child accessories exposed by a paired bridge.
-// Each entry: { childId: "bridgeId:aid", name, aid }
 app.get('/api/setup/bridge-children/:deviceId', async (req, res) => {
   const { deviceId } = req.params;
   const currentPairings = loadPairings();
@@ -305,13 +324,13 @@ app.get('/api/setup/bridge-children/:deviceId', async (req, res) => {
     const result = await client.getAccessories();
     const children = [];
     for (const acc of result?.accessories ?? []) {
-      if (acc.aid === 1) continue; // skip the bridge root itself
+      if (acc.aid === 1) continue;
       const infoService = acc.services?.find((s) => shortUuid(s.type) === '3E');
-      const nameProp    = infoService?.characteristics?.find((c) => shortUuid(c.type) === '23');
-      const name        = nameProp?.value ?? `Device ${acc.aid}`;
+      const nameProp = infoService?.characteristics?.find((c) => shortUuid(c.type) === '23');
+      const name = nameProp?.value ?? `Device ${acc.aid}`;
       children.push({ childId: `${deviceId}:${acc.aid}`, name, aid: acc.aid });
     }
-    console.log(`[setup] bridge-children: ${pairing.name} → ${children.length} child(ren)`);
+    console.log(`[setup] bridge-children: ${pairing.name} -> ${children.length} child(ren)`);
     res.json(children);
   } catch (err) {
     console.error(`[setup] bridge-children error for ${deviceId}:`, err.message ?? err.stack ?? err);
@@ -319,22 +338,20 @@ app.get('/api/setup/bridge-children/:deviceId', async (req, res) => {
   }
 });
 
-// GET /api/setup/pairings — list currently paired devices
 app.get('/api/setup/pairings', (_req, res) => {
   const currentPairings = loadPairings();
   const list = Object.entries(currentPairings).map(([id, p]) => ({
     id,
-    name:      p.name,
-    address:   p.address,
-    port:      p.port,
-    category:  p.category,
-    pairedAt:  p.pairedAt,
+    name: p.name,
+    address: p.address,
+    port: p.port,
+    category: p.category,
+    pairedAt: p.pairedAt,
   }));
   res.json(list);
 });
 
-// DELETE /api/setup/pairing/:deviceId — remove a pairing
-app.delete('/api/setup/pairing/:deviceId', (req, res) => {
+app.delete('/api/setup/pairing/:deviceId', async (req, res) => {
   const { deviceId } = req.params;
   const currentPairings = loadPairings();
 
@@ -343,10 +360,10 @@ app.delete('/api/setup/pairing/:deviceId', (req, res) => {
   }
 
   const name = currentPairings[deviceId].name;
+  stopSubscriber(deviceId);
   delete currentPairings[deviceId];
-  savePairings(currentPairings);
+  await savePairings(currentPairings);
 
-  // Also update the discovery cache so the device shows as unpaired
   const cached = discoveryCache.find((s) => s.id === deviceId);
   if (cached) { cached.paired = false; cached.alreadyPaired = false; }
 
@@ -354,9 +371,7 @@ app.delete('/api/setup/pairing/:deviceId', (req, res) => {
   res.json({ success: true, name });
 });
 
-// PATCH /api/setup/room  { accessoryId, roomName }
-// Sets or clears the room assignment for an accessory in rooms.json.
-app.patch('/api/setup/room', (req, res) => {
+app.patch('/api/setup/room', async (req, res) => {
   const { accessoryId, roomName } = req.body ?? {};
   if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
 
@@ -366,24 +381,16 @@ app.patch('/api/setup/room', (req, res) => {
   } else {
     delete rooms[accessoryId];
   }
-  saveRooms(rooms);
+  await saveRooms(rooms);
   console.log(`[setup] Room for ${accessoryId} set to ${roomName?.trim() || '(cleared)'}`);
   res.json({ success: true });
 });
 
-// GET /api/setup/rooms — return all room assignments
 app.get('/api/setup/rooms', (_req, res) => {
   res.json(loadRooms());
 });
 
-// ---------------------------------------------------------------------------
-// Data management endpoints (delete history)
-// ---------------------------------------------------------------------------
-
-// DELETE /api/data/accessory  { accessoryId }
-// Removes all event_logs rows for one accessory and its room assignment.
-// accessoryId can contain colons (e.g. "AA:BB:CC:DD:EE:FF:2") so we use
-// the request body rather than a URL param to avoid encoding issues.
+// Data management
 app.delete('/api/data/accessory', async (req, res) => {
   const { accessoryId } = req.body ?? {};
   if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
@@ -393,7 +400,7 @@ app.delete('/api/data/accessory', async (req, res) => {
     );
     const rooms = loadRooms();
     delete rooms[accessoryId];
-    saveRooms(rooms);
+    await saveRooms(rooms);
     console.log(`[data] Deleted ${result.rowCount} event(s) for accessory ${accessoryId}`);
     res.json({ success: true, deleted: result.rowCount });
   } catch (err) {
@@ -402,11 +409,10 @@ app.delete('/api/data/accessory', async (req, res) => {
   }
 });
 
-// DELETE /api/data/all — truncate event_logs and clear rooms.json
 app.delete('/api/data/all', async (_req, res) => {
   try {
     const result = await pool.query('DELETE FROM event_logs');
-    saveRooms({});
+    await saveRooms({});
     console.log(`[data] Wiped all data — ${result.rowCount} event(s) deleted`);
     res.json({ success: true, deleted: result.rowCount });
   } catch (err) {
@@ -415,138 +421,15 @@ app.delete('/api/data/all', async (_req, res) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Event / stats endpoints
-// ---------------------------------------------------------------------------
+// Event API routes
+app.use('/api', createEventsRouter({
+  pool,
+  getRooms: loadRooms,
+}));
 
-app.get('/api/events', async (req, res) => {
-  try {
-    const page   = parseIntInRange(req.query.page, 1, 1, Number.MAX_SAFE_INTEGER);
-    const limit  = parseIntInRange(req.query.limit, 50, 1, 200);
-    const offset = (page - 1) * limit;
-
-    const conditions = [];
-    const params = [];
-
-    if (req.query.room)           { params.push(req.query.room);                  conditions.push(`room_name = $${params.length}`); }
-    if (req.query.accessory)      { params.push(`%${req.query.accessory}%`);       conditions.push(`accessory_name ILIKE $${params.length}`); }
-    if (req.query.characteristic) { params.push(req.query.characteristic);         conditions.push(`characteristic = $${params.length}`); }
-    if (req.query.from)           { params.push(req.query.from);                   conditions.push(`timestamp >= $${params.length}`); }
-    if (req.query.to)             { params.push(req.query.to);                     conditions.push(`timestamp <= $${params.length}`); }
-
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-
-    const countResult = await pool.query(`SELECT COUNT(*) AS total FROM event_logs ${where}`, params);
-    const total = parseInt(countResult.rows[0].total, 10);
-
-    params.push(limit, offset);
-    const dataResult = await pool.query(
-      `SELECT id, timestamp, accessory_id, accessory_name, room_name,
-              service_type, characteristic, old_value, new_value, raw_iid
-       FROM event_logs ${where}
-       ORDER BY timestamp DESC
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params
-    );
-
-    // Overlay room_name from rooms.json at serve time so:
-    //   • child devices inherit their bridge's room if they have no override
-    //   • events logged before a room was assigned still show the right room
-    const rooms = loadRooms();
-    const events = dataResult.rows.map((row) => ({
-      ...row,
-      room_name: rooms[row.accessory_id]
-               ?? rooms[parentBridgeId(row.accessory_id)]
-               ?? row.room_name,
-    }));
-
-    res.json({ total, page, limit, pages: Math.ceil(total / limit), events });
-  } catch (err) {
-    console.error('[api] /api/events error:', err.message ?? err.stack ?? err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// GET /api/events/jump
-// Finds the most recent event matching a device + hour bucket (from the
-// heatmap) and tells the client which page it lives on so the timeline
-// can navigate directly to it.
-//
-// Query params:
-//   accessory — exact accessory_name match
-//   hour      — 0–23 (UTC hour)
-//   limit     — page size to calculate page number (default 50)
-//   room, from, to — same optional filters as /api/events
-//
-// Response: { page: number, eventId: string } | { page: null, eventId: null }
-app.get('/api/events/jump', async (req, res) => {
-  const { accessory, hour, limit = '50', room, from, to } = req.query;
-
-  if (!accessory || hour === undefined) {
-    return res.status(400).json({ error: 'accessory and hour are required' });
-  }
-
-  const pageSize = parseIntInRange(limit, 50, 1, 200);
-  const hourInt  = parseInt(hour, 10);
-
-  try {
-    // ── Step 1: find the most recent event for this device+hour ──────────
-    const matchParams     = [accessory, hourInt];
-    const matchConditions = [
-      `accessory_name = $1`,
-      `EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC') = $2`,
-    ];
-    if (room) { matchParams.push(room); matchConditions.push(`room_name = $${matchParams.length}`); }
-    if (from) { matchParams.push(from); matchConditions.push(`timestamp >= $${matchParams.length}`); }
-    if (to)   { matchParams.push(to);   matchConditions.push(`timestamp <= $${matchParams.length}`); }
-
-    const matchResult = await pool.query(
-      `SELECT id, timestamp FROM event_logs
-       WHERE ${matchConditions.join(' AND ')}
-       ORDER BY timestamp DESC LIMIT 1`,
-      matchParams
-    );
-
-    if (!matchResult.rows.length) return res.json({ page: null, eventId: null });
-
-    const { id: eventId, timestamp } = matchResult.rows[0];
-
-    // ── Step 2: count events newer than this one (same non-device filters) ─
-    // This mirrors the ORDER BY timestamp DESC used in /api/events so the
-    // page number calculation is consistent.
-    const countParams     = [timestamp];
-    const countConditions = [`timestamp > $1`];
-    if (room) { countParams.push(room); countConditions.push(`room_name = $${countParams.length}`); }
-    if (from) { countParams.push(from); countConditions.push(`timestamp >= $${countParams.length}`); }
-    if (to)   { countParams.push(to);   countConditions.push(`timestamp <= $${countParams.length}`); }
-
-    const countResult = await pool.query(
-      `SELECT COUNT(*) AS newer FROM event_logs WHERE ${countConditions.join(' AND ')}`,
-      countParams
-    );
-
-    const newer = parseInt(countResult.rows[0].newer, 10);
-    const page  = Math.floor(newer / pageSize) + 1;
-
-    res.json({ page, eventId: String(eventId) });
-  } catch (err) {
-    console.error('[api] /api/events/jump error:', err.message ?? err.stack ?? err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Helper: extract the top-level bridge MAC from an accessory_id.
-// "AA:BB:CC:DD:EE:FF:3" → "AA:BB:CC:DD:EE:FF"   (bridge child)
-// "AA:BB:CC:DD:EE:FF"   → "AA:BB:CC:DD:EE:FF"   (bridge or standalone)
-function parentBridgeId(id) {
-  const parts = id.split(':');
-  return parts.length > 6 ? parts.slice(0, 6).join(':') : id;
-}
-
+// Stats routes
 app.get('/api/accessories', async (_req, res) => {
   try {
-    // One row per accessory: latest name/room/service_type + last_seen + event count.
-    // GROUP BY instead of DISTINCT ON so we can add COUNT(*) cheaply.
     const result = await pool.query(`
       SELECT
         accessory_id,
@@ -560,36 +443,33 @@ app.get('/api/accessories', async (_req, res) => {
       ORDER BY last_seen DESC
     `);
 
-    const rooms           = loadRooms();
+    const rooms = loadRooms();
     const currentPairings = loadPairings();
 
-    // Overlay rooms.json + bridge metadata (address, pairedAt) onto DB rows
     const dbRows = result.rows.map((r) => {
       const bridgePairing = currentPairings[parentBridgeId(r.accessory_id)];
       return {
         ...r,
-        room_name:   rooms[r.accessory_id]     ?? r.room_name,
-        address:     bridgePairing?.address     ?? null,
-        paired_at:   bridgePairing?.pairedAt    ?? null,
+        room_name: rooms[r.accessory_id] ?? r.room_name,
+        address: bridgePairing?.address ?? null,
+        paired_at: bridgePairing?.pairedAt ?? null,
       };
     });
 
-    // Build a set of known accessory_ids from the DB
     const seenIds = new Set(dbRows.map((r) => r.accessory_id));
 
-    // Merge in paired bridges that haven't fired any event yet
     const neverSeen = Object.entries(currentPairings)
       .filter(([id]) => !seenIds.has(id))
       .map(([id, p]) => ({
-        accessory_id:   id,
+        accessory_id: id,
         accessory_name: p.name,
-        room_name:      rooms[id] ?? null,
-        service_type:   null,
-        category:       p.category ?? null,
-        last_seen:      null,
-        event_count:    0,
-        address:        p.address  ?? null,
-        paired_at:      p.pairedAt ?? null,
+        room_name: rooms[id] ?? null,
+        service_type: null,
+        category: p.category ?? null,
+        last_seen: null,
+        event_count: 0,
+        address: p.address ?? null,
+        paired_at: p.pairedAt ?? null,
       }));
 
     res.json([...dbRows, ...neverSeen]);
@@ -607,7 +487,7 @@ app.get('/api/stats/hourly', async (_req, res) => {
       GROUP BY hour ORDER BY hour
     `);
     res.json(result.rows);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -629,10 +509,6 @@ app.get('/api/stats/daily', async (req, res) => {
 
 app.get('/api/stats/top-devices', async (_req, res) => {
   try {
-    // Group by accessory_name only (not room_name) to avoid duplicate rows when
-    // the same device has events logged under different room values.
-    // LATERAL join fetches the most-recent accessory_id, room_name and
-    // service_type in a single pass so we can apply the rooms.json overlay.
     const result = await pool.query(`
       SELECT
         counts.accessory_name,
@@ -652,7 +528,7 @@ app.get('/api/stats/top-devices', async (_req, res) => {
         SELECT accessory_id, room_name, service_type
         FROM event_logs
         WHERE accessory_name = counts.accessory_name
-        ORDER BY timestamp DESC
+        ORDER BY timestamp DESC, id DESC
         LIMIT 1
       ) latest ON true
       ORDER BY counts.event_count DESC
@@ -669,8 +545,6 @@ app.get('/api/stats/top-devices', async (_req, res) => {
   }
 });
 
-// GET /api/stats/rooms?days=7
-// Returns [{room_name, count}] sorted by count desc, with rooms.json overlay applied.
 app.get('/api/stats/rooms', async (req, res) => {
   const days = parseIntInRange(req.query.days, 7, 1, 90);
   try {
@@ -684,8 +558,8 @@ app.get('/api/stats/rooms', async (req, res) => {
     const totals = {};
     for (const row of result.rows) {
       const name = rooms[row.accessory_id]
-                ?? rooms[parentBridgeId(row.accessory_id)]
-                ?? row.room_name;
+        ?? rooms[parentBridgeId(row.accessory_id)]
+        ?? row.room_name;
       if (!name) continue;
       totals[name] = (totals[name] ?? 0) + row.count;
     }
@@ -699,9 +573,6 @@ app.get('/api/stats/rooms', async (req, res) => {
   }
 });
 
-// GET /api/stats/weekday
-// Returns [{day_of_week (0=Sun…6=Sat), hour, count}] for last 90 days.
-// Used to show a Mon–Sun × hour activity heatmap.
 app.get('/api/stats/weekday', async (_req, res) => {
   try {
     const result = await pool.query(`
@@ -721,8 +592,6 @@ app.get('/api/stats/weekday', async (_req, res) => {
   }
 });
 
-// GET /api/stats/heatmap — events per device per hour of day, last 7 days
-// Returns [{accessory_name, hour, count}]
 app.get('/api/stats/heatmap', async (_req, res) => {
   try {
     const result = await pool.query(`
@@ -741,8 +610,6 @@ app.get('/api/stats/heatmap', async (_req, res) => {
   }
 });
 
-// GET /api/stats/device-patterns — per-device per-hour totals, last 30 days
-// Returns [{accessory_name, hour, total_count}] — client divides by 30 for daily avg
 app.get('/api/stats/device-patterns', async (_req, res) => {
   try {
     const result = await pool.query(`
@@ -767,4 +634,7 @@ app.get('/api/health', (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`[api] Listening on port ${PORT}`);
+  if (API_TOKEN) {
+    console.log('[api] Write auth enabled for POST/PATCH/DELETE routes');
+  }
 });
