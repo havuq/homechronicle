@@ -17,6 +17,7 @@ Apple's Home app shows you the current state of your accessories — HomeChronic
 ### Timeline
 - **Live event feed** — scrollable timeline grouped by day, auto-refreshes every 10 seconds
 - **Filters** — filter by room, accessory name, characteristic type, and date range
+- **Deterministic jump navigation** — heatmap jump resolves ties with `timestamp,id` ordering so page targeting is stable
 - **Service type labels** — events show human-readable type labels (Lightbulb, MotionSensor, Lock, etc.) instead of raw HAP UUIDs
 - **Component-level names** — accessories with multiple functions are split by service label (example: `Neakasa · Switch` vs `Neakasa · MotionSensor`)
 - **Run-cycle OFF delay** — switches named like "run leveling" / "run clean cycle" can delay OFF logging so completion is clearer
@@ -35,6 +36,7 @@ Apple's Home app shows you the current state of your accessories — HomeChronic
 
 ### Data Management
 - **Danger Zone** — collapsible section in Setup to delete history for individual accessories or wipe all event data
+- **Retention + archiving** — automatic pruning of old `event_logs` rows with optional archival to `event_logs_archive`
 - **Always-on** — runs 24/7 in Docker; no phone required
 - **Non-destructive** — pairs alongside Apple Home without disrupting it
 
@@ -68,6 +70,8 @@ cp .env.example .env
 
 Open `.env` and change `POSTGRES_PASSWORD` to something secure. The other defaults are fine to leave as-is.
 If you use run-cycle switches that auto-reset immediately, tune `RUN_CYCLE_OFF_DELAY_MS` (default `900000`, i.e. 15 minutes).
+Optional: set `API_TOKEN` to require authentication on all `POST`/`PATCH`/`DELETE` API routes.
+Retention defaults to 365 days with archive-before-delete enabled (`RETENTION_DAYS`, `RETENTION_SWEEP_MS`, `RETENTION_ARCHIVE`).
 
 ### 2. Start the stack
 
@@ -145,6 +149,7 @@ The listener exposes a REST API on port 3001, proxied through the web container 
 | Endpoint | Description |
 |---|---|
 | `GET /api/events` | Paginated events. Params: `page`, `limit`, `room`, `accessory`, `characteristic`, `from`, `to` |
+| `GET /api/events/jump` | Resolve the page + event ID for heatmap jump navigation. Params: `accessory`, `hour`, `limit`, `room`, `from`, `to` |
 | `GET /api/accessories` | All accessories with last-seen time, event count, room, and bridge info |
 | `GET /api/stats/hourly` | Event count by hour of day (last 30 days) |
 | `GET /api/stats/daily` | Event count by day (last 90 days) |
@@ -160,6 +165,18 @@ The listener exposes a REST API on port 3001, proxied through the web container 
 | `DELETE /api/data/accessory` | Delete all event history for one accessory |
 | `DELETE /api/data/all` | Wipe all event data |
 
+If `API_TOKEN` is set, all `POST`/`PATCH`/`DELETE` routes require `X-API-Token: <token>` (or `Authorization: Bearer <token>`).
+
+## Testing
+
+```bash
+# listener integration/unit tests
+cd listener && npm test
+
+# frontend smoke tests
+cd ../web && npm test
+```
+
 ## Project Structure
 
 ```
@@ -174,16 +191,22 @@ homechronicle/
 │   ├── package.json
 │   └── src/
 │       ├── index.js             # Entry point + Express REST API
+│       ├── events-router.js     # /api/events and /api/events/jump routes
 │       ├── discover.js          # mDNS scanner CLI
 │       ├── pairing.js           # Pairing CLI
 │       ├── subscriber.js        # HAP event subscriptions + DB inserts
 │       ├── db.js                # PostgreSQL client
+│       ├── store.js             # Async cached atomic JSON stores
 │       └── seed.js              # Fake data generator
+│   └── test/
+│       ├── events-router.integration.test.js
+│       └── subscriber.reconnect.test.js
 └── web/                         # React + Vite frontend
     ├── Dockerfile
     ├── nginx.conf.template
     └── src/
         ├── App.jsx
+        ├── App.smoke.test.jsx
         ├── components/          # Timeline, AccessoryList, Dashboard, Setup
         ├── hooks/               # useEvents, useAccessories, useStats
         └── lib/                 # icons.js (SF Symbol → Lucide mappings)
@@ -193,7 +216,8 @@ homechronicle/
 
 - `listener/data/pairings.json` contains your HomeKit pairing keys — gitignored, never commit or share this file
 - `.env` is gitignored; only `.env.example` is in the repo
-- The web UI and API have no authentication — run behind a VPN or firewall, never expose to the public internet
+- Optional hardening: set `API_TOKEN` to protect all write endpoints (`POST`/`PATCH`/`DELETE`)
+- Read-only endpoints (`GET`) are still unauthenticated — run behind a VPN or firewall, never expose to the public internet
 
 ## License
 
