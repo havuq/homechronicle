@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, VolumeX, X, Loader2 } from 'lucide-react';
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
 import { useEvents, useDevicePatterns } from '../hooks/useEvents.js';
 import { useMutedDevices } from '../hooks/useMutedDevices.js';
+import { withApiAuthHeaders } from '../lib/api.js';
 import { formatGap } from '../lib/icons.js';
 import SceneGroup from './SceneGroup.jsx';
 import FilterBar from './FilterBar.jsx';
@@ -204,7 +205,9 @@ export default function Timeline() {
       if (filters.from) qs.set('from', filters.from);
       if (filters.to)   qs.set('to',   filters.to);
 
-      const res   = await fetch(`${API_BASE}/events/jump?${qs}`);
+      const res   = await fetch(`${API_BASE}/events/jump?${qs}`, {
+        headers: withApiAuthHeaders(),
+      });
       const { page: targetPage, eventId } = await res.json();
 
       if (!eventId) return; // no match in DB
