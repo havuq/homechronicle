@@ -8,6 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
 import PinHelpModal from './PinHelpModal.jsx';
 import { useAccessories } from '../hooks/useEvents.js';
+import { fetchJson } from '../lib/api.js';
 
 const CATEGORY_LABELS = {
   1: 'Other', 2: 'Bridge', 3: 'Fan', 4: 'Garage', 5: 'Lightbulb',
@@ -16,13 +17,6 @@ const CATEGORY_LABELS = {
   15: 'Programmable Switch', 16: 'Range Extender', 17: 'IP Camera',
   18: 'Video Doorbell', 19: 'Air Purifier', 26: 'Speaker', 32: 'TV',
 };
-
-async function fetchJson(url, options) {
-  const res = await fetch(url, options);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-  return data;
-}
 
 // ---------------------------------------------------------------------------
 // PIN vault — persists entered PINs in localStorage so they survive refresh

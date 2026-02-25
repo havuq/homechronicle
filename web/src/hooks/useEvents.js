@@ -1,12 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
+import { fetchJson } from '../lib/api.js';
 
 const BASE = '/api';
-
-async function fetchJson(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`API error ${res.status}`);
-  return res.json();
-}
 
 function buildQueryString(params) {
   const qs = new URLSearchParams();
