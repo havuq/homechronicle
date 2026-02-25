@@ -82,7 +82,7 @@ export async function migrateDb() {
       ON event_logs (characteristic);
 
     CREATE INDEX IF NOT EXISTS idx_event_logs_timestamp_trunc
-      ON event_logs (date_trunc('hour', timestamp));
+      ON event_logs (date_trunc('hour', timestamp AT TIME ZONE 'UTC'));
   `);
   console.log('[db] Schema ready.');
 }

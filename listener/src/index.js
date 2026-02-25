@@ -22,6 +22,12 @@ const ROOMS_FILE = process.env.ROOMS_FILE
 const PORT = Number(process.env.API_PORT ?? 3001);
 const RESCAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
+function parseIntInRange(value, fallback, min, max) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 // Resolve the mDNS network interface.
 // If DISCOVER_IFACE is set but doesn't exist on this machine, log the
 // available interfaces and fall back to null (= let the OS choose).
@@ -415,8 +421,8 @@ app.delete('/api/data/all', async (_req, res) => {
 
 app.get('/api/events', async (req, res) => {
   try {
-    const page   = Math.max(1, parseInt(req.query.page  ?? '1', 10));
-    const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit ?? '50', 10)));
+    const page   = parseIntInRange(req.query.page, 1, 1, Number.MAX_SAFE_INTEGER);
+    const limit  = parseIntInRange(req.query.limit, 50, 1, 200);
     const offset = (page - 1) * limit;
 
     const conditions = [];
@@ -480,7 +486,7 @@ app.get('/api/events/jump', async (req, res) => {
     return res.status(400).json({ error: 'accessory and hour are required' });
   }
 
-  const pageSize = Math.min(200, Math.max(1, parseInt(limit, 10)));
+  const pageSize = parseIntInRange(limit, 50, 1, 200);
   const hourInt  = parseInt(hour, 10);
 
   try {
@@ -607,7 +613,7 @@ app.get('/api/stats/hourly', async (_req, res) => {
 });
 
 app.get('/api/stats/daily', async (req, res) => {
-  const days = Math.min(365, Math.max(7, parseInt(req.query.days ?? '30', 10)));
+  const days = parseIntInRange(req.query.days, 30, 7, 365);
   try {
     const result = await pool.query(`
       SELECT DATE(timestamp AT TIME ZONE 'UTC') AS day, COUNT(*) AS count
@@ -666,7 +672,7 @@ app.get('/api/stats/top-devices', async (_req, res) => {
 // GET /api/stats/rooms?days=7
 // Returns [{room_name, count}] sorted by count desc, with rooms.json overlay applied.
 app.get('/api/stats/rooms', async (req, res) => {
-  const days = Math.min(90, Math.max(1, parseInt(req.query.days ?? '7', 10)));
+  const days = parseIntInRange(req.query.days, 7, 1, 90);
   try {
     const result = await pool.query(`
       SELECT accessory_id, room_name, COUNT(*)::int AS count
