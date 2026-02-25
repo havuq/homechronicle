@@ -18,6 +18,8 @@ Apple's Home app shows you the current state of your accessories — HomeChronic
 - **Live event feed** — scrollable timeline grouped by day, auto-refreshes every 10 seconds
 - **Filters** — filter by room, accessory name, characteristic type, and date range
 - **Service type labels** — events show human-readable type labels (Lightbulb, MotionSensor, Lock, etc.) instead of raw HAP UUIDs
+- **Component-level names** — accessories with multiple functions are split by service label (example: `Neakasa · Switch` vs `Neakasa · MotionSensor`)
+- **Run-cycle OFF delay** — switches named like "run leveling" / "run clean cycle" can delay OFF logging so completion is clearer
 
 ### Accessories
 - **Live list** — all paired devices with room grouping, auto-refreshes every 15 seconds
@@ -65,6 +67,7 @@ cp .env.example .env
 ```
 
 Open `.env` and change `POSTGRES_PASSWORD` to something secure. The other defaults are fine to leave as-is.
+If you use run-cycle switches that auto-reset immediately, tune `RUN_CYCLE_OFF_DELAY_MS` (default `900000`, i.e. 15 minutes).
 
 ### 2. Start the stack
 
