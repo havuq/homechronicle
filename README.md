@@ -81,6 +81,26 @@ docker compose up -d
 
 Open **http://localhost:3000** (or replace `localhost` with your server's IP).
 
+## Production Install (Recommended)
+
+Use this when deploying on a server/NAS for 24/7 use.
+
+1. Keep only `docker-compose.yml` in use for production.
+2. Set a strong `POSTGRES_PASSWORD` in `.env`.
+3. Set `API_TOKEN` in `.env` to protect all write API routes.
+4. Restrict network access at your firewall/router:
+   - allow inbound `3000/tcp` only from trusted clients
+   - block public access to `5432/tcp` (Postgres)
+5. Start and verify:
+
+```bash
+docker compose up -d
+docker compose ps
+docker compose logs -f --tail=100 listener web postgres
+```
+
+The app should be reachable at `http://<server-ip>:3000`.
+
 ### 3. Pair your accessories
 
 1. Open the app and go to the **Setup** tab
@@ -110,6 +130,20 @@ docker compose up -d
 If mDNS discovery fails (Setup shows "No accessories found" after scanning):
 - Check that `avahi-daemon` is running on the NAS host
 - Or add an mDNS repeater container to your Compose stack
+
+## Production Upgrade
+
+```bash
+git pull
+docker compose pull
+docker compose up -d
+```
+
+Optional quick backup before upgrade:
+
+```bash
+docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sql
+```
 
 ## Troubleshooting
 
