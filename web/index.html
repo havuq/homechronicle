@@ -3,7 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/hc-icon-blue.png" />
     <title>HomeChronicle</title>
+    <script>
+      (function () {
+        const themeKey = 'hc_theme_preference';
+        const skinKey = 'hc_ui_skin';
+        const stored = localStorage.getItem(themeKey);
+        const preference = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+        const resolved = preference === 'system'
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : preference;
+        const storedSkin = localStorage.getItem(skinKey);
+        const skin = storedSkin === 'ocean' || storedSkin === 'graphite' || storedSkin === 'sunrise'
+          ? storedSkin
+          : 'ocean';
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.skin = skin;
+        document.documentElement.classList.toggle('theme-dark', resolved === 'dark');
+        document.documentElement.classList.toggle('theme-light', resolved === 'light');
+        document.documentElement.style.colorScheme = resolved;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
