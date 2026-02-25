@@ -27,11 +27,21 @@ const STYLES = [
   { id: 'sunrise', label: 'Sunrise' },
 ];
 
+const SKIN_SWATCH = {
+  ocean: 'from-blue-500 to-cyan-400',
+  graphite: 'from-slate-700 to-slate-500',
+  sunrise: 'from-orange-400 to-rose-400',
+};
+
 export default function App() {
   const [tab, setTab]               = useState('timeline');
   const [iconBroken, setIconBroken] = useState(false);
   const { preference, setPreference } = useTheme();
   const { skin, setSkin } = useSkin();
+  const nextPreference =
+    preference === 'system' ? 'light' :
+    preference === 'light' ? 'dark' :
+    'system';
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -39,16 +49,19 @@ export default function App() {
       <header className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-3 min-w-0">
           {iconBroken ? (
-            <div className="h-8 w-8 rounded-lg flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
-              <Home size={16} className="text-white" />
+            <div className="h-12 w-12 rounded-xl flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
+              <Home size={22} className="text-white" />
             </div>
           ) : (
-            <img
-              src="/hc-icon-blue.png"
-              alt=""
-              className="h-8 w-8 rounded-lg flex-shrink-0"
-              onError={() => setIconBroken(true)}
-            />
+            <div className="h-12 w-12 rounded-xl overflow-hidden flex-shrink-0">
+              <img
+                src="/hc-icon-blue.png"
+                alt=""
+                className="h-full w-full object-cover scale-[1.55]"
+                style={{ objectPosition: 'center 64%' }}
+                onError={() => setIconBroken(true)}
+              />
+            </div>
           )}
           <div className="min-w-0">
             <h1 className="text-lg font-semibold text-gray-900 leading-tight truncate">HomeChronicle</h1>
@@ -57,37 +70,17 @@ export default function App() {
         </div>
         <span className="flex-1 hidden md:block" />
 
-        <label className="relative flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600">
-          <span className="sr-only">Theme</span>
-          {preference === 'system' && <Monitor size={14} />}
-          {preference === 'light' && <Sun size={14} />}
-          {preference === 'dark' && <Moon size={14} />}
-          <select
-            aria-label="Theme"
-            value={preference}
-            onChange={(e) => setPreference(e.target.value)}
-            className="appearance-none bg-transparent pr-4 text-xs font-medium text-inherit focus:outline-none cursor-pointer"
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </label>
-
-        <label className="relative flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600">
-          <span className="sr-only">Style</span>
-          <Paintbrush2 size={14} />
-          <select
-            aria-label="Style"
-            value={skin}
-            onChange={(e) => setSkin(e.target.value)}
-            className="appearance-none bg-transparent pr-4 text-xs font-medium text-inherit focus:outline-none cursor-pointer"
-          >
-            {STYLES.map((style) => (
-              <option key={style.id} value={style.id}>{style.label}</option>
-            ))}
-          </select>
-        </label>
+        <button
+          type="button"
+          onClick={() => setPreference(nextPreference)}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-800"
+          aria-label={`Theme mode: ${preference}. Click to switch to ${nextPreference}.`}
+          title={`Theme mode: ${preference}`}
+        >
+          {preference === 'system' && <Monitor size={18} />}
+          {preference === 'light' && <Sun size={18} />}
+          {preference === 'dark' && <Moon size={18} />}
+        </button>
 
         <nav className="order-3 md:order-none w-full md:w-auto flex gap-1 overflow-x-auto pb-1 -mb-1">
           {TABS.map(({ id, label, icon: Icon }) => (
@@ -154,6 +147,27 @@ export default function App() {
         {tab === 'accessories' && <AccessoryList />}
         {tab === 'setup' && <Setup />}
       </main>
+
+      <div className="fixed bottom-4 right-4 z-20 flex items-center gap-1 rounded-full border border-gray-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur">
+        <Paintbrush2 size={14} className="text-gray-500" />
+        {STYLES.map((style) => (
+          <button
+            key={style.id}
+            type="button"
+            onClick={() => setSkin(style.id)}
+            className={clsx(
+              'h-6 w-6 rounded-full p-0.5 transition-all',
+              skin === style.id
+                ? 'ring-2 ring-blue-500'
+                : 'ring-1 ring-gray-300 hover:ring-gray-400'
+            )}
+            aria-label={`Use ${style.label} color theme`}
+            title={style.label}
+          >
+            <span className={clsx('block h-full w-full rounded-full bg-gradient-to-br', SKIN_SWATCH[style.id])} />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
