@@ -85,11 +85,17 @@ const WATCHED_CHARACTERISTICS = new Map([
 // Milliseconds before attempting reconnect after a lost connection
 const RECONNECT_BASE_MS = 5_000;
 const RECONNECT_MAX_MS  = 60_000;
+const RUN_CYCLE_NAME_REGEX = /(run leveling|run clean cycle)/i;
+const RUN_CYCLE_OFF_DELAY_MS = Number.parseInt(
+  process.env.RUN_CYCLE_OFF_DELAY_MS ?? `${15 * 60_000}`,
+  10
+);
 
 // In-memory cache of last-seen values: "deviceId:aid.iid" → value string.
 // Used to populate old_value on each event so the UI can show before→after.
 // Survives reconnects within the same process; cleared on restart.
 const valueCache = new Map();
+const delayedOffTimers = new Map();
 
 /**
  * Start subscribers for all entries in the pairings map.
@@ -115,7 +121,7 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs, getPairing = n
   const client = new HttpClient(deviceId, address, port, longTermData);
 
   client.getAccessories().then(async (accessories) => {
-    // Build a map of "aid.iid" → { serviceType, characteristicName, childName }
+    // Build a map of "aid.iid" → { serviceType, characteristicName, childName, componentName }
     // Using the composite key avoids iid collisions when a bridge has multiple
     // child accessories that each start their iid numbering from 1.
     const iidMeta = buildIidMetaMap(accessories);
@@ -142,8 +148,9 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs, getPairing = n
           continue;
         }
 
-        // For bridges, use the child accessory's name; fall back to bridge name
-        const effectiveName = meta.childName || accessoryName;
+        // Use a component-specific label when an accessory exposes multiple
+        // watched services (e.g. switch + sensor under the same parent name).
+        const effectiveName = meta.componentName || meta.childName || accessoryName;
         // For bridges, suffix the deviceId with the aid so each child is distinct
         const effectiveId = change.aid > 1 ? `${deviceId}:${change.aid}` : deviceId;
 
@@ -160,20 +167,64 @@ function connectAccessory(deviceId, pairing, rooms, retryDelayMs, getPairing = n
           continue;
         }
 
+        const eventPayload = {
+          accessoryId:    effectiveId,
+          accessoryName:  effectiveName,
+          // rooms.json stores child overrides keyed by effectiveId.
+          // If the child has no override, fall back to the top-level bridge entry
+          // so setting a room on the bridge automatically covers all its children.
+          roomName:       rooms[effectiveId] ?? (change.aid > 1 ? rooms[deviceId] : null) ?? null,
+          serviceType:    meta.serviceType,
+          characteristic: meta.characteristicName,
+          oldValue,
+          newValue,
+          rawIid:         change.iid,
+        };
+
+        // Run-cycle switches often auto-reset immediately. Delay OFF logging so
+        // users see completion later rather than an instant auto-off.
+        const timerKey = `${effectiveId}:${change.aid}.${change.iid}`;
+        const isRunCycleSwitch =
+          meta.characteristicName === 'On' &&
+          RUN_CYCLE_NAME_REGEX.test(effectiveName) &&
+          Number.isFinite(RUN_CYCLE_OFF_DELAY_MS) &&
+          RUN_CYCLE_OFF_DELAY_MS > 0;
+
+        if (isRunCycleSwitch && newValue === 'true') {
+          const pending = delayedOffTimers.get(timerKey);
+          if (pending) {
+            clearTimeout(pending);
+            delayedOffTimers.delete(timerKey);
+          }
+        }
+
+        if (isRunCycleSwitch && newValue === 'false' && oldValue === 'true') {
+          const pending = delayedOffTimers.get(timerKey);
+          if (pending) clearTimeout(pending);
+
+          const timeoutId = setTimeout(async () => {
+            delayedOffTimers.delete(timerKey);
+            try {
+              await insertEvent(eventPayload);
+              console.log(
+                `[event-delayed] ${effectiveName} → ${meta.characteristicName}: ${change.value} ` +
+                `(delayed ${Math.round(RUN_CYCLE_OFF_DELAY_MS / 1000)}s)`
+              );
+            } catch (err) {
+              console.error(`[subscriber] Delayed DB insert failed:`, err.message ?? err.stack ?? err);
+            }
+          }, RUN_CYCLE_OFF_DELAY_MS);
+
+          delayedOffTimers.set(timerKey, timeoutId);
+          console.log(
+            `[event-delay] ${effectiveName} → ${meta.characteristicName}: ${change.value} ` +
+            `queued for ${Math.round(RUN_CYCLE_OFF_DELAY_MS / 1000)}s`
+          );
+          continue;
+        }
+
         try {
-          await insertEvent({
-            accessoryId:    effectiveId,
-            accessoryName:  effectiveName,
-            // rooms.json stores child overrides keyed by effectiveId.
-            // If the child has no override, fall back to the top-level bridge entry
-            // so setting a room on the bridge automatically covers all its children.
-            roomName:       rooms[effectiveId] ?? (change.aid > 1 ? rooms[deviceId] : null) ?? null,
-            serviceType:    meta.serviceType,
-            characteristic: meta.characteristicName,
-            oldValue,
-            newValue,
-            rawIid:         change.iid,
-          });
+          await insertEvent(eventPayload);
           console.log(`[event] ${effectiveName} → ${meta.characteristicName}: ${change.value}`);
         } catch (err) {
           console.error(`[subscriber] DB insert failed:`, err.message ?? err.stack ?? err);
@@ -230,7 +281,7 @@ function scheduleReconnect(deviceId, pairing, rooms, retryDelayMs, getPairing = 
 
 /**
  * Walk the HAP accessories object and return a Map of:
- *   "aid.iid" → { serviceType, characteristicName, childName }
+ *   "aid.iid" → { serviceType, characteristicName, childName, componentName }
  *
  * Using the composite "aid.iid" key avoids collisions when a bridge exposes
  * multiple child accessories that each start their iid namespace from 1.
@@ -246,6 +297,18 @@ function buildIidMetaMap(accessories) {
     const infoService = acc.services?.find((s) => shortUuid(s.type) === '3E');
     const nameProp    = infoService?.characteristics?.find((c) => shortUuid(c.type) === '23');
     const childName   = nameProp?.value ?? null;
+    const watchedServiceTypes = new Set();
+
+    // Identify whether this accessory has multiple watched service types.
+    for (const service of acc.services ?? []) {
+      const shortType = shortUuid(service.type);
+      const serviceType = SERVICE_TYPE_LABELS.get(shortType) ?? shortType;
+      const hasWatchedChar = (service.characteristics ?? []).some((c) =>
+        WATCHED_CHARACTERISTICS.has(shortUuid(c.type))
+      );
+      if (hasWatchedChar) watchedServiceTypes.add(serviceType);
+    }
+    const shouldDisambiguateByService = watchedServiceTypes.size > 1;
 
     for (const service of acc.services ?? []) {
       const shortType  = shortUuid(service.type);
@@ -257,10 +320,14 @@ function buildIidMetaMap(accessories) {
 
         if (charName) {
           // "aid.iid" is globally unique across all accessories in a bridge
+          const componentName = (shouldDisambiguateByService && childName)
+            ? `${childName} · ${serviceType}`
+            : childName;
           map.set(`${acc.aid}.${char.iid}`, {
             serviceType,
             characteristicName: charName,
             childName,  // null for single non-bridge accessories
+            componentName, // label per service when needed
           });
         }
       }
