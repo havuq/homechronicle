@@ -20,5 +20,6 @@ COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 # Override to "listener" when running in bridge mode (local dev via override file)
 ENV LISTENER_HOST=127.0.0.1
 ENV API_TOKEN=
+ENV DOLLAR=$
 
 EXPOSE 80
