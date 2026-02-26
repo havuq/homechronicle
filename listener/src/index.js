@@ -556,9 +556,9 @@ app.get('/api/stats/daily', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT DATE(timestamp AT TIME ZONE 'UTC') AS day, COUNT(*) AS count
-      FROM event_logs WHERE timestamp >= NOW() - INTERVAL '${days} days'
+      FROM event_logs WHERE timestamp >= NOW() - ($1::int * INTERVAL '1 day')
       GROUP BY day ORDER BY day
-    `);
+    `, [days]);
     res.json(result.rows);
   } catch (err) {
     console.error('[api] /api/stats/daily error:', err.message ?? err.stack ?? err);
@@ -610,9 +610,9 @@ app.get('/api/stats/rooms', async (req, res) => {
     const result = await pool.query(`
       SELECT accessory_id, room_name, COUNT(*)::int AS count
       FROM event_logs
-      WHERE timestamp >= NOW() - INTERVAL '${days} days'
+      WHERE timestamp >= NOW() - ($1::int * INTERVAL '1 day')
       GROUP BY accessory_id, room_name
-    `);
+    `, [days]);
     const rooms = loadRooms();
     const totals = {};
     for (const row of result.rows) {
@@ -632,7 +632,8 @@ app.get('/api/stats/rooms', async (req, res) => {
   }
 });
 
-app.get('/api/stats/weekday', async (_req, res) => {
+app.get('/api/stats/weekday', async (req, res) => {
+  const days = parseIntInRange(req.query.days, 90, 7, 365);
   try {
     const result = await pool.query(`
       SELECT
@@ -640,10 +641,10 @@ app.get('/api/stats/weekday', async (_req, res) => {
         EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS hour,
         COUNT(*)::int AS count
       FROM event_logs
-      WHERE timestamp >= NOW() - INTERVAL '90 days'
+      WHERE timestamp >= NOW() - ($1::int * INTERVAL '1 day')
       GROUP BY day_of_week, hour
       ORDER BY day_of_week, hour
-    `);
+    `, [days]);
     res.json(result.rows);
   } catch (err) {
     console.error('[api] /api/stats/weekday error:', err.message ?? err.stack ?? err);

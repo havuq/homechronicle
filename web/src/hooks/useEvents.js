@@ -68,10 +68,10 @@ export function useRoomStats(days = 7) {
   });
 }
 
-export function useWeekdayStats() {
+export function useWeekdayStats(days = 90) {
   return useQuery({
-    queryKey: ['stats', 'weekday'],
-    queryFn: () => fetchJson(`${BASE}/stats/weekday`),
+    queryKey: ['stats', 'weekday', days],
+    queryFn: () => fetchJson(`${BASE}/stats/weekday?days=${days}`),
     staleTime: 300_000,
     refetchInterval: 300_000,
   });
