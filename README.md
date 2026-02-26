@@ -77,6 +77,7 @@ cp .env.example .env
 Open `.env` and change `POSTGRES_PASSWORD` to something secure. The other defaults are fine to leave as-is.
 If you use run-cycle switches that auto-reset immediately, tune `RUN_CYCLE_OFF_DELAY_MS` (default `900000`, i.e. 15 minutes).
 Webhook alert delivery timeout is configurable with `ALERTS_WEBHOOK_TIMEOUT_MS` (default `5000`).
+Set `ALERTS_ENABLED=false` to hide Alerts in the UI and disable alert processing/routes without removing code.
 Optional: set `API_TOKEN` to require authentication on all `POST`/`PATCH`/`DELETE` API routes.
 Retention defaults to 365 days with archive-before-delete enabled (`RETENTION_DAYS`, `RETENTION_SWEEP_MS`, `RETENTION_ARCHIVE`).
 
@@ -210,6 +211,8 @@ The listener exposes a REST API on port 3001, proxied through the web container 
 | `PATCH /api/alerts/rules/:id` | Update an alert rule |
 | `DELETE /api/alerts/rules/:id` | Delete an alert rule |
 | `GET /api/alerts/deliveries` | Paginated alert delivery history. Params: `page`, `limit` |
+
+When `ALERTS_ENABLED=false`, Alerts UI and `/api/alerts/*` endpoints are disabled.
 
 If `API_TOKEN` is set, all `POST`/`PATCH`/`DELETE` routes require `X-API-Token: <token>` (or `Authorization: Bearer <token>`).
 
