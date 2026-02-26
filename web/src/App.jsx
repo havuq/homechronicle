@@ -6,9 +6,9 @@ import StatsCards from './components/StatsCards.jsx';
 import ActivityChart from './components/ActivityChart.jsx';
 import TrendChart from './components/TrendChart.jsx';
 import TopDevices from './components/TopDevices.jsx';
-import HeatmapLane from './components/HeatmapLane.jsx';
 import RoomChart from './components/RoomChart.jsx';
 import WeekdayHeatmap from './components/WeekdayHeatmap.jsx';
+import MonthlyHeatmap from './components/MonthlyHeatmap.jsx';
 import AccessoryList from './components/AccessoryList.jsx';
 import Setup from './components/Setup.jsx';
 import { useTheme } from './hooks/useTheme.js';
@@ -25,17 +25,24 @@ const STYLES = [
   { id: 'ocean', label: 'Ocean' },
   { id: 'graphite', label: 'Graphite' },
   { id: 'sunrise', label: 'Sunrise' },
+  { id: 'red', label: 'Red' },
+  { id: 'yellow', label: 'Yellow' },
+  { id: 'purple', label: 'Purple' },
 ];
 
 const SKIN_SWATCH = {
   ocean: 'from-blue-500 to-cyan-400',
   graphite: 'from-slate-700 to-slate-500',
   sunrise: 'from-orange-400 to-rose-400',
+  red: 'from-red-500 to-rose-500',
+  yellow: 'from-yellow-400 to-amber-500',
+  purple: 'from-violet-500 to-fuchsia-500',
 };
 
 export default function App() {
   const [tab, setTab]               = useState('timeline');
   const [iconBroken, setIconBroken] = useState(false);
+  const [isSkinPickerOpen, setIsSkinPickerOpen] = useState(false);
   const { preference, setPreference } = useTheme();
   const { skin, setSkin } = useSkin();
   const nextPreference =
@@ -133,12 +140,10 @@ export default function App() {
               </div>
               <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
                 <WeekdayHeatmap />
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <MonthlyHeatmap />
+                </div>
               </div>
-            </div>
-
-            {/* Full-width per-device heatmap */}
-            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
-              <HeatmapLane />
             </div>
 
           </div>
@@ -148,25 +153,51 @@ export default function App() {
         {tab === 'setup' && <Setup />}
       </main>
 
-      <div className="fixed bottom-4 right-4 z-20 flex items-center gap-1 rounded-full border border-gray-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur">
-        <Paintbrush2 size={14} className="text-gray-500" />
-        {STYLES.map((style) => (
-          <button
-            key={style.id}
-            type="button"
-            onClick={() => setSkin(style.id)}
+      <div className="fixed bottom-4 right-4 z-20">
+        <div className="relative flex items-center justify-end">
+          <div
             className={clsx(
-              'h-6 w-6 rounded-full p-0.5 transition-all',
-              skin === style.id
-                ? 'ring-2 ring-blue-500'
-                : 'ring-1 ring-gray-300 hover:ring-gray-400'
+              'absolute right-11 flex items-center gap-1 rounded-full border border-gray-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur transition-all duration-300 ease-out',
+              isSkinPickerOpen
+                ? 'translate-x-0 opacity-100 pointer-events-auto'
+                : 'translate-x-8 opacity-0 pointer-events-none'
             )}
-            aria-label={`Use ${style.label} color theme`}
-            title={style.label}
+            aria-hidden={!isSkinPickerOpen}
           >
-            <span className={clsx('block h-full w-full rounded-full bg-gradient-to-br', SKIN_SWATCH[style.id])} />
+            {STYLES.map((style) => (
+              <button
+                key={style.id}
+                type="button"
+                onClick={() => setSkin(style.id)}
+                className={clsx(
+                  'h-6 w-6 rounded-full p-0.5 transition-all',
+                  skin === style.id
+                    ? 'ring-2 ring-blue-500'
+                    : 'ring-1 ring-gray-300 hover:ring-gray-400'
+                )}
+                aria-label={`Use ${style.label} color theme`}
+                title={style.label}
+              >
+                <span className={clsx('block h-full w-full rounded-full bg-gradient-to-br', SKIN_SWATCH[style.id])} />
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsSkinPickerOpen((current) => !current)}
+            className={clsx(
+              'relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-500 shadow-sm backdrop-blur transition-all duration-200',
+              isSkinPickerOpen
+                ? 'text-blue-600 border-blue-300'
+                : 'hover:text-gray-700 hover:bg-gray-50'
+            )}
+            aria-label={isSkinPickerOpen ? 'Hide color themes' : 'Show color themes'}
+            aria-expanded={isSkinPickerOpen}
+            title="Color themes"
+          >
+            <Paintbrush2 size={15} />
           </button>
-        ))}
+        </div>
       </div>
     </div>
   );
