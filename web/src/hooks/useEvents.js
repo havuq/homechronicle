@@ -94,3 +94,12 @@ export function useDevicePatterns() {
     refetchInterval: 300_000,
   });
 }
+
+export function useAnomalies() {
+  return useQuery({
+    queryKey: ['stats', 'anomalies'],
+    queryFn: () => fetchJson(`${BASE}/stats/anomalies`),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+}

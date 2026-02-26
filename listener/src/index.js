@@ -14,6 +14,8 @@ import { startSubscribers, stopSubscriber } from './subscriber.js';
 import { JsonObjectStore } from './store.js';
 import { createEventsRouter, parentBridgeId, parseIntInRange } from './events-router.js';
 import { createAlertsRouter } from './alerts-router.js';
+import { deriveDeviceHealth } from './device-health.js';
+import { detectOutliers } from './anomaly-detection.js';
 
 const PAIRINGS_FILE = process.env.PAIRINGS_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/pairings.json' : './data/pairings.json');
@@ -495,28 +497,91 @@ if (ALERTS_ENABLED) {
 app.get('/api/accessories', async (_req, res) => {
   try {
     const result = await pool.query(`
+      WITH latest AS (
+        SELECT DISTINCT ON (accessory_id)
+          accessory_id,
+          accessory_name,
+          room_name,
+          service_type,
+          timestamp AS last_seen
+        FROM event_logs
+        ORDER BY accessory_id, timestamp DESC, id DESC
+      ),
+      counts AS (
+        SELECT accessory_id, COUNT(*)::int AS event_count
+        FROM event_logs
+        GROUP BY accessory_id
+      )
+      SELECT
+        latest.accessory_id,
+        latest.accessory_name,
+        latest.room_name,
+        latest.service_type,
+        latest.last_seen,
+        counts.event_count
+      FROM latest
+      JOIN counts USING (accessory_id)
+      ORDER BY latest.last_seen DESC
+    `);
+    const heartbeatResult = await pool.query(`
+      WITH recent AS (
+        SELECT accessory_id, timestamp
+        FROM (
+          SELECT
+            accessory_id,
+            timestamp,
+            ROW_NUMBER() OVER (
+              PARTITION BY accessory_id
+              ORDER BY timestamp DESC, id DESC
+            ) AS row_num
+          FROM event_logs
+          WHERE timestamp >= NOW() - INTERVAL '30 days'
+        ) ranked
+        WHERE row_num <= 200
+      ),
+      deltas AS (
+        SELECT
+          accessory_id,
+          EXTRACT(EPOCH FROM (
+            timestamp - LAG(timestamp) OVER (
+              PARTITION BY accessory_id
+              ORDER BY timestamp ASC
+            )
+          ))::float AS gap_seconds
+        FROM recent
+      )
       SELECT
         accessory_id,
-        accessory_name,
-        room_name,
-        service_type,
-        MAX(timestamp)  AS last_seen,
-        COUNT(*)::int   AS event_count
-      FROM event_logs
-      GROUP BY accessory_id, accessory_name, room_name, service_type
-      ORDER BY last_seen DESC
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY gap_seconds) AS heartbeat_seconds,
+        COUNT(*) FILTER (WHERE gap_seconds IS NOT NULL)::int AS heartbeat_samples
+      FROM deltas
+      WHERE gap_seconds IS NOT NULL AND gap_seconds > 0
+      GROUP BY accessory_id
     `);
 
     const rooms = loadRooms();
     const currentPairings = loadPairings();
+    const now = Date.now();
+    const heartbeatById = Object.fromEntries(
+      heartbeatResult.rows.map((row) => [row.accessory_id, row])
+    );
 
     const dbRows = result.rows.map((r) => {
       const bridgePairing = currentPairings[parentBridgeId(r.accessory_id)];
+      const heartbeat = heartbeatById[r.accessory_id] ?? {};
+      const health = deriveDeviceHealth({
+        lastSeen: r.last_seen,
+        pairedAt: bridgePairing?.pairedAt ?? null,
+        heartbeatSeconds: heartbeat.heartbeat_seconds ?? null,
+        heartbeatSamples: heartbeat.heartbeat_samples ?? 0,
+        now,
+      });
       return {
         ...r,
         room_name: rooms[r.accessory_id] ?? r.room_name,
         address: bridgePairing?.address ?? null,
         paired_at: bridgePairing?.pairedAt ?? null,
+        health,
       };
     });
 
@@ -534,6 +599,11 @@ app.get('/api/accessories', async (_req, res) => {
         event_count: 0,
         address: p.address ?? null,
         paired_at: p.pairedAt ?? null,
+        health: deriveDeviceHealth({
+          lastSeen: null,
+          pairedAt: p.pairedAt ?? null,
+          now,
+        }),
       }));
 
     res.json([...dbRows, ...neverSeen]);
@@ -689,6 +759,144 @@ app.get('/api/stats/device-patterns', async (_req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error('[api] /api/stats/device-patterns error:', err.message ?? err.stack ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/stats/anomalies', async (_req, res) => {
+  try {
+    const [deviceRows, roomRows] = await Promise.all([
+      pool.query(`
+        WITH scope_set AS (
+          SELECT DISTINCT accessory_name AS scope_name
+          FROM event_logs
+          WHERE timestamp >= NOW() - INTERVAL '31 days'
+            AND accessory_name IS NOT NULL
+            AND accessory_name <> ''
+        ),
+        hours AS (
+          SELECT generate_series(0, 23)::int AS hour
+        ),
+        history AS (
+          SELECT
+            accessory_name AS scope_name,
+            EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS hour,
+            DATE(timestamp AT TIME ZONE 'UTC') AS day_key,
+            COUNT(*)::int AS count
+          FROM event_logs
+          WHERE timestamp >= NOW() - INTERVAL '31 days'
+            AND timestamp < NOW() - INTERVAL '1 day'
+            AND accessory_name IS NOT NULL
+            AND accessory_name <> ''
+          GROUP BY 1, 2, 3
+        ),
+        baseline AS (
+          SELECT
+            scopes.scope_name,
+            hours.hour,
+            COALESCE(AVG(history.count), 0)::float8 AS baseline_avg,
+            COALESCE(STDDEV_SAMP(history.count), 0)::float8 AS baseline_std,
+            COUNT(history.day_key)::int AS baseline_days
+          FROM scope_set scopes
+          CROSS JOIN hours
+          LEFT JOIN history
+            ON history.scope_name = scopes.scope_name
+           AND history.hour = hours.hour
+          GROUP BY scopes.scope_name, hours.hour
+        ),
+        current_window AS (
+          SELECT
+            accessory_name AS scope_name,
+            EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS hour,
+            COUNT(*)::int AS event_count
+          FROM event_logs
+          WHERE timestamp >= NOW() - INTERVAL '1 day'
+            AND accessory_name IS NOT NULL
+            AND accessory_name <> ''
+          GROUP BY 1, 2
+        )
+        SELECT
+          baseline.scope_name,
+          baseline.hour,
+          baseline.baseline_avg,
+          baseline.baseline_std,
+          baseline.baseline_days,
+          COALESCE(current_window.event_count, 0)::int AS event_count
+        FROM baseline
+        LEFT JOIN current_window
+          ON current_window.scope_name = baseline.scope_name
+         AND current_window.hour = baseline.hour
+        WHERE baseline.baseline_days > 0
+      `),
+      pool.query(`
+        WITH scope_set AS (
+          SELECT DISTINCT COALESCE(room_name, 'Unassigned') AS scope_name
+          FROM event_logs
+          WHERE timestamp >= NOW() - INTERVAL '31 days'
+        ),
+        hours AS (
+          SELECT generate_series(0, 23)::int AS hour
+        ),
+        history AS (
+          SELECT
+            COALESCE(room_name, 'Unassigned') AS scope_name,
+            EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS hour,
+            DATE(timestamp AT TIME ZONE 'UTC') AS day_key,
+            COUNT(*)::int AS count
+          FROM event_logs
+          WHERE timestamp >= NOW() - INTERVAL '31 days'
+            AND timestamp < NOW() - INTERVAL '1 day'
+          GROUP BY 1, 2, 3
+        ),
+        baseline AS (
+          SELECT
+            scopes.scope_name,
+            hours.hour,
+            COALESCE(AVG(history.count), 0)::float8 AS baseline_avg,
+            COALESCE(STDDEV_SAMP(history.count), 0)::float8 AS baseline_std,
+            COUNT(history.day_key)::int AS baseline_days
+          FROM scope_set scopes
+          CROSS JOIN hours
+          LEFT JOIN history
+            ON history.scope_name = scopes.scope_name
+           AND history.hour = hours.hour
+          GROUP BY scopes.scope_name, hours.hour
+        ),
+        current_window AS (
+          SELECT
+            COALESCE(room_name, 'Unassigned') AS scope_name,
+            EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS hour,
+            COUNT(*)::int AS event_count
+          FROM event_logs
+          WHERE timestamp >= NOW() - INTERVAL '1 day'
+          GROUP BY 1, 2
+        )
+        SELECT
+          baseline.scope_name,
+          baseline.hour,
+          baseline.baseline_avg,
+          baseline.baseline_std,
+          baseline.baseline_days,
+          COALESCE(current_window.event_count, 0)::int AS event_count
+        FROM baseline
+        LEFT JOIN current_window
+          ON current_window.scope_name = baseline.scope_name
+         AND current_window.hour = baseline.hour
+        WHERE baseline.baseline_days > 0
+      `),
+    ]);
+
+    const deviceOutliers = detectOutliers(deviceRows.rows, 'device').slice(0, 50);
+    const roomOutliers = detectOutliers(roomRows.rows, 'room').slice(0, 50);
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      outlierCount: deviceOutliers.length + roomOutliers.length,
+      devices: deviceOutliers,
+      rooms: roomOutliers,
+    });
+  } catch (err) {
+    console.error('[api] /api/stats/anomalies error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

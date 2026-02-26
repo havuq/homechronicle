@@ -6,6 +6,7 @@ vi.mock('./components/StatsCards.jsx', () => ({ default: () => <div>Stats Cards<
 vi.mock('./components/ActivityChart.jsx', () => ({ default: () => <div>Activity Chart</div> }));
 vi.mock('./components/TrendChart.jsx', () => ({ default: () => <div>Trend Chart</div> }));
 vi.mock('./components/TopDevices.jsx', () => ({ default: () => <div>Top Devices</div> }));
+vi.mock('./components/AnomalyPanel.jsx', () => ({ default: () => <div>Anomaly Panel</div> }));
 vi.mock('./components/HeatmapLane.jsx', () => ({ default: () => <div>Heatmap Lane</div> }));
 vi.mock('./components/RoomChart.jsx', () => ({ default: () => <div>Room Chart</div> }));
 vi.mock('./components/WeekdayHeatmap.jsx', () => ({ default: () => <div>Weekday Heatmap</div> }));
@@ -18,10 +19,10 @@ describe('App smoke', () => {
     render(<App />);
 
     expect(screen.getByText('HomeChronicle')).toBeInTheDocument();
-    expect(screen.getByText('Timeline View')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /dashboard/i }));
     expect(screen.getByText('Stats Cards')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /timeline/i }));
+    expect(screen.getByText('Timeline View')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /accessories/i }));
     expect(screen.getByText('Accessory List')).toBeInTheDocument();

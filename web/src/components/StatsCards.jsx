@@ -2,6 +2,11 @@ import { format } from 'date-fns';
 import { Zap, Calendar, Activity, MapPin } from 'lucide-react';
 import { useDailyStats, useTopDevices, useRoomStats } from '../hooks/useEvents.js';
 
+function toInt(value, fallback = 0) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
 function Card({ icon: Icon, label, value, sub, bgClass, iconClass }) {
   return (
     <div className="bg-white rounded-xl shadow-sm p-4 flex items-start gap-3">
@@ -30,8 +35,8 @@ export default function StatsCards() {
 
   const todayKey   = format(new Date(), 'yyyy-MM-dd');
   const todayRow   = daily?.find((d) => d.day?.startsWith(todayKey));
-  const eventsToday = todayRow ? parseInt(todayRow.count, 10) : 0;
-  const eventsWeek  = daily?.reduce((sum, d) => sum + parseInt(d.count, 10), 0) ?? null;
+  const eventsToday = todayRow ? toInt(todayRow.count) : 0;
+  const eventsWeek  = daily?.reduce((sum, d) => sum + toInt(d.count), 0) ?? null;
 
   const topDevice = topDevices?.[0];
   // filter out null/empty room names for the top-room card
@@ -59,7 +64,7 @@ export default function StatsCards() {
         icon={Activity}
         label="Top Device"
         value={topDevices ? (topDevice?.accessory_name ?? 'None') : '…'}
-        sub={topDevice ? `${parseInt(topDevice.event_count, 10).toLocaleString()} events` : null}
+        sub={topDevice ? `${toInt(topDevice.event_count).toLocaleString()} events` : null}
         bgClass="bg-violet-50"
         iconClass="text-violet-500"
       />
@@ -67,7 +72,7 @@ export default function StatsCards() {
         icon={MapPin}
         label="Top Room"
         value={rooms ? (topRoom?.room_name ?? 'Unknown') : '…'}
-        sub={topRoom ? `${parseInt(topRoom.event_count, 10).toLocaleString()} events` : null}
+        sub={topRoom ? `${toInt(topRoom.count).toLocaleString()} events` : null}
         bgClass="bg-emerald-50"
         iconClass="text-emerald-500"
       />

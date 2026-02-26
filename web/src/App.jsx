@@ -9,6 +9,7 @@ import TopDevices from './components/TopDevices.jsx';
 import RoomChart from './components/RoomChart.jsx';
 import WeekdayHeatmap from './components/WeekdayHeatmap.jsx';
 import MonthlyHeatmap from './components/MonthlyHeatmap.jsx';
+import AnomalyPanel from './components/AnomalyPanel.jsx';
 import AccessoryList from './components/AccessoryList.jsx';
 import Setup from './components/Setup.jsx';
 import Alerts from './components/Alerts.jsx';
@@ -16,8 +17,8 @@ import { useTheme } from './hooks/useTheme.js';
 import { useSkin } from './hooks/useSkin.js';
 
 const TABS = [
-  { id: 'timeline',    label: 'Timeline',    icon: LayoutList },
   { id: 'dashboard',  label: 'Dashboard',   icon: BarChart2 },
+  { id: 'timeline',    label: 'Timeline',    icon: LayoutList },
   { id: 'accessories',label: 'Accessories', icon: Home },
   { id: 'setup',      label: 'Setup',       icon: Settings },
 ];
@@ -42,7 +43,7 @@ const SKIN_SWATCH = {
 };
 
 export default function App() {
-  const [tab, setTab]               = useState('timeline');
+  const [tab, setTab]               = useState('dashboard');
   const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [iconBroken, setIconBroken] = useState(false);
   const [isSkinPickerOpen, setIsSkinPickerOpen] = useState(false);
@@ -105,18 +106,6 @@ export default function App() {
         </div>
         <span className="flex-1 hidden md:block" />
 
-        <button
-          type="button"
-          onClick={() => setPreference(nextPreference)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-800"
-          aria-label={`Theme mode: ${preference}. Click to switch to ${nextPreference}.`}
-          title={`Theme mode: ${preference}`}
-        >
-          {preference === 'system' && <Monitor size={18} />}
-          {preference === 'light' && <Sun size={18} />}
-          {preference === 'dark' && <Moon size={18} />}
-        </button>
-
         <nav className="order-3 md:order-none w-full md:w-auto flex gap-1 overflow-x-auto pb-1 -mb-1">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
@@ -167,6 +156,12 @@ export default function App() {
                 <TopDevices />
               </div>
               <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
+                <AnomalyPanel />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
                 <WeekdayHeatmap />
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <MonthlyHeatmap />
@@ -183,7 +178,7 @@ export default function App() {
       </main>
 
       <div className="fixed bottom-4 right-4 z-20">
-        <div className="relative flex items-center justify-end">
+        <div className="relative flex items-center justify-end gap-2">
           <div
             className={clsx(
               'absolute right-11 flex items-center gap-1 rounded-full border border-gray-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur transition-all duration-300 ease-out',
@@ -211,6 +206,17 @@ export default function App() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => setPreference(nextPreference)}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-500 shadow-sm backdrop-blur transition-all duration-200 hover:text-gray-700 hover:bg-gray-50"
+            aria-label={`Theme mode: ${preference}. Click to switch to ${nextPreference}.`}
+            title={`Theme mode: ${preference}`}
+          >
+            {preference === 'system' && <Monitor size={15} />}
+            {preference === 'light' && <Sun size={15} />}
+            {preference === 'dark' && <Moon size={15} />}
+          </button>
           <button
             type="button"
             onClick={() => setIsSkinPickerOpen((current) => !current)}
