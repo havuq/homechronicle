@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutList, BarChart2, Home, Settings, Monitor, Sun, Moon, Paintbrush2 } from 'lucide-react';
+import { LayoutList, BarChart2, Home, Settings, Monitor, Sun, Moon, Paintbrush2, Bell } from 'lucide-react';
 import clsx from 'clsx';
 import Timeline from './components/Timeline.jsx';
 import StatsCards from './components/StatsCards.jsx';
@@ -11,6 +11,7 @@ import WeekdayHeatmap from './components/WeekdayHeatmap.jsx';
 import MonthlyHeatmap from './components/MonthlyHeatmap.jsx';
 import AccessoryList from './components/AccessoryList.jsx';
 import Setup from './components/Setup.jsx';
+import Alerts from './components/Alerts.jsx';
 import { useTheme } from './hooks/useTheme.js';
 import { useSkin } from './hooks/useSkin.js';
 
@@ -18,6 +19,7 @@ const TABS = [
   { id: 'timeline',    label: 'Timeline',    icon: LayoutList },
   { id: 'dashboard',  label: 'Dashboard',   icon: BarChart2 },
   { id: 'accessories',label: 'Accessories', icon: Home },
+  { id: 'alerts',     label: 'Alerts',      icon: Bell },
   { id: 'setup',      label: 'Setup',       icon: Settings },
 ];
 
@@ -150,6 +152,7 @@ export default function App() {
         )}
 
         {tab === 'accessories' && <AccessoryList />}
+        {tab === 'alerts' && <Alerts />}
         {tab === 'setup' && <Setup />}
       </main>
 
