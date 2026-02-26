@@ -1,9 +1,15 @@
 import { useWeekdayStats } from '../hooks/useEvents.js';
 import { useState } from 'react';
+import clsx from 'clsx';
 
 const CELL = 18; // px
 const GAP  = 2;  // px
 const LABEL_W = 30; // px for day name
+const WINDOWS = [
+  { label: '30d', days: 30 },
+  { label: '90d', days: 90 },
+  { label: '365d', days: 365 },
+];
 
 // DOW from PostgreSQL: 0 = Sunday
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -18,16 +24,20 @@ function cellColor(intensity) {
   return `rgb(${r},${g},${b})`;
 }
 
-// Map a UTC hour to the user's local hour
-function utcToLocalH(utcH) {
-  const offsetHours = -new Date().getTimezoneOffset() / 60;
-  return ((utcH + offsetHours) % 24 + 24) % 24;
+// Convert a UTC weekday/hour slot to the local weekday/hour slot.
+function utcSlotToLocalSlot(utcDow, utcH) {
+  const ref = new Date(Date.UTC(2024, 0, 7 + utcDow, utcH, 0, 0));
+  return {
+    day: ref.getDay(),
+    hour: ref.getHours(),
+  };
 }
 
 const AXIS_LABELS = ['midnight', '6 am', 'noon', '6 pm', ''];
 
 export default function WeekdayHeatmap() {
-  const { data = [], isLoading } = useWeekdayStats();
+  const [days, setDays] = useState(90);
+  const { data = [], isLoading } = useWeekdayStats(days);
   const [hoveredCell, setHoveredCell] = useState(null);
 
   if (isLoading) {
@@ -40,10 +50,11 @@ export default function WeekdayHeatmap() {
   // Build grid[dow 0-6][localHour 0-23]
   const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
   for (const row of data) {
-    const dow    = parseInt(row.day_of_week, 10);
-    const localH = Math.round(utcToLocalH(parseInt(row.hour, 10)));
-    const lh     = ((localH % 24) + 24) % 24;
-    grid[dow][lh] += parseInt(row.count, 10);
+    const dow = parseInt(row.day_of_week, 10);
+    const hour = parseInt(row.hour, 10);
+    const count = parseInt(row.count, 10);
+    const local = utcSlotToLocalSlot(dow, hour);
+    grid[local.day][local.hour] += count;
   }
 
   const maxCount = Math.max(...grid.flat(), 1);
@@ -53,7 +64,25 @@ export default function WeekdayHeatmap() {
     <div>
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-700">Weekday Heatmap</h3>
-        <span className="text-xs text-gray-400">last 90 days · local time</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">last {days} days · local time</span>
+          <div className="flex gap-1">
+            {WINDOWS.map(({ label, days: d }) => (
+              <button
+                key={d}
+                onClick={() => setDays(d)}
+                className={clsx(
+                  'text-[10px] px-1.5 py-0.5 rounded-md transition-colors',
+                  days === d
+                    ? 'bg-emerald-100 text-emerald-700 font-medium'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       <p className="text-xs text-gray-500 mb-3 min-h-4">
         {hoveredCell

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const STORAGE_KEY = 'hc_ui_skin';
-const VALID_SKINS = new Set(['ocean', 'graphite', 'sunrise']);
+const VALID_SKINS = new Set(['ocean', 'graphite', 'sunrise', 'red', 'yellow', 'purple']);
 
 function getStorage() {
   if (typeof window === 'undefined') return null;

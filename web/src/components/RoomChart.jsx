@@ -24,7 +24,7 @@ export default function RoomChart() {
     return <p className="text-sm text-gray-400">No room data yet.</p>;
   }
 
-  const max = Math.max(...data.map((d) => toCount(d.event_count)), 1);
+  const max = Math.max(...data.map((d) => toCount(d.count ?? d.event_count)), 1);
 
   return (
     <div>
@@ -50,7 +50,7 @@ export default function RoomChart() {
 
       <div className="space-y-2.5">
         {data.map((row) => {
-          const count     = toCount(row.event_count);
+          const count     = toCount(row.count ?? row.event_count);
           const pct       = Math.round((count / max) * 100);
           const roomColor = getRoomColor(row.room_name);
 
