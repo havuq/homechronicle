@@ -27,6 +27,7 @@ const PORT = Number(process.env.API_PORT ?? 3001);
 const RESCAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const STORE_REFRESH_INTERVAL_MS = Number.parseInt(process.env.STORE_REFRESH_INTERVAL_MS ?? '30000', 10);
 const API_TOKEN = (process.env.API_TOKEN ?? '').trim();
+const ALERTS_ENABLED = !/^(0|false|no|off)$/i.test(process.env.ALERTS_ENABLED ?? 'true');
 
 const RETENTION_SWEEP_MS = Number.parseInt(process.env.RETENTION_SWEEP_MS ?? `${24 * 60 * 60 * 1000}`, 10);
 const RETENTION_DAYS_DEFAULT = Number.parseInt(process.env.RETENTION_DAYS ?? '365', 10);
@@ -486,7 +487,9 @@ app.use('/api', createEventsRouter({
   pool,
   getRooms: loadRooms,
 }));
-app.use('/api/alerts', createAlertsRouter({ pool }));
+if (ALERTS_ENABLED) {
+  app.use('/api/alerts', createAlertsRouter({ pool }));
+}
 
 // Stats routes
 app.get('/api/accessories', async (_req, res) => {
@@ -691,12 +694,19 @@ app.get('/api/stats/device-patterns', async (_req, res) => {
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', paired: Object.keys(loadPairings()).length });
+  res.json({
+    status: 'ok',
+    paired: Object.keys(loadPairings()).length,
+    alertsEnabled: ALERTS_ENABLED,
+  });
 });
 
 app.listen(PORT, () => {
   console.log(`[api] Listening on port ${PORT}`);
   if (API_TOKEN) {
     console.log('[api] Write auth enabled for POST/PATCH/DELETE routes');
+  }
+  if (!ALERTS_ENABLED) {
+    console.log('[api] Alerts feature disabled (ALERTS_ENABLED=false)');
   }
 });
