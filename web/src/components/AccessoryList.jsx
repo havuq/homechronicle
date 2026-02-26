@@ -2,7 +2,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAccessories } from '../hooks/useEvents.js';
 import { getServiceIcon } from '../lib/icons.js';
 import { getRoomColor } from '../lib/roomColors.js';
-import { Network } from 'lucide-react';
+import { AlertTriangle, Network } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -21,6 +21,16 @@ function activityDot(lastSeen) {
   if (age < 3_600_000)  return 'bg-green-400';   // < 1 hour
   if (age < 86_400_000) return 'bg-yellow-400';  // < 24 hours
   return 'bg-gray-300';
+}
+
+function formatSeconds(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3_600);
+  const mins = Math.floor((seconds % 3_600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,6 +107,10 @@ export default function AccessoryList() {
               const bridgeName = childOf ? bridgeMap[childOf] : null;
               const Icon       = isBridge ? Network : getServiceIcon(accessory.service_type);
               const dot        = activityDot(accessory.last_seen);
+              const health     = accessory.health ?? {};
+              const offlineFor = formatSeconds(health.offlineDurationSeconds);
+              const heartbeatFor = formatSeconds(health.heartbeatSeconds);
+              const showStale = Boolean(health.isStale);
 
               return (
                 <div key={accessory.accessory_id} className="flex items-center gap-3 px-4 py-3">
@@ -139,15 +153,50 @@ export default function AccessoryList() {
                             <><span className="text-gray-300">·</span>
                             <span>last seen {formatDistanceToNow(new Date(accessory.last_seen), { addSuffix: true })}</span></>
                           )}
+                          {health.status && health.status !== 'online' && (
+                            <><span className="text-gray-300">·</span>
+                            <span>{health.status}</span></>
+                          )}
                         </>
                       )}
                     </div>
+                    {!isBridge && (
+                      <div className="text-[11px] text-gray-400 mt-0.5 flex flex-wrap gap-x-1.5">
+                        {offlineFor && health.status !== 'online' && (
+                          <span>offline for {offlineFor}</span>
+                        )}
+                        {Number.isFinite(health.missedHeartbeats) && health.missedHeartbeats > 0 && (
+                          <>
+                            <span className="text-gray-300">·</span>
+                            <span>
+                              missed {health.missedHeartbeats} heartbeat{health.missedHeartbeats === 1 ? '' : 's'}
+                            </span>
+                          </>
+                        )}
+                        {heartbeatFor && (
+                          <>
+                            <span className="text-gray-300">·</span>
+                            <span>heartbeat ~{heartbeatFor}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Event count badge */}
-                  {accessory.event_count > 0 && (
-                    <div className="flex-shrink-0 text-xs text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5 whitespace-nowrap">
-                      {accessory.event_count.toLocaleString()} {accessory.event_count === 1 ? 'event' : 'events'}
+                  {(accessory.event_count > 0 || showStale) && (
+                    <div className="flex flex-col items-end gap-1">
+                      {showStale && (
+                        <div className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 whitespace-nowrap">
+                          <AlertTriangle size={11} />
+                          stale device
+                        </div>
+                      )}
+                      {accessory.event_count > 0 && (
+                        <div className="flex-shrink-0 text-xs text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5 whitespace-nowrap">
+                          {accessory.event_count.toLocaleString()} {accessory.event_count === 1 ? 'event' : 'events'}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
