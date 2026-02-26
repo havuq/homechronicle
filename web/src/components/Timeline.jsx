@@ -3,7 +3,7 @@ import { format, startOfDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, VolumeX, X, Loader2 } from 'lucide-react';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
-import { useEvents, useDevicePatterns } from '../hooks/useEvents.js';
+import { useEvents, useAnomalies } from '../hooks/useEvents.js';
 import { useMutedDevices } from '../hooks/useMutedDevices.js';
 import { withApiAuthHeaders } from '../lib/api.js';
 import { formatGap } from '../lib/icons.js';
@@ -43,26 +43,6 @@ function groupByDay(events) {
   return groups;
 }
 
-function buildAnomalyMap(patternData) {
-  const map = {};
-  if (!patternData?.length) return map;
-  for (const row of patternData) {
-    if (!map[row.accessory_name]) map[row.accessory_name] = { hours: {} };
-    map[row.accessory_name].hours[row.hour] = row.total_count / 30;
-  }
-  for (const device of Object.values(map)) {
-    for (let h = 0; h < 24; h++) device.hours[h] ??= 0;
-    device.peakAvg = Math.max(...Object.values(device.hours));
-  }
-  return map;
-}
-
-function hourLabel(h) {
-  if (h === 0)  return 'midnight';
-  if (h === 12) return 'noon';
-  return h < 12 ? `${h}am` : `${h - 12}pm`;
-}
-
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function Timeline() {
@@ -80,10 +60,23 @@ export default function Timeline() {
   const activeCell = lockedCell ?? hoveredCell;
 
   const { data, isLoading, isError } = useEvents(filters, page);
-  const { data: patternData }        = useDevicePatterns();
+  const { data: anomalies }          = useAnomalies();
   const { muted, mute, unmute }      = useMutedDevices();
 
-  const anomalyMap = useMemo(() => buildAnomalyMap(patternData), [patternData]);
+  const anomalyMap = useMemo(() => {
+    const byDeviceHour = new Map();
+    const byRoomHour = new Map();
+
+    for (const row of anomalies?.devices ?? []) {
+      if (row.kind !== 'spike') continue;
+      byDeviceHour.set(`${row.scopeName}|${row.hour}`, row);
+    }
+    for (const row of anomalies?.rooms ?? []) {
+      if (row.kind !== 'spike') continue;
+      byRoomHour.set(`${row.scopeName}|${row.hour}`, row);
+    }
+    return { byDeviceHour, byRoomHour };
+  }, [anomalies]);
 
   // Filter out muted devices before any further processing
   const visibleEvents = useMemo(
@@ -140,13 +133,17 @@ export default function Timeline() {
             meta.gap = formatGap(gapMs);   // undefined when < 2 min
           }
 
-          // ── Unusual time detection ───────────────────────────────────────
-          const dp = anomalyMap[e.accessory_name];
-          if (dp && dp.peakAvg >= 2) {
-            const hour = new Date(e.timestamp).getUTCHours();
-            if ((dp.hours[hour] ?? 0) < 0.1) {
-              meta.anomalyLabel = `unusual at ${hourLabel(hour)}`;
-            }
+          // ── Baseline outlier detection (device and room) ────────────────
+          const hour = new Date(e.timestamp).getUTCHours();
+          const deviceOutlier = anomalyMap.byDeviceHour.get(`${e.accessory_name}|${hour}`);
+          const roomOutlier = e.room_name
+            ? anomalyMap.byRoomHour.get(`${e.room_name}|${hour}`)
+            : null;
+
+          if (deviceOutlier) {
+            meta.anomalyLabel = 'device spike vs baseline';
+          } else if (roomOutlier) {
+            meta.anomalyLabel = 'room spike vs baseline';
           }
 
           map[e.id] = meta;
