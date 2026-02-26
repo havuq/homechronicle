@@ -31,6 +31,40 @@ CREATE TABLE IF NOT EXISTS event_logs_archive (
     archived_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id              BIGSERIAL PRIMARY KEY,
+    name            TEXT        NOT NULL,
+    enabled         BOOLEAN     NOT NULL DEFAULT TRUE,
+    scope_type      TEXT        NOT NULL DEFAULT 'all',
+    scope_value     TEXT,
+    characteristic  TEXT,
+    operator        TEXT        NOT NULL DEFAULT 'equals',
+    match_value     TEXT        NOT NULL,
+    target_url      TEXT        NOT NULL,
+    quiet_minutes   INT         NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_alert_scope_type
+      CHECK (scope_type IN ('all', 'room', 'accessory', 'characteristic')),
+    CONSTRAINT chk_alert_operator
+      CHECK (operator IN ('equals', 'not_equals', 'contains')),
+    CONSTRAINT chk_alert_quiet_minutes
+      CHECK (quiet_minutes >= 0 AND quiet_minutes <= 10080)
+);
+
+CREATE TABLE IF NOT EXISTS alert_deliveries (
+    id              BIGSERIAL PRIMARY KEY,
+    rule_id         BIGINT      NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
+    event_id        BIGINT      REFERENCES event_logs(id) ON DELETE SET NULL,
+    status          TEXT        NOT NULL,
+    target_url      TEXT        NOT NULL,
+    response_code   INT,
+    error           TEXT,
+    sent_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_alert_delivery_status
+      CHECK (status IN ('sent', 'failed', 'suppressed'))
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_event_logs_archive_source_id
   ON event_logs_archive (source_id);
 
@@ -47,3 +81,12 @@ CREATE INDEX IF NOT EXISTS idx_event_logs_char_ts        ON event_logs (characte
 -- Stats queries group by hour/day in UTC.
 -- date_trunc(timestamptz) is not immutable; convert to UTC timestamp first.
 CREATE INDEX IF NOT EXISTS idx_event_logs_timestamp_trunc ON event_logs (date_trunc('hour', timestamp AT TIME ZONE 'UTC'));
+
+CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled
+  ON alert_rules (enabled);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_updated
+  ON alert_rules (updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_deliveries_rule_sent
+  ON alert_deliveries (rule_id, sent_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_deliveries_event
+  ON alert_deliveries (event_id);

@@ -13,6 +13,7 @@ import { pool, migrateDb, runRetentionSweep } from './db.js';
 import { startSubscribers, stopSubscriber } from './subscriber.js';
 import { JsonObjectStore } from './store.js';
 import { createEventsRouter, parentBridgeId, parseIntInRange } from './events-router.js';
+import { createAlertsRouter } from './alerts-router.js';
 
 const PAIRINGS_FILE = process.env.PAIRINGS_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/pairings.json' : './data/pairings.json');
@@ -485,6 +486,7 @@ app.use('/api', createEventsRouter({
   pool,
   getRooms: loadRooms,
 }));
+app.use('/api/alerts', createAlertsRouter({ pool }));
 
 // Stats routes
 app.get('/api/accessories', async (_req, res) => {

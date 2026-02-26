@@ -8,7 +8,8 @@
  */
 
 import { HttpClient } from 'hap-controller';
-import { insertEvent } from './db.js';
+import { insertEvent, pool } from './db.js';
+import { processAlertsForEvent } from './alerts.js';
 
 // Maps short HAP service UUID → human-readable label stored in the DB.
 // This must match the keys expected by getServiceIcon() in web/src/lib/icons.js.
@@ -102,6 +103,18 @@ const valueCache = new Map();
 const delayedOffTimers = new Map();
 const subscriberSessions = new Map();
 let connectAccessoryImpl = connectAccessory;
+
+async function processAlertsSafe(eventPayload, insertedRow) {
+  try {
+    await processAlertsForEvent(pool, {
+      ...eventPayload,
+      eventId: insertedRow?.id,
+      timestamp: insertedRow?.timestamp ?? new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[alerts] Processing failed:', err.message ?? err.stack ?? err);
+  }
+}
 
 /**
  * Start subscribers for all entries in the pairings map.
@@ -262,7 +275,8 @@ function connectAccessory(session, pairing) {
           const timeoutId = setTimeout(async () => {
             delayedOffTimers.delete(timerKey);
             try {
-              await insertEvent(eventPayload);
+              const inserted = await insertEvent(eventPayload);
+              await processAlertsSafe(eventPayload, inserted);
               console.log(
                 `[event-delayed] ${effectiveName} → ${meta.characteristicName}: ${change.value} ` +
                 `(delayed ${Math.round(RUN_CYCLE_OFF_DELAY_MS / 1000)}s)`
@@ -281,7 +295,8 @@ function connectAccessory(session, pairing) {
         }
 
         try {
-          await insertEvent(eventPayload);
+          const inserted = await insertEvent(eventPayload);
+          await processAlertsSafe(eventPayload, inserted);
           console.log(`[event] ${effectiveName} → ${meta.characteristicName}: ${change.value}`);
         } catch (err) {
           console.error(`[subscriber] DB insert failed:`, err.message ?? err.stack ?? err);
