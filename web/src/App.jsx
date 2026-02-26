@@ -43,7 +43,7 @@ const SKIN_SWATCH = {
 
 export default function App() {
   const [tab, setTab]               = useState('timeline');
-  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [iconBroken, setIconBroken] = useState(false);
   const [isSkinPickerOpen, setIsSkinPickerOpen] = useState(false);
   const { preference, setPreference } = useTheme();

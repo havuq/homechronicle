@@ -11,7 +11,6 @@ vi.mock('./components/RoomChart.jsx', () => ({ default: () => <div>Room Chart</d
 vi.mock('./components/WeekdayHeatmap.jsx', () => ({ default: () => <div>Weekday Heatmap</div> }));
 vi.mock('./components/MonthlyHeatmap.jsx', () => ({ default: () => <div>Monthly Heatmap</div> }));
 vi.mock('./components/AccessoryList.jsx', () => ({ default: () => <div>Accessory List</div> }));
-vi.mock('./components/Alerts.jsx', () => ({ default: () => <div>Alerts View</div> }));
 vi.mock('./components/Setup.jsx', () => ({ default: () => <div>Setup View</div> }));
 
 describe('App smoke', () => {
@@ -27,8 +26,7 @@ describe('App smoke', () => {
     fireEvent.click(screen.getByRole('button', { name: /accessories/i }));
     expect(screen.getByText('Accessory List')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /alerts/i }));
-    expect(screen.getByText('Alerts View')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /alerts/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /setup/i }));
     expect(screen.getByText('Setup View')).toBeInTheDocument();
