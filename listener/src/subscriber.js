@@ -11,6 +11,8 @@ import { HttpClient } from 'hap-controller';
 import { insertEvent, pool } from './db.js';
 import { processAlertsForEvent } from './alerts.js';
 
+const ALERTS_ENABLED = !/^(0|false|no|off)$/i.test(process.env.ALERTS_ENABLED ?? 'true');
+
 // Maps short HAP service UUID → human-readable label stored in the DB.
 // This must match the keys expected by getServiceIcon() in web/src/lib/icons.js.
 const SERVICE_TYPE_LABELS = new Map([
@@ -105,6 +107,7 @@ const subscriberSessions = new Map();
 let connectAccessoryImpl = connectAccessory;
 
 async function processAlertsSafe(eventPayload, insertedRow) {
+  if (!ALERTS_ENABLED) return;
   try {
     await processAlertsForEvent(pool, {
       ...eventPayload,
