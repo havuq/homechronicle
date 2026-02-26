@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LayoutList, BarChart2, Home, Settings, Monitor, Sun, Moon, Paintbrush2, Bell } from 'lucide-react';
 import clsx from 'clsx';
 import Timeline from './components/Timeline.jsx';
@@ -19,9 +19,9 @@ const TABS = [
   { id: 'timeline',    label: 'Timeline',    icon: LayoutList },
   { id: 'dashboard',  label: 'Dashboard',   icon: BarChart2 },
   { id: 'accessories',label: 'Accessories', icon: Home },
-  { id: 'alerts',     label: 'Alerts',      icon: Bell },
   { id: 'setup',      label: 'Setup',       icon: Settings },
 ];
+const ALERTS_TAB = { id: 'alerts', label: 'Alerts', icon: Bell };
 
 const STYLES = [
   { id: 'ocean', label: 'Ocean' },
@@ -43,6 +43,7 @@ const SKIN_SWATCH = {
 
 export default function App() {
   const [tab, setTab]               = useState('timeline');
+  const [alertsEnabled, setAlertsEnabled] = useState(true);
   const [iconBroken, setIconBroken] = useState(false);
   const [isSkinPickerOpen, setIsSkinPickerOpen] = useState(false);
   const { preference, setPreference } = useTheme();
@@ -51,6 +52,31 @@ export default function App() {
     preference === 'system' ? 'light' :
     preference === 'light' ? 'dark' :
     'system';
+  const tabs = useMemo(
+    () => (alertsEnabled ? [...TABS.slice(0, 3), ALERTS_TAB, ...TABS.slice(3)] : TABS),
+    [alertsEnabled]
+  );
+
+  useEffect(() => {
+    if (typeof fetch !== 'function') return;
+    let active = true;
+    fetch('/api/health')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active) return;
+        if (typeof data?.alertsEnabled === 'boolean') {
+          setAlertsEnabled(data.alertsEnabled);
+        }
+      })
+      .catch(() => {
+        // Keep current default if health probe fails.
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!alertsEnabled && tab === 'alerts') setTab('timeline');
+  }, [alertsEnabled, tab]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -92,7 +118,7 @@ export default function App() {
         </button>
 
         <nav className="order-3 md:order-none w-full md:w-auto flex gap-1 overflow-x-auto pb-1 -mb-1">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setTab(id)}
