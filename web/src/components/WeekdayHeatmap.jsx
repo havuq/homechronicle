@@ -1,4 +1,5 @@
 import { useWeekdayStats } from '../hooks/useEvents.js';
+import { useState } from 'react';
 
 const CELL = 18; // px
 const GAP  = 2;  // px
@@ -27,6 +28,7 @@ const AXIS_LABELS = ['midnight', '6 am', 'noon', '6 pm', ''];
 
 export default function WeekdayHeatmap() {
   const { data = [], isLoading } = useWeekdayStats();
+  const [hoveredCell, setHoveredCell] = useState(null);
 
   if (isLoading) {
     return <div className="h-32 flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
@@ -53,6 +55,11 @@ export default function WeekdayHeatmap() {
         <h3 className="text-sm font-semibold text-gray-700">Weekday Heatmap</h3>
         <span className="text-xs text-gray-400">last 90 days · local time</span>
       </div>
+      <p className="text-xs text-gray-500 mb-3 min-h-4">
+        {hoveredCell
+          ? `${hoveredCell.day} · ${hoveredCell.hourLabel} · ${hoveredCell.count} event${hoveredCell.count !== 1 ? 's' : ''}`
+          : 'Hover a cell for details'}
+      </p>
 
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ minWidth: totalWidth }}>
@@ -94,7 +101,15 @@ export default function WeekdayHeatmap() {
                       flexShrink:      0,
                       borderRadius:    3,
                       backgroundColor: cellColor(intensity),
-                      transition:      'background-color 0.15s',
+                      transition:      'background-color 0.15s, transform 0.12s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.08)';
+                      setHoveredCell({ day, hourLabel: hLabel, count });
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = '';
+                      setHoveredCell(null);
                     }}
                   />
                 );

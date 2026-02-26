@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   RefreshCw, CheckCircle, Circle, Loader, Wifi, Lock, ChevronsRight,
@@ -153,6 +153,7 @@ export default function Setup() {
   const [confirmDeleteAccessory, setConfirmDeleteAccessory] = useState(null);
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [wipePending, setWipePending]         = useState(false);
+  const [retentionDaysInput, setRetentionDaysInput] = useState('');
 
   // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -168,6 +169,10 @@ export default function Setup() {
   const { data: savedRooms = {} } = useQuery({
     queryKey: ['setup', 'rooms'],
     queryFn: () => fetchJson('/api/setup/rooms'),
+  });
+  const { data: retentionConfig } = useQuery({
+    queryKey: ['setup', 'retention'],
+    queryFn: () => fetchJson('/api/setup/retention'),
   });
 
   // All accessories known to the DB (for Danger Zone list)
@@ -212,6 +217,19 @@ export default function Setup() {
     },
   });
 
+  const saveRetentionMutation = useMutation({
+    mutationFn: (retentionDays) =>
+      fetchJson('/api/setup/retention', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ retentionDays }),
+      }),
+    onSuccess: (next) => {
+      queryClient.setQueryData(['setup', 'retention'], next);
+      setRetentionDaysInput(String(next.retentionDays));
+    },
+  });
+
   const deleteAccessoryMutation = useMutation({
     mutationFn: (accessoryId) =>
       fetchJson('/api/data/accessory', {
@@ -234,6 +252,12 @@ export default function Setup() {
   const scanning     = scanMutation.isPending;
   const isBulkPairing = bulkProgress !== null && bulkProgress.done < bulkProgress.total;
   const allSelected   = unpaired.length > 0 && selected.size === unpaired.length;
+  const retentionDaysCurrent = retentionConfig?.retentionDays ?? null;
+
+  useEffect(() => {
+    if (retentionDaysCurrent === null) return;
+    setRetentionDaysInput((prev) => (prev.trim() ? prev : String(retentionDaysCurrent)));
+  }, [retentionDaysCurrent]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -334,6 +358,12 @@ export default function Setup() {
     }
   }
 
+  function handleSaveRetention() {
+    const parsed = Number.parseInt(retentionDaysInput, 10);
+    if (!Number.isFinite(parsed)) return;
+    saveRetentionMutation.mutate(parsed);
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -380,6 +410,45 @@ export default function Setup() {
         <p className="text-xs text-gray-400">
           Can't find a PIN? Click the "Can't find PIN?" link next to any device for step-by-step help.
         </p>
+      </div>
+
+      {/* Retention */}
+      <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Retention cutoff</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Keep timeline data in the main table for this many days.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              max="3650"
+              step="1"
+              value={retentionDaysInput}
+              onChange={(e) => setRetentionDaysInput(e.target.value)}
+              className="w-24 text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-xs text-gray-500">days</span>
+            <button
+              onClick={handleSaveRetention}
+              disabled={saveRetentionMutation.isPending || !retentionDaysInput.trim()}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {saveRetentionMutation.isPending ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+        <p className="text-[11px] text-gray-400 mt-2">
+          Changes apply without restart. Sweep interval is every 24 hours by default.
+        </p>
+        {saveRetentionMutation.isError && (
+          <p className="text-xs text-red-600 mt-1.5">
+            Could not save retention: {saveRetentionMutation.error?.message}
+          </p>
+        )}
       </div>
 
       {data?.cachedAt && (
