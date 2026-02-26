@@ -1,4 +1,5 @@
 import { useHeatmap } from '../hooks/useEvents.js';
+import { useState } from 'react';
 
 const CELL  = 22; // px — width & height of each hour cell
 const GAP   = 2;  // px — gap between cells
@@ -26,6 +27,7 @@ const AXIS_LABELS = ['midnight', '6 am', 'noon', '6 pm', ''];
 
 export default function HeatmapLane() {
   const { data = [], isLoading } = useHeatmap();
+  const [hoveredCell, setHoveredCell] = useState(null);
 
   if (isLoading) {
     return <p className="text-sm text-gray-400 py-2">Loading…</p>;
@@ -58,7 +60,12 @@ export default function HeatmapLane() {
         <h3 className="text-sm font-semibold text-gray-700">Activity Heatmap</h3>
         <span className="text-xs text-gray-400">last 7 days · local time</span>
       </div>
-      <p className="text-xs text-gray-400 mb-4">Events per device per hour</p>
+      <p className="text-xs text-gray-400 mb-1">Events per device per hour</p>
+      <p className="text-xs text-gray-500 mb-4 min-h-4">
+        {hoveredCell
+          ? `${hoveredCell.device} · ${hoveredCell.hourLabel} · ${hoveredCell.count} event${hoveredCell.count !== 1 ? 's' : ''}`
+          : 'Hover a cell for details'}
+      </p>
 
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ minWidth: totalWidth }}>
@@ -99,7 +106,15 @@ export default function HeatmapLane() {
                       flexShrink:   0,
                       borderRadius: 3,
                       backgroundColor: cellColor(intensity),
-                      transition:   'background-color 0.15s',
+                      transition:   'background-color 0.15s, transform 0.12s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.08)';
+                      setHoveredCell({ device: name, hourLabel: h === 0 ? 'midnight' : h < 12 ? `${h}am` : h === 12 ? 'noon' : `${h - 12}pm`, count });
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = '';
+                      setHoveredCell(null);
                     }}
                   />
                 );

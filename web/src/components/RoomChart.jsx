@@ -8,6 +8,11 @@ const WINDOWS = [
   { label: '30d', days: 30 },
 ];
 
+function toCount(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export default function RoomChart() {
   const [days, setDays] = useState(7);
   const { data, isLoading } = useRoomStats(days);
@@ -19,7 +24,7 @@ export default function RoomChart() {
     return <p className="text-sm text-gray-400">No room data yet.</p>;
   }
 
-  const max = Math.max(...data.map((d) => parseInt(d.event_count, 10)), 1);
+  const max = Math.max(...data.map((d) => toCount(d.event_count)), 1);
 
   return (
     <div>
@@ -45,7 +50,7 @@ export default function RoomChart() {
 
       <div className="space-y-2.5">
         {data.map((row) => {
-          const count     = parseInt(row.event_count, 10);
+          const count     = toCount(row.event_count);
           const pct       = Math.round((count / max) * 100);
           const roomColor = getRoomColor(row.room_name);
 

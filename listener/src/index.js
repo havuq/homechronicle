@@ -19,18 +19,35 @@ const PAIRINGS_FILE = process.env.PAIRINGS_FILE
 
 const ROOMS_FILE = process.env.ROOMS_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/rooms.json' : './data/rooms.json');
+const RETENTION_FILE = process.env.RETENTION_FILE
+  || (process.env.NODE_ENV === 'production' ? '/app/data/retention.json' : './data/retention.json');
 
 const PORT = Number(process.env.API_PORT ?? 3001);
 const RESCAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const STORE_REFRESH_INTERVAL_MS = Number.parseInt(process.env.STORE_REFRESH_INTERVAL_MS ?? '30000', 10);
 const API_TOKEN = (process.env.API_TOKEN ?? '').trim();
 
-const RETENTION_DAYS = Number.parseInt(process.env.RETENTION_DAYS ?? '365', 10);
 const RETENTION_SWEEP_MS = Number.parseInt(process.env.RETENTION_SWEEP_MS ?? `${24 * 60 * 60 * 1000}`, 10);
-const RETENTION_ARCHIVE = /^(1|true|yes|on)$/i.test(process.env.RETENTION_ARCHIVE ?? 'true');
+const RETENTION_DAYS_DEFAULT = Number.parseInt(process.env.RETENTION_DAYS ?? '365', 10);
+const RETENTION_ARCHIVE_DEFAULT = /^(1|true|yes|on)$/i.test(process.env.RETENTION_ARCHIVE ?? 'true');
 
 const pairingsStore = new JsonObjectStore(PAIRINGS_FILE, {});
 const roomsStore = new JsonObjectStore(ROOMS_FILE, {});
+const retentionStore = new JsonObjectStore(RETENTION_FILE, {
+  retentionDays: RETENTION_DAYS_DEFAULT,
+  archiveBeforeDelete: RETENTION_ARCHIVE_DEFAULT,
+});
+
+function normalizeRetentionSettings(input = {}) {
+  const days = Number.parseInt(String(input.retentionDays ?? ''), 10);
+  const retentionDays = Number.isFinite(days) && days >= 1 && days <= 3650
+    ? days
+    : RETENTION_DAYS_DEFAULT;
+  const archiveBeforeDelete = input.archiveBeforeDelete === undefined
+    ? RETENTION_ARCHIVE_DEFAULT
+    : Boolean(input.archiveBeforeDelete);
+  return { retentionDays, archiveBeforeDelete };
+}
 
 function loadPairings() {
   return pairingsStore.getSnapshot();
@@ -46,6 +63,14 @@ function loadRooms() {
 
 async function saveRooms(rooms) {
   await roomsStore.write(rooms);
+}
+
+function loadRetentionSettings() {
+  return normalizeRetentionSettings(retentionStore.getSnapshot());
+}
+
+async function saveRetentionSettings(settings) {
+  await retentionStore.write(normalizeRetentionSettings(settings));
 }
 
 // Resolve the mDNS network interface.
@@ -71,6 +96,9 @@ const DISCOVER_IFACE = (() => {
 await migrateDb();
 await pairingsStore.init();
 await roomsStore.init();
+await retentionStore.init();
+
+let retentionSettings = loadRetentionSettings();
 
 if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5_000) {
   setInterval(() => {
@@ -80,6 +108,11 @@ if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5
     void roomsStore.refresh().catch((err) => {
       console.warn('[store] rooms refresh failed:', err.message ?? err.stack ?? err);
     });
+    void retentionStore.refresh()
+      .then(() => { retentionSettings = loadRetentionSettings(); })
+      .catch((err) => {
+        console.warn('[store] retention refresh failed:', err.message ?? err.stack ?? err);
+      });
   }, STORE_REFRESH_INTERVAL_MS);
 }
 
@@ -180,13 +213,13 @@ setInterval(safeDiscoveryScan, RESCAN_INTERVAL_MS);
 // ---------------------------------------------------------------------------
 
 async function runRetentionSweepSafe() {
-  if (!Number.isFinite(RETENTION_DAYS) || RETENTION_DAYS <= 0) {
+  if (!Number.isFinite(retentionSettings.retentionDays) || retentionSettings.retentionDays <= 0) {
     return;
   }
   try {
     const result = await runRetentionSweep({
-      retentionDays: RETENTION_DAYS,
-      archiveBeforeDelete: RETENTION_ARCHIVE,
+      retentionDays: retentionSettings.retentionDays,
+      archiveBeforeDelete: retentionSettings.archiveBeforeDelete,
     });
     if (result.deleted > 0 || result.archived > 0) {
       console.log(
@@ -388,6 +421,32 @@ app.patch('/api/setup/room', async (req, res) => {
 
 app.get('/api/setup/rooms', (_req, res) => {
   res.json(loadRooms());
+});
+
+app.get('/api/setup/retention', (_req, res) => {
+  res.json({
+    retentionDays: retentionSettings.retentionDays,
+    archiveBeforeDelete: retentionSettings.archiveBeforeDelete,
+    sweepMs: RETENTION_SWEEP_MS,
+  });
+});
+
+app.patch('/api/setup/retention', async (req, res) => {
+  const nextDays = Number.parseInt(String(req.body?.retentionDays ?? ''), 10);
+  if (!Number.isFinite(nextDays) || nextDays < 1 || nextDays > 3650) {
+    return res.status(400).json({ error: 'retentionDays must be an integer between 1 and 3650.' });
+  }
+
+  const nextSettings = { ...retentionSettings, retentionDays: nextDays };
+  await saveRetentionSettings(nextSettings);
+  retentionSettings = loadRetentionSettings();
+  console.log(`[setup] Retention cutoff updated to ${retentionSettings.retentionDays} day(s)`);
+
+  res.json({
+    retentionDays: retentionSettings.retentionDays,
+    archiveBeforeDelete: retentionSettings.archiveBeforeDelete,
+    sweepMs: RETENTION_SWEEP_MS,
+  });
 });
 
 // Data management
