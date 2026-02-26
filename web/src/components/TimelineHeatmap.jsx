@@ -46,19 +46,24 @@ export default function TimelineHeatmap({
       <button
         onClick={onToggle}
         disabled={!hasData && !isLoading}
-        className="w-full py-2 text-left hover:bg-gray-50 transition-colors disabled:cursor-default"
+        className="w-full py-2.5 text-left hover:bg-emerald-50/60 transition-colors disabled:cursor-default"
       >
         <div className="max-w-2xl mx-auto px-4 flex items-center gap-2">
-          <BarChart2 size={13} className={hasData ? 'text-blue-500' : 'text-gray-300'} />
-          <span className={`text-xs font-medium ${hasData ? 'text-gray-600' : 'text-gray-300'}`}>
+          <BarChart2 size={13} className={hasData ? 'text-emerald-600' : 'text-gray-300'} />
+          <span className={`text-xs font-semibold ${hasData ? 'text-emerald-800' : 'text-gray-300'}`}>
             Activity heatmap
           </span>
+          {hasData && (
+            <span className="text-[10px] font-medium text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+              Jump view
+            </span>
+          )}
           {isLoading && <span className="text-[10px] text-gray-300 ml-auto">Loading…</span>}
           {!isLoading && !hasData && <span className="text-[10px] text-gray-300 ml-auto">No data yet</span>}
           {hasData && (
             open
-              ? <ChevronUp size={12} className="text-gray-400 ml-auto" />
-              : <ChevronDown size={12} className="text-gray-400 ml-auto" />
+              ? <ChevronUp size={12} className="text-emerald-700 ml-auto" />
+              : <ChevronDown size={12} className="text-emerald-700 ml-auto" />
           )}
         </div>
       </button>

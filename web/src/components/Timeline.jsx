@@ -68,6 +68,7 @@ function hourLabel(h) {
 export default function Timeline() {
   const [filters, setFilters]         = useState({});
   const [page, setPage]               = useState(1);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [heatmapOpen, setHeatmapOpen] = useState(false);
   const [hoveredCell, setHoveredCell] = useState(null); // transient: cleared on mouse-leave
   const [lockedCell,  setLockedCell]  = useState(null); // persistent: set by click, cleared by re-click
@@ -238,7 +239,12 @@ export default function Timeline() {
 
   return (
     <div className="flex flex-col h-full">
-      <FilterBar filters={filters} onChange={handleFilterChange} />
+      <FilterBar
+        filters={filters}
+        onChange={handleFilterChange}
+        open={filtersOpen}
+        onToggle={() => setFiltersOpen((o) => !o)}
+      />
 
       <TimelineHeatmap
         open={heatmapOpen}
