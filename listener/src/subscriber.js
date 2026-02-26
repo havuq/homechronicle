@@ -11,7 +11,7 @@ import { HttpClient } from 'hap-controller';
 import { insertEvent, pool } from './db.js';
 import { processAlertsForEvent } from './alerts.js';
 
-const ALERTS_ENABLED = !/^(0|false|no|off)$/i.test(process.env.ALERTS_ENABLED ?? 'true');
+const ALERTS_ENABLED = !/^(0|false|no|off)$/i.test(process.env.ALERTS_ENABLED ?? 'false');
 
 // Maps short HAP service UUID → human-readable label stored in the DB.
 // This must match the keys expected by getServiceIcon() in web/src/lib/icons.js.

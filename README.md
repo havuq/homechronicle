@@ -40,11 +40,8 @@ Apple's Home app shows you the current state of your accessories — HomeChronic
 - **Always-on** — runs 24/7 in Docker; no phone required
 - **Non-destructive** — pairs alongside Apple Home without disrupting it
 
-### Alerts
-- **Rule-based webhook alerts** — create alert rules in the Alerts tab and send matching events to your webhook endpoint
-- **Flexible matching** — scope rules by all events, room, accessory, or characteristic with operators (`equals`, `not_equals`, `contains`)
-- **Quiet period suppression** — avoid duplicate alerts with per-rule cooldown windows in minutes
-- **Delivery history** — view sent, failed, and suppressed deliveries in the UI
+### Future Enhancements
+- **Webhook alerts (deferred)** — alerting has been removed from the active product while usage is validated; it may return in a future release
 
 ## Architecture
 
@@ -76,8 +73,7 @@ cp .env.example .env
 
 Open `.env` and change `POSTGRES_PASSWORD` to something secure. The other defaults are fine to leave as-is.
 If you use run-cycle switches that auto-reset immediately, tune `RUN_CYCLE_OFF_DELAY_MS` (default `900000`, i.e. 15 minutes).
-Webhook alert delivery timeout is configurable with `ALERTS_WEBHOOK_TIMEOUT_MS` (default `5000`).
-Set `ALERTS_ENABLED=false` to hide Alerts in the UI and disable alert processing/routes without removing code.
+Alerting is currently disabled by default (`ALERTS_ENABLED=false`) while we validate core product usage.
 Optional: set `API_TOKEN` to require authentication on all `POST`/`PATCH`/`DELETE` API routes.
 Retention defaults to 365 days with archive-before-delete enabled (`RETENTION_DAYS`, `RETENTION_SWEEP_MS`, `RETENTION_ARCHIVE`).
 
@@ -206,49 +202,10 @@ The listener exposes a REST API on port 3001, proxied through the web container 
 | `GET /api/setup/rooms` | Get all saved room assignments |
 | `DELETE /api/data/accessory` | Delete all event history for one accessory |
 | `DELETE /api/data/all` | Wipe all event data |
-| `GET /api/alerts/rules` | List all alert rules |
-| `POST /api/alerts/rules` | Create an alert rule |
-| `PATCH /api/alerts/rules/:id` | Update an alert rule |
-| `DELETE /api/alerts/rules/:id` | Delete an alert rule |
-| `GET /api/alerts/deliveries` | Paginated alert delivery history. Params: `page`, `limit` |
-
-When `ALERTS_ENABLED=false`, Alerts UI and `/api/alerts/*` endpoints are disabled.
+Alerts endpoints are disabled by default while alerting is deferred.
 
 If `API_TOKEN` is set, all `POST`/`PATCH`/`DELETE` routes require `X-API-Token: <token>` (or `Authorization: Bearer <token>`).
 
-### Alert Webhook Payload
-
-`POST` alerts use `Content-Type: application/json` with a payload shaped like:
-
-```json
-{
-  "type": "homechronicle.alert",
-  "firedAt": "2026-02-26T13:00:00.000Z",
-  "rule": {
-    "id": 12,
-    "name": "Door opened",
-    "scopeType": "characteristic",
-    "scopeValue": "ContactSensorState",
-    "characteristic": null,
-    "operator": "equals",
-    "matchValue": "true",
-    "quietMinutes": 5,
-    "targetUrl": "https://example.com/hook"
-  },
-  "event": {
-    "id": 8912,
-    "timestamp": "2026-02-26T13:00:00.000Z",
-    "accessoryId": "AA:BB:CC:DD:EE:FF",
-    "accessoryName": "Front Door Sensor",
-    "roomName": "Entry",
-    "serviceType": "ContactSensor",
-    "characteristic": "ContactSensorState",
-    "oldValue": "false",
-    "newValue": "true",
-    "rawIid": 42
-  }
-}
-```
 
 ## Testing
 
@@ -275,8 +232,6 @@ homechronicle/
 │   └── src/
 │       ├── index.js             # Entry point + Express REST API
 │       ├── events-router.js     # /api/events and /api/events/jump routes
-│       ├── alerts-router.js     # /api/alerts/rules and /api/alerts/deliveries routes
-│       ├── alerts.js            # Rule evaluation + webhook delivery
 │       ├── discover.js          # mDNS scanner CLI
 │       ├── pairing.js           # Pairing CLI
 │       ├── subscriber.js        # HAP event subscriptions + DB inserts
@@ -284,8 +239,6 @@ homechronicle/
 │       ├── store.js             # Async cached atomic JSON stores
 │       └── seed.js              # Fake data generator
 │   └── test/
-│       ├── alerts-router.integration.test.js
-│       ├── alerts.processor.test.js
 │       ├── events-router.integration.test.js
 │       └── subscriber.reconnect.test.js
 └── web/                         # React + Vite frontend
