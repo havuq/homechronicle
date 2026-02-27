@@ -58,7 +58,6 @@ export default function WeekdayHeatmap() {
   }
 
   const maxCount = Math.max(...grid.flat(), 1);
-  const totalWidth = LABEL_W + 24 * (CELL + GAP);
 
   return (
     <div>
@@ -90,80 +89,89 @@ export default function WeekdayHeatmap() {
           : 'Hover a cell for details'}
       </p>
 
-      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <div style={{ minWidth: totalWidth }}>
-
-          {/* Day rows */}
-          {DAY_LABELS.map((day, dow) => (
-            <div key={day} style={{ display: 'flex', alignItems: 'center', marginBottom: GAP }}>
-              {/* Day label */}
-              <div
-                style={{
-                  width:      LABEL_W,
-                  flexShrink: 0,
-                  fontSize:   10,
-                  color:      '#6b7280',
-                  textAlign:  'right',
-                  paddingRight: 6,
-                  lineHeight: `${CELL}px`,
-                }}
-              >
-                {day}
-              </div>
-
-              {/* Hour cells */}
-              {grid[dow].map((count, h) => {
-                const intensity = count / maxCount;
-                const hLabel =
-                  h === 0    ? 'midnight'
-                  : h < 12   ? `${h}am`
-                  : h === 12 ? 'noon'
-                  : `${h - 12}pm`;
-                return (
-                  <div
-                    key={h}
-                    title={`${day} ${hLabel} — ${count} event${count !== 1 ? 's' : ''}`}
-                    style={{
-                      width:           CELL,
-                      height:          CELL,
-                      marginRight:     GAP,
-                      flexShrink:      0,
-                      borderRadius:    3,
-                      backgroundColor: cellColor(intensity),
-                      transition:      'background-color 0.15s, transform 0.12s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.08)';
-                      setHoveredCell({ day, hourLabel: hLabel, count });
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = '';
-                      setHoveredCell(null);
-                    }}
-                  />
-                );
-              })}
-            </div>
-          ))}
-
-          {/* Bottom axis */}
-          <div style={{ display: 'flex', marginLeft: LABEL_W, marginTop: 4 }}>
-            {AXIS_LABELS.map((label, i) => (
-              <div
-                key={i}
-                style={{
-                  width:      6 * (CELL + GAP),
-                  flexShrink: 0,
-                  fontSize:   10,
-                  color:      '#94a3b8',
-                }}
-              >
-                {label}
-              </div>
-            ))}
+      {/* Day rows */}
+      {DAY_LABELS.map((day, dow) => (
+        <div
+          key={day}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `${LABEL_W}px repeat(24, minmax(0, 1fr))`,
+            columnGap: GAP,
+            alignItems: 'center',
+            marginBottom: GAP,
+          }}
+        >
+          {/* Day label */}
+          <div
+            style={{
+              width:      LABEL_W,
+              fontSize:   10,
+              color:      '#6b7280',
+              textAlign:  'right',
+              paddingRight: 6,
+              lineHeight: `${CELL}px`,
+            }}
+          >
+            {day}
           </div>
 
+          {/* Hour cells */}
+          {grid[dow].map((count, h) => {
+            const intensity = count / maxCount;
+            const hLabel =
+              h === 0    ? 'midnight'
+              : h < 12   ? `${h}am`
+              : h === 12 ? 'noon'
+              : `${h - 12}pm`;
+            return (
+              <div
+                key={h}
+                title={`${day} ${hLabel} — ${count} event${count !== 1 ? 's' : ''}`}
+                style={{
+                  width:           '100%',
+                  maxWidth:        CELL,
+                  aspectRatio:     '1 / 1',
+                  justifySelf:     'center',
+                  borderRadius:    3,
+                  backgroundColor: cellColor(intensity),
+                  transition:      'background-color 0.15s, transform 0.12s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.08)';
+                  setHoveredCell({ day, hourLabel: hLabel, count });
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = '';
+                  setHoveredCell(null);
+                }}
+              />
+            );
+          })}
         </div>
+      ))}
+
+      {/* Bottom axis */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `${LABEL_W}px repeat(24, minmax(0, 1fr))`,
+          columnGap: GAP,
+          marginTop: 4,
+        }}
+      >
+        <div />
+        {AXIS_LABELS.map((label, i) => (
+          <div
+            key={i}
+            style={{
+              gridColumn: 'span 6',
+              fontSize:   10,
+              color:      '#94a3b8',
+            }}
+          >
+            {label}
+          </div>
+        ))}
       </div>
     </div>
   );
