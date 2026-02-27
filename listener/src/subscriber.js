@@ -10,82 +10,12 @@
 import { HttpClient } from 'hap-controller';
 import { insertEvent, pool } from './db.js';
 import { processAlertsForEvent } from './alerts.js';
+import {
+  cacheAccessoryMetadata,
+  clearAccessoryMetadata,
+} from './accessory-metadata.js';
 
 const ALERTS_ENABLED = !/^(0|false|no|off)$/i.test(process.env.ALERTS_ENABLED ?? 'false');
-
-// Maps short HAP service UUID → human-readable label stored in the DB.
-// This must match the keys expected by getServiceIcon() in web/src/lib/icons.js.
-const SERVICE_TYPE_LABELS = new Map([
-  ['43',  'Lightbulb'],
-  ['49',  'Switch'],
-  ['47',  'Outlet'],
-  ['40',  'Fan'],
-  ['B7',  'Fan'],              // FanV2
-  ['41',  'GarageDoorOpener'],
-  ['45',  'LockMechanism'],
-  ['4A',  'Thermostat'],
-  ['7E',  'SecuritySystem'],
-  ['85',  'MotionSensor'],
-  ['80',  'ContactSensor'],
-  ['86',  'OccupancySensor'],
-  ['8A',  'TemperatureSensor'],
-  ['82',  'HumiditySensor'],
-  ['84',  'LightSensor'],
-  ['8D',  'AirQualitySensor'],
-  ['83',  'LeakSensor'],
-  ['87',  'SmokeSensor'],
-  ['7F',  'CarbonMonoxideSensor'],
-  ['97',  'CarbonDioxideSensor'],
-  ['81',  'Door'],
-  ['8B',  'Window'],
-  ['8C',  'WindowCovering'],
-  ['BB',  'AirPurifier'],
-  ['BC',  'HeaterCooler'],
-  ['BD',  'HumidifierDehumidifier'],
-  ['CF',  'IrrigationSystem'],
-  ['D0',  'Valve'],
-  ['96',  'Battery'],
-  ['110', 'Camera'],
-  ['121', 'Doorbell'],
-  ['D8',  'Television'],
-]);
-
-// Characteristics worth logging. Keys are the HAP characteristic type UUIDs
-// (short form). Values are human-readable names stored in the DB.
-const WATCHED_CHARACTERISTICS = new Map([
-  // Lightbulb / switch
-  ['25',   'On'],
-  // Door / garage
-  ['E',    'CurrentDoorState'],
-  ['F',    'TargetDoorState'],
-  // Lock
-  ['1D',   'LockCurrentState'],
-  ['1E',   'LockTargetState'],
-  // Sensors
-  ['22',   'MotionDetected'],
-  ['6D',   'ContactSensorState'],
-  ['71',   'OccupancyDetected'],
-  ['30',   'CurrentTemperature'],
-  ['10',   'CurrentRelativeHumidity'],
-  // Security system
-  ['66',   'SecuritySystemCurrentState'],
-  ['67',   'SecuritySystemTargetState'],
-  // Brightness / colour (smart bulbs)
-  ['8',    'Brightness'],
-  ['C0',   'ColorTemperature'],
-  ['13',   'Hue'],
-  ['2F',   'Saturation'],
-  // Appliances / fans / purifiers (Homebridge plugins)
-  ['B0',   'Active'],
-  ['AB',   'FilterLifeLevel'],
-  ['95',   'AirQuality'],
-  ['75',   'VOCDensity'],
-  ['76',   'PM2_5Density'],
-  ['64',   'CurrentAmbientLightLevel'],
-  // Battery
-  ['68',   'StatusLowBattery'],
-  ['5B',   'BatteryLevel'],
-]);
 
 // Milliseconds before attempting reconnect after a lost connection
 let reconnectBaseMs = Number.parseInt(process.env.RECONNECT_BASE_MS ?? '5000', 10);
@@ -104,6 +34,7 @@ const RUN_CYCLE_OFF_DELAY_MS = Number.parseInt(
 const valueCache = new Map();
 const delayedOffTimers = new Map();
 const subscriberSessions = new Map();
+const subscriberStats = new Map();
 let connectAccessoryImpl = connectAccessory;
 
 async function processAlertsSafe(eventPayload, insertedRow) {
@@ -137,18 +68,34 @@ export function startSubscribers(pairings, rooms = {}, getPairing = null) {
 
 export function startSubscriber(deviceId, pairing, rooms = {}, getPairing = null) {
   stopSubscriber(deviceId);
+  const stats = {
+    connectAttempts: 0,
+    reconnectSchedules: 0,
+    disconnects: 0,
+    resubscribeSuccesses: 0,
+    resubscribeFailures: 0,
+    subscribeFailures: 0,
+    accessoriesQueryFailures: 0,
+    lastConnectedAt: null,
+    lastSubscribedAt: null,
+    lastError: null,
+    lastErrorAt: null,
+  };
   const session = {
     deviceId,
     rooms,
     getPairing,
+    pairingName: pairing.name,
     retryDelayMs: reconnectBaseMs,
     stopped: false,
     reconnectTimeout: null,
     client: null,
     eventHandler: null,
     disconnectHandler: null,
+    stats,
   };
   subscriberSessions.set(deviceId, session);
+  subscriberStats.set(deviceId, stats);
   connectAccessoryImpl(session, pairing);
 }
 
@@ -178,14 +125,18 @@ export function stopSubscriber(deviceId) {
   for (const key of valueCache.keys()) {
     if (key.startsWith(`${deviceId}:`)) valueCache.delete(key);
   }
+  clearAccessoryMetadata(deviceId);
+  subscriberStats.delete(deviceId);
 
   subscriberSessions.delete(deviceId);
 }
 
 function connectAccessory(session, pairing) {
   if (session.stopped) return;
-  const { deviceId, rooms, getPairing } = session;
+  const { deviceId, rooms, getPairing, stats } = session;
   const { name: accessoryName, address, port, longTermData } = pairing;
+  session.pairingName = accessoryName;
+  stats.connectAttempts += 1;
 
   console.log(`[subscriber] Connecting to ${accessoryName} (${address}:${port})`);
 
@@ -193,10 +144,12 @@ function connectAccessory(session, pairing) {
   session.client = client;
 
   client.getAccessories().then(async (accessories) => {
-    // Build a map of "aid.iid" → { serviceType, characteristicName, childName, componentName }
-    // Using the composite key avoids iid collisions when a bridge has multiple
-    // child accessories that each start their iid numbering from 1.
-    const iidMeta = buildIidMetaMap(accessories);
+    const { iidMetaMap: iidMeta } = cacheAccessoryMetadata({
+      deviceId,
+      pairingName: accessoryName,
+      accessories,
+    });
+    stats.lastConnectedAt = new Date().toISOString();
 
     // subscribeCharacteristics() expects an array of "aid.iid" strings
     const watchedKeys = [...iidMeta.keys()];
@@ -315,11 +268,17 @@ function connectAccessory(session, pairing) {
     // to resubscribe without needing to rebuild the key list.
     const disconnectHandler = async (formerSubscribes) => {
       if (session.stopped) return;
+      stats.disconnects += 1;
       console.warn(`[subscriber] ${accessoryName}: disconnected, resubscribing…`);
       try {
         await client.subscribeCharacteristics(formerSubscribes);
+        stats.resubscribeSuccesses += 1;
+        stats.lastSubscribedAt = new Date().toISOString();
         console.log(`[subscriber] ${accessoryName}: resubscribed to ${formerSubscribes.length} characteristic(s)`);
       } catch (err) {
+        stats.resubscribeFailures += 1;
+        stats.lastError = err.message ?? String(err);
+        stats.lastErrorAt = new Date().toISOString();
         console.error(`[subscriber] ${accessoryName}: resubscribe failed:`, err.message ?? err.stack ?? err);
         scheduleReconnect(session, pairing);
       }
@@ -330,13 +289,20 @@ function connectAccessory(session, pairing) {
     try {
       await client.subscribeCharacteristics(watchedKeys);
       session.retryDelayMs = reconnectBaseMs;
+      stats.lastSubscribedAt = new Date().toISOString();
       console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
     } catch (err) {
+      stats.subscribeFailures += 1;
+      stats.lastError = err.message ?? String(err);
+      stats.lastErrorAt = new Date().toISOString();
       console.error(`[subscriber] ${accessoryName}: subscribe failed:`, err.message ?? err.stack ?? err);
       scheduleReconnect(session, pairing);
     }
 
   }).catch((err) => {
+    stats.accessoriesQueryFailures += 1;
+    stats.lastError = err.message ?? String(err);
+    stats.lastErrorAt = new Date().toISOString();
     console.error(`[subscriber] ${accessoryName}: getAccessories failed:`, err.message ?? err.stack ?? err);
     scheduleReconnect(session, pairing);
   });
@@ -345,6 +311,7 @@ function connectAccessory(session, pairing) {
 function scheduleReconnect(session, pairing) {
   if (session.stopped) return;
   const { deviceId, getPairing } = session;
+  if (session.stats) session.stats.reconnectSchedules += 1;
   const nextDelay = Math.min(session.retryDelayMs * 2, reconnectMaxMs);
   session.retryDelayMs = nextDelay;
   console.log(`[subscriber] ${pairing.name}: retrying in ${nextDelay / 1000}s`);
@@ -364,72 +331,16 @@ function scheduleReconnect(session, pairing) {
   }, nextDelay);
 }
 
-/**
- * Walk the HAP accessories object and return a Map of:
- *   "aid.iid" → { serviceType, characteristicName, childName, componentName }
- *
- * Using the composite "aid.iid" key avoids collisions when a bridge exposes
- * multiple child accessories that each start their iid namespace from 1.
- * childName is the child accessory's Name characteristic value (null for
- * standalone non-bridge accessories where the pairing name is used instead).
- */
-function buildIidMetaMap(accessories) {
-  const map = new Map();
-
-  for (const acc of accessories?.accessories ?? []) {
-    // Try to extract the child accessory's name from its AccessoryInformation service
-    // UUID 3E = AccessoryInformation, UUID 23 = Name characteristic
-    const infoService = acc.services?.find((s) => shortUuid(s.type) === '3E');
-    const nameProp    = infoService?.characteristics?.find((c) => shortUuid(c.type) === '23');
-    const childName   = nameProp?.value ?? null;
-    const watchedServiceTypes = new Set();
-
-    // Identify whether this accessory has multiple watched service types.
-    for (const service of acc.services ?? []) {
-      const shortType = shortUuid(service.type);
-      const serviceType = SERVICE_TYPE_LABELS.get(shortType) ?? shortType;
-      const hasWatchedChar = (service.characteristics ?? []).some((c) =>
-        WATCHED_CHARACTERISTICS.has(shortUuid(c.type))
-      );
-      if (hasWatchedChar) watchedServiceTypes.add(serviceType);
-    }
-    const shouldDisambiguateByService = watchedServiceTypes.size > 1;
-
-    for (const service of acc.services ?? []) {
-      const shortType  = shortUuid(service.type);
-      const serviceType = SERVICE_TYPE_LABELS.get(shortType) ?? shortType;
-
-      for (const char of service.characteristics ?? []) {
-        const charType = shortUuid(char.type);
-        const charName = WATCHED_CHARACTERISTICS.get(charType) ?? null;
-
-        if (charName) {
-          // "aid.iid" is globally unique across all accessories in a bridge
-          const componentName = (shouldDisambiguateByService && childName)
-            ? `${childName} · ${serviceType}`
-            : childName;
-          map.set(`${acc.aid}.${char.iid}`, {
-            serviceType,
-            characteristicName: charName,
-            childName,  // null for single non-bridge accessories
-            componentName, // label per service when needed
-          });
-        }
-      }
-    }
-  }
-
-  return map;
-}
-
-/** Convert full UUID like 00000025-0000-1000-8000-0026BB765291 → "25" */
-function shortUuid(uuid = '') {
-  const match = uuid.match(/^0*([0-9A-Fa-f]+)-/);
-  return match ? match[1].toUpperCase() : uuid.toUpperCase();
+export function getSubscriberStats(deviceId) {
+  const stats = subscriberStats.get(deviceId);
+  if (!stats) return null;
+  return {
+    ...stats,
+    reconnectAttempts: Math.max(0, stats.connectAttempts - 1),
+  };
 }
 
 export const __testHooks = {
-  buildIidMetaMap,
   scheduleReconnect,
   getSession(deviceId) {
     return subscriberSessions.get(deviceId) ?? null;
