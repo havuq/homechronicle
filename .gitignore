@@ -23,3 +23,7 @@ Thumbs.db
 
 # Docker volumes / local data
 postgres-data/
+
+# Local helper scripts
+scripts/dev-local.sh
+scripts/test-local.sh

@@ -10,6 +10,7 @@ import RoomChart from './components/RoomChart.jsx';
 import WeekdayHeatmap from './components/WeekdayHeatmap.jsx';
 import MonthlyHeatmap from './components/MonthlyHeatmap.jsx';
 import AnomalyPanel from './components/AnomalyPanel.jsx';
+import StaleDevicesPanel from './components/StaleDevicesPanel.jsx';
 import AccessoryList from './components/AccessoryList.jsx';
 import Setup from './components/Setup.jsx';
 import Alerts from './components/Alerts.jsx';
@@ -42,13 +43,23 @@ const SKIN_SWATCH = {
   purple: 'from-violet-500 to-fuchsia-500',
 };
 
+const SKIN_SWATCH_DARK = {
+  ocean: 'from-blue-400 to-cyan-300',
+  graphite: 'from-slate-300 to-teal-300',
+  sunrise: 'from-orange-300 to-pink-300',
+  red: 'from-rose-300 to-red-300',
+  yellow: 'from-amber-300 to-yellow-300',
+  purple: 'from-violet-300 to-fuchsia-300',
+};
+
 export default function App() {
   const [tab, setTab]               = useState('dashboard');
   const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [iconBroken, setIconBroken] = useState(false);
   const [isSkinPickerOpen, setIsSkinPickerOpen] = useState(false);
-  const { preference, setPreference } = useTheme();
+  const { preference, resolvedTheme, setPreference } = useTheme();
   const { skin, setSkin } = useSkin();
+  const isDarkTheme = resolvedTheme === 'dark';
   const nextPreference =
     preference === 'system' ? 'light' :
     preference === 'light' ? 'dark' :
@@ -150,22 +161,26 @@ export default function App() {
               </div>
             </div>
 
-            {/* 2-col: top devices + weekday heatmap */}
+            {/* 2-col: top devices + heatmaps */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
                 <TopDevices />
               </div>
               <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
-                <AnomalyPanel />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
                 <WeekdayHeatmap />
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <MonthlyHeatmap />
                 </div>
+              </div>
+            </div>
+
+            {/* 2-col: active outliers + stale devices */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
+                <AnomalyPanel />
+              </div>
+              <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
+                <StaleDevicesPanel />
               </div>
             </div>
 
@@ -178,7 +193,7 @@ export default function App() {
       </main>
 
       <div className="fixed bottom-4 right-4 z-20">
-        <div className="relative flex items-center justify-end gap-2">
+        <div className="relative flex flex-col items-end gap-2">
           <div
             className={clsx(
               'absolute right-11 bottom-0 z-10 flex items-center gap-1 rounded-full border border-gray-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur transition-all duration-300 ease-out',
@@ -186,6 +201,7 @@ export default function App() {
                 ? 'translate-x-0 opacity-100 pointer-events-auto'
                 : 'translate-x-8 opacity-0 pointer-events-none'
             )}
+            style={isDarkTheme ? { backgroundColor: 'rgba(255,255,255,0.92)', borderColor: 'rgba(148,163,184,0.55)' } : undefined}
             aria-hidden={!isSkinPickerOpen}
           >
             {STYLES.map((style) => (
@@ -197,12 +213,21 @@ export default function App() {
                   'h-6 w-6 rounded-full p-0.5 transition-all',
                   skin === style.id
                     ? 'ring-2 ring-blue-500'
-                    : 'ring-1 ring-gray-300 hover:ring-gray-400'
+                    : isDarkTheme
+                      ? 'ring-1 ring-slate-300 hover:ring-slate-400'
+                      : 'ring-1 ring-gray-300 hover:ring-gray-400'
                 )}
+                style={isDarkTheme ? { backgroundColor: 'rgba(255,255,255,0.86)' } : undefined}
                 aria-label={`Use ${style.label} color theme`}
                 title={style.label}
               >
-                <span className={clsx('block h-full w-full rounded-full bg-gradient-to-br', SKIN_SWATCH[style.id])} />
+                <span
+                  className={clsx(
+                    'block h-full w-full rounded-full bg-gradient-to-br',
+                    isDarkTheme ? SKIN_SWATCH_DARK[style.id] : SKIN_SWATCH[style.id]
+                  )}
+                  style={isDarkTheme ? { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.52)' } : undefined}
+                />
               </button>
             ))}
           </div>

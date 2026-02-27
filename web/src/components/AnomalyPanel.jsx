@@ -24,7 +24,7 @@ export default function AnomalyPanel() {
   return (
     <div>
       <div className="flex items-baseline justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">Anomaly Detection</h3>
+        <h3 className="text-sm font-semibold text-gray-700">Active Outliers</h3>
         <span className="text-xs text-gray-400">devices + rooms</span>
       </div>
       <div className="space-y-2">

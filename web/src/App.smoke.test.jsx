@@ -11,6 +11,7 @@ vi.mock('./components/HeatmapLane.jsx', () => ({ default: () => <div>Heatmap Lan
 vi.mock('./components/RoomChart.jsx', () => ({ default: () => <div>Room Chart</div> }));
 vi.mock('./components/WeekdayHeatmap.jsx', () => ({ default: () => <div>Weekday Heatmap</div> }));
 vi.mock('./components/MonthlyHeatmap.jsx', () => ({ default: () => <div>Monthly Heatmap</div> }));
+vi.mock('./components/StaleDevicesPanel.jsx', () => ({ default: () => <div>Stale Devices Panel</div> }));
 vi.mock('./components/AccessoryList.jsx', () => ({ default: () => <div>Accessory List</div> }));
 vi.mock('./components/Setup.jsx', () => ({ default: () => <div>Setup View</div> }));
 
