@@ -21,7 +21,7 @@ const TABS = [
   { id: 'dashboard',  label: 'Dashboard',   icon: BarChart2 },
   { id: 'timeline',    label: 'Timeline',    icon: LayoutList },
   { id: 'accessories',label: 'Accessories', icon: Home },
-  { id: 'setup',      label: 'Setup',       icon: Settings },
+  { id: 'setup',      label: 'Manage',      icon: Settings },
 ];
 const ALERTS_TAB = { id: 'alerts', label: 'Alerts', icon: Bell };
 

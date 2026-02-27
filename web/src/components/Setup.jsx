@@ -331,8 +331,7 @@ export default function Setup() {
     }
   }
 
-  async function handleBulkPair() {
-    const ids = [...selected];
+  async function pairSelectedIds(ids) {
     if (!ids.length) return;
     setBulkProgress({ total: ids.length, done: 0, results: [] });
     for (let i = 0; i < ids.length; i++) {
@@ -351,6 +350,10 @@ export default function Setup() {
     queryClient.invalidateQueries({ queryKey: ['setup', 'pairings'] });
     queryClient.invalidateQueries({ queryKey: ['setup', 'discovered'] });
     setSelected(new Set());
+  }
+
+  async function handleBulkPair() {
+    await pairSelectedIds([...selected]);
   }
 
   async function handleWipeAll() {
@@ -583,7 +586,7 @@ export default function Setup() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Accessory Setup</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Accessory Management</h2>
           <p className="text-sm text-gray-500 mt-0.5">
             Discover and pair HomeKit accessories to start logging their events.
           </p>
@@ -636,9 +639,9 @@ export default function Setup() {
       {unpaired.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
           <div>
-            <p className="text-sm font-medium text-blue-900">Pair multiple at once</p>
+            <p className="text-sm font-medium text-blue-900">Pair selected accessories</p>
             <p className="text-xs text-blue-700 mt-0.5">
-              Enter a shared PIN for accessories that use the same code, then select them and click Pair Selected.
+              Select one or more accessories, enter a shared PIN if needed, then click Pair Selected.
               Devices with a different PIN can be set individually below.
             </p>
           </div>
@@ -661,7 +664,7 @@ export default function Setup() {
             >
               {isBulkPairing
                 ? <><Loader size={14} className="animate-spin" /> {bulkProgress.done}/{bulkProgress.total}</>
-                : <><ChevronsRight size={14} /> Pair Selected ({selected.size})</>
+                : <><ChevronsRight size={14} /> {selected.size === 1 ? 'Pair Selected (1 device)' : `Pair Selected (${selected.size})`}</>
               }
             </button>
           </div>
@@ -840,7 +843,7 @@ export default function Setup() {
                       )}
                     </div>
                     {!isSuccess && (
-                      <div className="flex flex-col items-end gap-0.5">
+                      <div className="flex flex-col items-end gap-1">
                         <input
                           type="text"
                           placeholder={hasSavedPin ? '(saved)' : acc.category === 2 ? 'Bridge PIN' : 'Device PIN'}
@@ -864,6 +867,13 @@ export default function Setup() {
                         >
                           <HelpCircle size={10} />
                           Can't find PIN?
+                        </button>
+                        <button
+                          onClick={() => pairSelectedIds([acc.id])}
+                          disabled={isPairing || isBulkPairing}
+                          className="text-xs px-2.5 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Pair now
                         </button>
                       </div>
                     )}

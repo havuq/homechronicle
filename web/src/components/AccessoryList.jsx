@@ -2,7 +2,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAccessories } from '../hooks/useEvents.js';
 import { getServiceIcon } from '../lib/icons.js';
 import { getRoomColor } from '../lib/roomColors.js';
-import { AlertTriangle, Network } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Network } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -16,7 +16,7 @@ function parentId(id) {
 
 // Activity dot color based on last_seen recency
 function activityDot(lastSeen) {
-  if (!lastSeen) return 'bg-gray-200';
+  if (!lastSeen) return 'bg-sky-300';
   const age = Date.now() - new Date(lastSeen).getTime();
   if (age < 3_600_000)  return 'bg-green-400';   // < 1 hour
   if (age < 86_400_000) return 'bg-yellow-400';  // < 24 hours
@@ -100,6 +100,59 @@ export default function AccessoryList() {
 
   return (
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-6">
+      <details className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group">
+        <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between select-none">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Legend</p>
+            <p className="text-xs text-gray-500">Icon and activity dot meanings</p>
+          </div>
+          <ChevronDown
+            size={16}
+            className="text-gray-400 transition-transform duration-200 group-open:rotate-180"
+          />
+        </summary>
+        <div className="px-4 pb-4 border-t border-gray-100 space-y-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Icons</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="w-7 h-7 rounded-full flex items-center justify-center bg-blue-50">
+                  <span className="w-3.5 h-3.5 rounded-full bg-blue-200" />
+                </span>
+                <span>Theme-accent service icon: accessory type (light, switch, sensor, lock, and others)</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="w-7 h-7 rounded-full flex items-center justify-center bg-purple-50">
+                  <Network size={14} className="text-purple-500" />
+                </span>
+                <span>Purple network icon: bridge device</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Activity Dots</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-600">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-400" />
+                <span>Green: active within 1 hour</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                <span>Yellow: active within 24 hours</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-gray-300" />
+                <span>Gray: older than 24 hours</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-sky-300" />
+                <span>Sky blue: no activity yet</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
       {Object.entries(byRoom)
         .sort(([a], [b]) => {
           if (a === 'No room') return 1;
