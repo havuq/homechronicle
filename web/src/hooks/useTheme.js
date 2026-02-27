@@ -69,5 +69,5 @@ export function useTheme() {
     return () => media.removeEventListener('change', listener);
   }, [preference]);
 
-  return { preference, setPreference };
+  return { preference, resolvedTheme, setPreference };
 }
