@@ -188,7 +188,8 @@ The listener exposes a REST API on port 3001, proxied through the web container 
 |---|---|
 | `GET /api/events` | Paginated events. Params: `page`, `limit`, `room`, `accessory`, `characteristic`, `from`, `to` |
 | `GET /api/events/jump` | Resolve the page + event ID for heatmap jump navigation. Params: `accessory`, `hour`, `limit`, `room`, `from`, `to` |
-| `GET /api/accessories` | All accessories with last-seen time, event count, room, and bridge info |
+| `GET /api/accessories` | All accessories with last-seen time, event count, room, bridge info, identity metadata (manufacturer/model/firmware), and subscriber reliability stats |
+| `GET /api/accessories/:accessoryId/capabilities` | Full service + characteristic capability metadata for an accessory (including units, ranges, and permissions) |
 | `GET /api/stats/hourly` | Event count by hour of day (last 30 days) |
 | `GET /api/stats/daily` | Event count by day (last 90 days) |
 | `GET /api/stats/top-devices` | Most active accessories (last 7 days) |
