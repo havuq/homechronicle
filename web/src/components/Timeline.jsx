@@ -14,6 +14,7 @@ import TimelineHeatmap from './TimelineHeatmap.jsx';
 // ── Pure helpers (defined outside component for stable references in useMemo) ──
 
 const SCENE_WINDOW_MS = 5_000;
+const PAGE_SIZE = 50;
 
 function groupIntoScenes(events) {
   if (!events.length) return [];
@@ -55,6 +56,7 @@ export default function Timeline() {
   const [isJumping,   setIsJumping]   = useState(false);
   const scrollRef                     = useRef(null);
   const pendingJumpId                 = useRef(null);   // event id to scroll to after page loads
+  const [backfilledEvents, setBackfilledEvents] = useState([]);
 
   // The cell used for dim/highlight logic — prefer locked over hovered
   const activeCell = lockedCell ?? hoveredCell;
@@ -78,11 +80,59 @@ export default function Timeline() {
     return { byDeviceHour, byRoomHour };
   }, [anomalies]);
 
-  // Filter out muted devices before any further processing
-  const visibleEvents = useMemo(
-    () => (data?.events ?? []).filter((e) => !muted.has(e.accessory_name)),
-    [data?.events, muted]
-  );
+  // When muting removes many rows, pull additional pages to keep this page full.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function backfill() {
+      const baseEvents = data?.events ?? [];
+      setBackfilledEvents([]);
+
+      if (!baseEvents.length) return;
+
+      const baseVisibleCount = baseEvents.filter((e) => !muted.has(e.accessory_name)).length;
+      if (baseVisibleCount >= PAGE_SIZE || page >= (data?.pages ?? 1)) return;
+
+      const extras = [];
+      let visibleCount = baseVisibleCount;
+      let nextPage = page + 1;
+
+      while (visibleCount < PAGE_SIZE && nextPage <= data.pages) {
+        const qs = new URLSearchParams({ ...filters, page: String(nextPage), limit: String(PAGE_SIZE) });
+        const res = await fetch(`${API_BASE}/events?${qs}`, { headers: withApiAuthHeaders() });
+        if (!res.ok) break;
+
+        const payload = await res.json();
+        const events = payload?.events ?? [];
+        if (!events.length) break;
+
+        extras.push(...events);
+        visibleCount += events.filter((e) => !muted.has(e.accessory_name)).length;
+        nextPage += 1;
+      }
+
+      if (!cancelled) {
+        setBackfilledEvents(extras);
+      }
+    }
+
+    backfill();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.events, data?.pages, filters, muted, page]);
+
+  // Filter muted devices after combining the current page + backfilled events.
+  const visibleEvents = useMemo(() => {
+    const seen = new Set();
+    const combined = [...(data?.events ?? []), ...backfilledEvents].filter((e) => {
+      if (seen.has(e.id)) return false;
+      seen.add(e.id);
+      return true;
+    });
+    return combined.filter((e) => !muted.has(e.accessory_name));
+  }, [data?.events, backfilledEvents, muted]);
 
   /**
    * eventMetaMap — per-event metadata keyed by event id.
@@ -198,7 +248,7 @@ export default function Timeline() {
     setIsJumping(true);
 
     try {
-      const qs = new URLSearchParams({ accessory: name, hour, limit: 50 });
+      const qs = new URLSearchParams({ accessory: name, hour, limit: PAGE_SIZE });
       if (filters.room) qs.set('room', filters.room);
       if (filters.from) qs.set('from', filters.from);
       if (filters.to)   qs.set('to',   filters.to);
