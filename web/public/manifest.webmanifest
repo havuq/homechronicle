@@ -9,18 +9,18 @@
   "theme_color": "#1f75d8",
   "icons": [
     {
-      "src": "./hc-icon-blue-192.png",
-      "sizes": "192x192",
+      "src": "./hc-icon-blue.png",
+      "sizes": "1024x1024",
       "type": "image/png"
     },
     {
-      "src": "./hc-icon-blue-512.png",
-      "sizes": "512x512",
+      "src": "./hc-icon-blue.png",
+      "sizes": "1024x1024",
       "type": "image/png"
     },
     {
-      "src": "./hc-icon-blue-512.png",
-      "sizes": "512x512",
+      "src": "./hc-icon-blue.png",
+      "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "maskable"
     }
