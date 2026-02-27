@@ -61,7 +61,11 @@ export default function SceneGroup({ events, eventMetaMap = {}, hoveredCell, onM
         onClick={() => setExpanded((x) => !x)}
         className="flex items-center gap-3 py-2.5 px-4 w-full text-left hover:bg-blue-50/60 transition-colors"
       >
-        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+        <div
+          className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center"
+          title="Scene: multiple events happened together"
+          aria-label="Scene: multiple events happened together"
+        >
           <Zap size={16} className="text-blue-500" />
         </div>
 

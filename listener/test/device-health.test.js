@@ -42,3 +42,16 @@ test('deriveDeviceHealth marks stale when paired device never emits', () => {
   assert.equal(health.isStale, true);
   assert.match(health.staleReason, /never produced events/i);
 });
+
+test('deriveDeviceHealth honors configured staleThresholdSeconds', () => {
+  const now = new Date('2026-02-26T18:00:00.000Z').getTime();
+  const health = deriveDeviceHealth({
+    lastSeen: '2026-02-26T11:00:00.000Z',
+    staleThresholdSeconds: 6 * 60 * 60,
+    now,
+  });
+
+  assert.equal(health.status, 'stale');
+  assert.equal(health.staleThresholdSeconds, 6 * 60 * 60);
+  assert.equal(health.isStale, true);
+});

@@ -19,11 +19,14 @@ export function deriveDeviceHealth({
   pairedAt = null,
   heartbeatSeconds = null,
   heartbeatSamples = 0,
+  staleThresholdSeconds = 12 * 60 * 60,
   now = Date.now(),
 } = {}) {
   const nowMs = Number.isFinite(now) ? now : Date.now();
   const normalizedHeartbeat = normalizeHeartbeatSeconds(heartbeatSeconds);
   const offlineDurationSeconds = safeSecondsBetween(nowMs, lastSeen);
+  const configuredStaleThresholdSeconds = clamp(Number(staleThresholdSeconds), 60, 30 * 24 * 60 * 60)
+    ?? 12 * 60 * 60;
 
   const hasReliableHeartbeat = Number.isFinite(normalizedHeartbeat) && Number(heartbeatSamples) >= 3;
   const baselineSeconds = hasReliableHeartbeat ? normalizedHeartbeat : null;
@@ -32,9 +35,9 @@ export function deriveDeviceHealth({
     ? Math.max(Math.floor(baselineSeconds * 2), 5 * 60)
     : 15 * 60;
 
-  const staleThresholdSeconds = baselineSeconds
-    ? Math.max(Math.floor(baselineSeconds * 6), 6 * 60 * 60)
-    : 12 * 60 * 60;
+  const staleThreshold = baselineSeconds
+    ? Math.max(Math.floor(baselineSeconds * 6), configuredStaleThresholdSeconds)
+    : configuredStaleThresholdSeconds;
 
   let status = 'unknown';
   let missedHeartbeats = 0;
@@ -42,7 +45,7 @@ export function deriveDeviceHealth({
 
   if (offlineDurationSeconds == null) {
     const pairedAgeSeconds = safeSecondsBetween(nowMs, pairedAt);
-    if (pairedAgeSeconds != null && pairedAgeSeconds >= staleThresholdSeconds) {
+    if (pairedAgeSeconds != null && pairedAgeSeconds >= staleThreshold) {
       status = 'stale';
       staleReason = 'paired but never produced events';
     }
@@ -53,7 +56,7 @@ export function deriveDeviceHealth({
 
     if (offlineDurationSeconds <= onlineThresholdSeconds) {
       status = 'online';
-    } else if (offlineDurationSeconds >= staleThresholdSeconds) {
+    } else if (offlineDurationSeconds >= staleThreshold) {
       status = 'stale';
       staleReason = baselineSeconds
         ? `no events for ${missedHeartbeats} expected heartbeat interval(s)`
@@ -68,7 +71,7 @@ export function deriveDeviceHealth({
     heartbeatSeconds: baselineSeconds,
     heartbeatSamples: Number.isFinite(Number(heartbeatSamples)) ? Number(heartbeatSamples) : 0,
     onlineThresholdSeconds,
-    staleThresholdSeconds,
+    staleThresholdSeconds: staleThreshold,
     offlineDurationSeconds,
     missedHeartbeats,
     isStale: status === 'stale',

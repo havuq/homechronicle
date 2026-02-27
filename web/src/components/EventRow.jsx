@@ -1,6 +1,6 @@
 import { formatDistanceToNow, format } from 'date-fns';
 import { VolumeX } from 'lucide-react';
-import { getServiceIcon, describeChange, describeBeforeAfter } from '../lib/icons.js';
+import { getServiceIcon, getServiceLabel, describeChange, describeBeforeAfter } from '../lib/icons.js';
 import { getRoomColor } from '../lib/roomColors.js';
 
 /** 1st / 2nd / 3rd … Nth */
@@ -22,6 +22,7 @@ function ordinal(n) {
  */
 export default function EventRow({ event, hoveredCell = null, meta = {}, onMute }) {
   const Icon        = getServiceIcon(event.service_type);
+  const serviceName = getServiceLabel(event.service_type);
   const ts          = new Date(event.timestamp);
   const description = describeChange(event.characteristic, event.new_value);
   const beforeAfter = describeBeforeAfter(event.characteristic, event.old_value, event.new_value);
@@ -48,7 +49,11 @@ export default function EventRow({ event, hoveredCell = null, meta = {}, onMute 
       style={isHighlighted ? { boxShadow: 'inset 3px 0 0 0 #60a5fa' } : undefined}
     >
       {/* Service icon */}
-      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center mt-0.5">
+      <div
+        className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center mt-0.5"
+        title={`${serviceName} service`}
+        aria-label={`${serviceName} service`}
+      >
         <Icon size={18} className="text-blue-600" />
       </div>
 
