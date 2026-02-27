@@ -1,10 +1,9 @@
-const CACHE_NAME = 'homechronicle-v1';
+const CACHE_NAME = 'homechronicle-v3';
 const APP_SHELL_ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './hc-icon-blue-192.png',
-  './hc-icon-blue-512.png',
+  './hc-icon-blue.png',
 ];
 
 self.addEventListener('install', (event) => {

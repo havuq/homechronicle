@@ -57,6 +57,7 @@ export default function App() {
   const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [iconBroken, setIconBroken] = useState(false);
   const [isSkinPickerOpen, setIsSkinPickerOpen] = useState(false);
+  const [isStandalonePwa, setIsStandalonePwa] = useState(false);
   const { preference, resolvedTheme, setPreference } = useTheme();
   const { skin, setSkin } = useSkin();
   const isDarkTheme = resolvedTheme === 'dark';
@@ -90,54 +91,74 @@ export default function App() {
     if (!alertsEnabled && tab === 'alerts') setTab('timeline');
   }, [alertsEnabled, tab]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const media = window.matchMedia?.('(display-mode: standalone)');
+    const applyStandaloneState = () => {
+      const standalone =
+        Boolean(media?.matches) || Boolean(window.navigator?.standalone);
+      setIsStandalonePwa(standalone);
+      document.documentElement.classList.toggle('hc-standalone', standalone);
+    };
+
+    applyStandaloneState();
+    if (!media) return undefined;
+    media.addEventListener?.('change', applyStandaloneState);
+    return () => {
+      media.removeEventListener?.('change', applyStandaloneState);
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className={clsx('min-h-screen bg-gray-50 flex flex-col', isStandalonePwa && 'hc-pwa-shell')}>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          {iconBroken ? (
-            <div className="h-12 w-12 rounded-xl flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
-              <Home size={22} className="text-white" />
+        {!isStandalonePwa && (
+          <div className="flex items-center gap-3 min-w-0">
+            {iconBroken ? (
+              <div className="h-12 w-12 rounded-xl flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
+                <Home size={22} className="text-white" />
+              </div>
+            ) : (
+              <div className="h-12 w-12 rounded-xl overflow-hidden flex-shrink-0">
+                <img
+                  src="/hc-icon-blue.png"
+                  alt=""
+                  className="h-full w-full object-cover scale-[1.55]"
+                  style={{ objectPosition: 'center 64%' }}
+                  onError={() => setIconBroken(true)}
+                />
+              </div>
+            )}
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold text-gray-900 leading-tight truncate">HomeChronicle</h1>
+              <p className="text-xs text-gray-400 leading-tight truncate">Event Logging for Apple HomeKit</p>
             </div>
-          ) : (
-            <div className="h-12 w-12 rounded-xl overflow-hidden flex-shrink-0">
-              <img
-                src="/hc-icon-blue.png"
-                alt=""
-                className="h-full w-full object-cover scale-[1.55]"
-                style={{ objectPosition: 'center 64%' }}
-                onError={() => setIconBroken(true)}
-              />
-            </div>
-          )}
-          <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-gray-900 leading-tight truncate">HomeChronicle</h1>
-            <p className="text-xs text-gray-400 leading-tight truncate">Event Logging for Apple HomeKit</p>
           </div>
-        </div>
-        <span className="flex-1 hidden md:block" />
+        )}
+        {!isStandalonePwa && <span className="flex-1 hidden md:block" />}
 
-        <nav className="order-3 md:order-none w-full md:w-auto flex gap-1 overflow-x-auto pb-1 -mb-1">
+        <nav className="hc-tab-nav order-3 md:order-none w-full md:w-auto flex gap-1 overflow-x-auto pb-1 -mb-1">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setTab(id)}
               className={clsx(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap',
+                'hc-tab-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap',
                 tab === id
                   ? 'bg-blue-50 text-blue-600'
                   : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
               )}
             >
-              <Icon size={15} />
-              {label}
+              <Icon size={isStandalonePwa ? 20 : 15} />
+              <span className="hc-tab-label">{label}</span>
             </button>
           ))}
         </nav>
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-hidden">
+      <main className={clsx('flex-1 overflow-hidden', isStandalonePwa && 'hc-pwa-main')}>
         {tab === 'timeline' && <Timeline />}
 
         {tab === 'dashboard' && (
@@ -192,7 +213,7 @@ export default function App() {
         {tab === 'setup' && <Setup />}
       </main>
 
-      <div className="fixed bottom-4 right-4 z-20">
+      <div className="hc-fab fixed bottom-4 right-4 z-20">
         <div className="relative flex flex-col items-end gap-2">
           <div
             className={clsx(

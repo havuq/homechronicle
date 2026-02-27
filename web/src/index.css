@@ -133,6 +133,72 @@
   }
 }
 
+@media (display-mode: standalone) {
+  .hc-tab-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+    z-index: 40;
+    margin-bottom: 0;
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid var(--hc-panel-border);
+    background-color: color-mix(in srgb, var(--hc-panel) 92%, transparent);
+    backdrop-filter: blur(10px);
+    justify-content: space-around;
+    overflow-x: hidden;
+  }
+
+  .hc-tab-btn {
+    flex: 1 1 0%;
+    justify-content: center;
+  }
+
+  .hc-tab-label {
+    display: none;
+  }
+
+  .hc-pwa-main {
+    padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  }
+
+  .hc-fab {
+    bottom: calc(5.25rem + env(safe-area-inset-bottom) + 1rem);
+  }
+}
+
+html.hc-standalone .hc-tab-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+  z-index: 40;
+  margin-bottom: 0;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--hc-panel-border);
+  background-color: color-mix(in srgb, var(--hc-panel) 92%, transparent);
+  backdrop-filter: blur(10px);
+  justify-content: space-around;
+  overflow-x: hidden;
+}
+
+html.hc-standalone .hc-tab-btn {
+  flex: 1 1 0%;
+  justify-content: center;
+}
+
+html.hc-standalone .hc-tab-label {
+  display: none;
+}
+
+html.hc-standalone .hc-pwa-main {
+  padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+}
+
+html.hc-standalone .hc-fab {
+  bottom: calc(5.25rem + env(safe-area-inset-bottom) + 1rem);
+}
+
 @layer utilities {
   .bg-white {
     background-color: var(--hc-panel);
