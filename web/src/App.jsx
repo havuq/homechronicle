@@ -181,7 +181,7 @@ export default function App() {
         <div className="relative flex items-center justify-end gap-2">
           <div
             className={clsx(
-              'absolute right-11 flex items-center gap-1 rounded-full border border-gray-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur transition-all duration-300 ease-out',
+              'absolute right-11 bottom-0 z-10 flex items-center gap-1 rounded-full border border-gray-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur transition-all duration-300 ease-out',
               isSkinPickerOpen
                 ? 'translate-x-0 opacity-100 pointer-events-auto'
                 : 'translate-x-8 opacity-0 pointer-events-none'
@@ -209,7 +209,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setPreference(nextPreference)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-500 shadow-sm backdrop-blur transition-all duration-200 hover:text-gray-700 hover:bg-gray-50"
+            className="z-30 inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-500 shadow-sm backdrop-blur transition-all duration-200 hover:text-gray-700 hover:bg-gray-50"
             aria-label={`Theme mode: ${preference}. Click to switch to ${nextPreference}.`}
             title={`Theme mode: ${preference}`}
           >
@@ -221,7 +221,7 @@ export default function App() {
             type="button"
             onClick={() => setIsSkinPickerOpen((current) => !current)}
             className={clsx(
-              'relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-500 shadow-sm backdrop-blur transition-all duration-200',
+              'relative z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-500 shadow-sm backdrop-blur transition-all duration-200',
               isSkinPickerOpen
                 ? 'text-blue-600 border-blue-300'
                 : 'hover:text-gray-700 hover:bg-gray-50'
