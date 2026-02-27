@@ -10,12 +10,18 @@ import express from 'express';
 import cors from 'cors';
 import { IPDiscovery, HttpClient } from 'hap-controller';
 import { pool, migrateDb, runRetentionSweep } from './db.js';
-import { startSubscribers, stopSubscriber } from './subscriber.js';
+import { startSubscribers, stopSubscriber, getSubscriberStats } from './subscriber.js';
 import { JsonObjectStore } from './store.js';
 import { createEventsRouter, parentBridgeId, parseIntInRange } from './events-router.js';
 import { createAlertsRouter } from './alerts-router.js';
 import { deriveDeviceHealth } from './device-health.js';
 import { detectOutliers } from './anomaly-detection.js';
+import {
+  cacheAccessoryMetadata,
+  getAccessoryCapabilities,
+  getAccessoryIdentity,
+  shortUuid,
+} from './accessory-metadata.js';
 
 const PAIRINGS_FILE = process.env.PAIRINGS_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/pairings.json' : './data/pairings.json');
@@ -34,12 +40,14 @@ const ALERTS_ENABLED = !/^(0|false|no|off)$/i.test(process.env.ALERTS_ENABLED ??
 const RETENTION_SWEEP_MS = Number.parseInt(process.env.RETENTION_SWEEP_MS ?? `${24 * 60 * 60 * 1000}`, 10);
 const RETENTION_DAYS_DEFAULT = Number.parseInt(process.env.RETENTION_DAYS ?? '365', 10);
 const RETENTION_ARCHIVE_DEFAULT = /^(1|true|yes|on)$/i.test(process.env.RETENTION_ARCHIVE ?? 'true');
+const STALE_THRESHOLD_HOURS_DEFAULT = Number.parseInt(process.env.STALE_THRESHOLD_HOURS ?? '12', 10);
 
 const pairingsStore = new JsonObjectStore(PAIRINGS_FILE, {});
 const roomsStore = new JsonObjectStore(ROOMS_FILE, {});
 const retentionStore = new JsonObjectStore(RETENTION_FILE, {
   retentionDays: RETENTION_DAYS_DEFAULT,
   archiveBeforeDelete: RETENTION_ARCHIVE_DEFAULT,
+  staleThresholdHours: STALE_THRESHOLD_HOURS_DEFAULT,
 });
 
 function normalizeRetentionSettings(input = {}) {
@@ -47,10 +55,14 @@ function normalizeRetentionSettings(input = {}) {
   const retentionDays = Number.isFinite(days) && days >= 1 && days <= 3650
     ? days
     : RETENTION_DAYS_DEFAULT;
+  const staleHours = Number.parseInt(String(input.staleThresholdHours ?? ''), 10);
+  const staleThresholdHours = Number.isFinite(staleHours) && staleHours >= 1 && staleHours <= 720
+    ? staleHours
+    : STALE_THRESHOLD_HOURS_DEFAULT;
   const archiveBeforeDelete = input.archiveBeforeDelete === undefined
     ? RETENTION_ARCHIVE_DEFAULT
     : Boolean(input.archiveBeforeDelete);
-  return { retentionDays, archiveBeforeDelete };
+  return { retentionDays, archiveBeforeDelete, staleThresholdHours };
 }
 
 function loadPairings() {
@@ -345,11 +357,6 @@ app.post('/api/setup/pair', async (req, res) => {
   }
 });
 
-function shortUuid(uuid = '') {
-  const match = uuid.match(/^0*([0-9A-Fa-f]+)-/);
-  return match ? match[1].toUpperCase() : uuid.toUpperCase();
-}
-
 app.get('/api/setup/bridge-children/:deviceId', async (req, res) => {
   const { deviceId } = req.params;
   const currentPairings = loadPairings();
@@ -372,6 +379,35 @@ app.get('/api/setup/bridge-children/:deviceId', async (req, res) => {
   } catch (err) {
     console.error(`[setup] bridge-children error for ${deviceId}:`, err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Could not query bridge: ' + err.message });
+  }
+});
+
+app.get('/api/accessories/:accessoryId/capabilities', async (req, res) => {
+  const accessoryId = String(req.params.accessoryId ?? '');
+  const bridgeId = parentBridgeId(accessoryId);
+
+  const capability = getAccessoryCapabilities(accessoryId);
+  if (capability) return res.json(capability);
+
+  const currentPairings = loadPairings();
+  const pairing = currentPairings[bridgeId];
+  if (!pairing) return res.status(404).json({ error: 'Accessory not found' });
+
+  try {
+    const client = new HttpClient(bridgeId, pairing.address, pairing.port, pairing.longTermData);
+    const accessories = await client.getAccessories();
+    cacheAccessoryMetadata({
+      deviceId: bridgeId,
+      pairingName: pairing.name,
+      accessories,
+    });
+
+    const refreshed = getAccessoryCapabilities(accessoryId);
+    if (!refreshed) return res.status(404).json({ error: 'Accessory metadata unavailable' });
+    return res.json(refreshed);
+  } catch (err) {
+    console.error('[api] /api/accessories/:accessoryId/capabilities error:', err.message ?? err.stack ?? err);
+    return res.status(500).json({ error: 'Could not query accessory capabilities' });
   }
 });
 
@@ -431,24 +467,46 @@ app.get('/api/setup/retention', (_req, res) => {
   res.json({
     retentionDays: retentionSettings.retentionDays,
     archiveBeforeDelete: retentionSettings.archiveBeforeDelete,
+    staleThresholdHours: retentionSettings.staleThresholdHours,
     sweepMs: RETENTION_SWEEP_MS,
   });
 });
 
 app.patch('/api/setup/retention', async (req, res) => {
-  const nextDays = Number.parseInt(String(req.body?.retentionDays ?? ''), 10);
-  if (!Number.isFinite(nextDays) || nextDays < 1 || nextDays > 3650) {
-    return res.status(400).json({ error: 'retentionDays must be an integer between 1 and 3650.' });
+  const body = req.body ?? {};
+  const updates = {};
+
+  if (body.retentionDays !== undefined) {
+    const nextDays = Number.parseInt(String(body.retentionDays ?? ''), 10);
+    if (!Number.isFinite(nextDays) || nextDays < 1 || nextDays > 3650) {
+      return res.status(400).json({ error: 'retentionDays must be an integer between 1 and 3650.' });
+    }
+    updates.retentionDays = nextDays;
   }
 
-  const nextSettings = { ...retentionSettings, retentionDays: nextDays };
+  if (body.staleThresholdHours !== undefined) {
+    const nextHours = Number.parseInt(String(body.staleThresholdHours ?? ''), 10);
+    if (!Number.isFinite(nextHours) || nextHours < 1 || nextHours > 720) {
+      return res.status(400).json({ error: 'staleThresholdHours must be an integer between 1 and 720.' });
+    }
+    updates.staleThresholdHours = nextHours;
+  }
+
+  if (!Object.keys(updates).length) {
+    return res.status(400).json({ error: 'No supported settings provided.' });
+  }
+
+  const nextSettings = { ...retentionSettings, ...updates };
   await saveRetentionSettings(nextSettings);
   retentionSettings = loadRetentionSettings();
-  console.log(`[setup] Retention cutoff updated to ${retentionSettings.retentionDays} day(s)`);
+  console.log(
+    `[setup] Settings updated: retention=${retentionSettings.retentionDays}d stale=${retentionSettings.staleThresholdHours}h`
+  );
 
   res.json({
     retentionDays: retentionSettings.retentionDays,
     archiveBeforeDelete: retentionSettings.archiveBeforeDelete,
+    staleThresholdHours: retentionSettings.staleThresholdHours,
     sweepMs: RETENTION_SWEEP_MS,
   });
 });
@@ -567,13 +625,18 @@ app.get('/api/accessories', async (_req, res) => {
     );
 
     const dbRows = result.rows.map((r) => {
-      const bridgePairing = currentPairings[parentBridgeId(r.accessory_id)];
+      const bridgeId = parentBridgeId(r.accessory_id);
+      const bridgePairing = currentPairings[bridgeId];
       const heartbeat = heartbeatById[r.accessory_id] ?? {};
+      const identity = getAccessoryIdentity(r.accessory_id)
+        ?? getAccessoryIdentity(bridgeId);
+      const reliability = getSubscriberStats(bridgeId);
       const health = deriveDeviceHealth({
         lastSeen: r.last_seen,
         pairedAt: bridgePairing?.pairedAt ?? null,
         heartbeatSeconds: heartbeat.heartbeat_seconds ?? null,
         heartbeatSamples: heartbeat.heartbeat_samples ?? 0,
+        staleThresholdSeconds: retentionSettings.staleThresholdHours * 60 * 60,
         now,
       });
       return {
@@ -581,6 +644,26 @@ app.get('/api/accessories', async (_req, res) => {
         room_name: rooms[r.accessory_id] ?? r.room_name,
         address: bridgePairing?.address ?? null,
         paired_at: bridgePairing?.pairedAt ?? null,
+        manufacturer: identity?.manufacturer ?? null,
+        model: identity?.model ?? null,
+        serial_number: identity?.serial_number ?? null,
+        firmware_revision: identity?.firmware_revision ?? null,
+        hardware_revision: identity?.hardware_revision ?? null,
+        metadata_updated_at: identity?.metadata_updated_at ?? null,
+        reliability: reliability ? {
+          connect_attempts: reliability.connectAttempts,
+          reconnect_attempts: reliability.reconnectAttempts,
+          reconnect_schedules: reliability.reconnectSchedules,
+          disconnects: reliability.disconnects,
+          resubscribe_successes: reliability.resubscribeSuccesses,
+          resubscribe_failures: reliability.resubscribeFailures,
+          subscribe_failures: reliability.subscribeFailures,
+          accessories_query_failures: reliability.accessoriesQueryFailures,
+          last_connected_at: reliability.lastConnectedAt,
+          last_subscribed_at: reliability.lastSubscribedAt,
+          last_error: reliability.lastError,
+          last_error_at: reliability.lastErrorAt,
+        } : null,
         health,
       };
     });
@@ -589,22 +672,47 @@ app.get('/api/accessories', async (_req, res) => {
 
     const neverSeen = Object.entries(currentPairings)
       .filter(([id]) => !seenIds.has(id))
-      .map(([id, p]) => ({
-        accessory_id: id,
-        accessory_name: p.name,
-        room_name: rooms[id] ?? null,
-        service_type: null,
-        category: p.category ?? null,
-        last_seen: null,
-        event_count: 0,
-        address: p.address ?? null,
-        paired_at: p.pairedAt ?? null,
-        health: deriveDeviceHealth({
-          lastSeen: null,
-          pairedAt: p.pairedAt ?? null,
-          now,
-        }),
-      }));
+      .map(([id, p]) => {
+        const identity = getAccessoryIdentity(id);
+        const reliability = getSubscriberStats(id);
+        return {
+          accessory_id: id,
+          accessory_name: p.name,
+          room_name: rooms[id] ?? null,
+          service_type: null,
+          category: p.category ?? null,
+          last_seen: null,
+          event_count: 0,
+          address: p.address ?? null,
+          paired_at: p.pairedAt ?? null,
+          manufacturer: identity?.manufacturer ?? null,
+          model: identity?.model ?? null,
+          serial_number: identity?.serial_number ?? null,
+          firmware_revision: identity?.firmware_revision ?? null,
+          hardware_revision: identity?.hardware_revision ?? null,
+          metadata_updated_at: identity?.metadata_updated_at ?? null,
+          reliability: reliability ? {
+            connect_attempts: reliability.connectAttempts,
+            reconnect_attempts: reliability.reconnectAttempts,
+            reconnect_schedules: reliability.reconnectSchedules,
+            disconnects: reliability.disconnects,
+            resubscribe_successes: reliability.resubscribeSuccesses,
+            resubscribe_failures: reliability.resubscribeFailures,
+            subscribe_failures: reliability.subscribeFailures,
+            accessories_query_failures: reliability.accessoriesQueryFailures,
+            last_connected_at: reliability.lastConnectedAt,
+            last_subscribed_at: reliability.lastSubscribedAt,
+            last_error: reliability.lastError,
+            last_error_at: reliability.lastErrorAt,
+          } : null,
+          health: deriveDeviceHealth({
+            lastSeen: null,
+            pairedAt: p.pairedAt ?? null,
+            staleThresholdSeconds: retentionSettings.staleThresholdHours * 60 * 60,
+            now,
+          }),
+        };
+      });
 
     res.json([...dbRows, ...neverSeen]);
   } catch (err) {

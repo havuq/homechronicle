@@ -33,6 +33,31 @@ function formatSeconds(seconds) {
   return `${mins}m`;
 }
 
+function metadataSummary(accessory) {
+  const parts = [];
+  if (accessory.manufacturer) parts.push(accessory.manufacturer);
+  if (accessory.model) parts.push(accessory.model);
+  if (accessory.firmware_revision) parts.push(`FW ${accessory.firmware_revision}`);
+  return parts.join(' · ');
+}
+
+function reliabilitySummary(accessory) {
+  const stats = accessory.reliability ?? null;
+  if (!stats) return null;
+
+  const parts = [];
+  if (Number.isFinite(stats.disconnects) && stats.disconnects > 0) {
+    parts.push(`${stats.disconnects} disconnect${stats.disconnects === 1 ? '' : 's'}`);
+  }
+  if (Number.isFinite(stats.reconnect_attempts) && stats.reconnect_attempts > 0) {
+    parts.push(`${stats.reconnect_attempts} reconnect${stats.reconnect_attempts === 1 ? '' : 's'}`);
+  }
+  if (Number.isFinite(stats.resubscribe_failures) && stats.resubscribe_failures > 0) {
+    parts.push(`${stats.resubscribe_failures} resubscribe fail${stats.resubscribe_failures === 1 ? '' : 's'}`);
+  }
+  return parts.length ? parts.join(' · ') : null;
+}
+
 // ---------------------------------------------------------------------------
 export default function AccessoryList() {
   const { data: accessories, isLoading } = useAccessories();
@@ -110,7 +135,9 @@ export default function AccessoryList() {
               const health     = accessory.health ?? {};
               const offlineFor = formatSeconds(health.offlineDurationSeconds);
               const heartbeatFor = formatSeconds(health.heartbeatSeconds);
-              const showStale = Boolean(health.isStale);
+              const showStale = Boolean(health.isStale) && !isBridge;
+              const metadata = metadataSummary(accessory);
+              const reliability = reliabilitySummary(accessory);
 
               return (
                 <div key={accessory.accessory_id} className="flex items-center gap-3 px-4 py-3">
@@ -162,8 +189,14 @@ export default function AccessoryList() {
                     </div>
                     {!isBridge && (
                       <div className="text-[11px] text-gray-400 mt-0.5 flex flex-wrap gap-x-1.5">
+                        {metadata && (
+                          <span>{metadata}</span>
+                        )}
                         {offlineFor && health.status !== 'online' && (
-                          <span>offline for {offlineFor}</span>
+                          <>
+                            {metadata && <span className="text-gray-300">·</span>}
+                            <span>offline for {offlineFor}</span>
+                          </>
                         )}
                         {Number.isFinite(health.missedHeartbeats) && health.missedHeartbeats > 0 && (
                           <>
@@ -177,6 +210,12 @@ export default function AccessoryList() {
                           <>
                             <span className="text-gray-300">·</span>
                             <span>heartbeat ~{heartbeatFor}</span>
+                          </>
+                        )}
+                        {reliability && (
+                          <>
+                            <span className="text-gray-300">·</span>
+                            <span>{reliability}</span>
                           </>
                         )}
                       </div>
