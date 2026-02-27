@@ -17,6 +17,10 @@ services:
       - "5432:5432"
 
   listener:
+    build:
+      context: ./listener
+    image: homechronicle-listener:local
+    pull_policy: never
     # On macOS, run the listener natively with `npm run dev` instead of Docker.
     # This avoids the mDNS limitation of Docker Desktop and port 3001 conflicts.
     # Setting profiles means `docker compose up` will NOT start this container.
@@ -24,6 +28,10 @@ services:
       - donotstart
 
   web:
+    build:
+      context: ./web
+    image: homechronicle-web:local
+    pull_policy: never
     environment:
       # Nginx proxies /api to the native listener on the host machine
       - LISTENER_HOST=host.docker.internal
