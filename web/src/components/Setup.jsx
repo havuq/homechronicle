@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   RefreshCw, CheckCircle, Circle, Loader, Wifi, Lock, ChevronsRight,
-  HelpCircle, Trash2, AlertTriangle, ChevronDown, MapPin,
+  HelpCircle, Trash2, AlertTriangle, ChevronDown, ChevronUp, SlidersHorizontal, MapPin,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
@@ -154,6 +154,8 @@ export default function Setup() {
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [wipePending, setWipePending]         = useState(false);
   const [retentionDaysInput, setRetentionDaysInput] = useState('');
+  const [staleThresholdHoursInput, setStaleThresholdHoursInput] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -218,15 +220,16 @@ export default function Setup() {
   });
 
   const saveRetentionMutation = useMutation({
-    mutationFn: (retentionDays) =>
+    mutationFn: (settingsPatch) =>
       fetchJson('/api/setup/retention', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ retentionDays }),
+        body: JSON.stringify(settingsPatch),
       }),
     onSuccess: (next) => {
       queryClient.setQueryData(['setup', 'retention'], next);
       setRetentionDaysInput(String(next.retentionDays));
+      setStaleThresholdHoursInput(String(next.staleThresholdHours));
     },
   });
 
@@ -253,11 +256,16 @@ export default function Setup() {
   const isBulkPairing = bulkProgress !== null && bulkProgress.done < bulkProgress.total;
   const allSelected   = unpaired.length > 0 && selected.size === unpaired.length;
   const retentionDaysCurrent = retentionConfig?.retentionDays ?? null;
+  const staleThresholdHoursCurrent = retentionConfig?.staleThresholdHours ?? null;
 
   useEffect(() => {
     if (retentionDaysCurrent === null) return;
     setRetentionDaysInput((prev) => (prev.trim() ? prev : String(retentionDaysCurrent)));
   }, [retentionDaysCurrent]);
+  useEffect(() => {
+    if (staleThresholdHoursCurrent === null) return;
+    setStaleThresholdHoursInput((prev) => (prev.trim() ? prev : String(staleThresholdHoursCurrent)));
+  }, [staleThresholdHoursCurrent]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -361,7 +369,13 @@ export default function Setup() {
   function handleSaveRetention() {
     const parsed = Number.parseInt(retentionDaysInput, 10);
     if (!Number.isFinite(parsed)) return;
-    saveRetentionMutation.mutate(parsed);
+    saveRetentionMutation.mutate({ retentionDays: parsed });
+  }
+
+  function handleSaveStaleThreshold() {
+    const parsed = Number.parseInt(staleThresholdHoursInput, 10);
+    if (!Number.isFinite(parsed)) return;
+    saveRetentionMutation.mutate({ staleThresholdHours: parsed });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -377,6 +391,194 @@ export default function Setup() {
           onClose={() => setHelpDevice(null)}
         />
       )}
+
+      {/* Settings (collapsed by default) */}
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <button
+          onClick={() => setSettingsOpen((open) => !open)}
+          aria-expanded={settingsOpen}
+          className="w-full py-2.5 px-4 text-left hover:bg-blue-50/60 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal size={13} className="text-blue-600" />
+            <span className="text-xs font-semibold text-blue-800">Settings</span>
+            {settingsOpen
+              ? <ChevronUp size={13} className="text-blue-700 ml-auto" />
+              : <ChevronDown size={13} className="text-blue-700 ml-auto" />
+            }
+          </div>
+        </button>
+
+        {settingsOpen && (
+          <div className="px-4 pb-4 pt-1 space-y-4 border-t border-gray-100">
+            <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Retention cutoff</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Keep timeline data in the main table for this many days.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="3650"
+                    step="1"
+                    value={retentionDaysInput}
+                    onChange={(e) => setRetentionDaysInput(e.target.value)}
+                    className="w-24 text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-gray-500">days</span>
+                  <button
+                    onClick={handleSaveRetention}
+                    disabled={saveRetentionMutation.isPending || !retentionDaysInput.trim()}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {saveRetentionMutation.isPending ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-2">
+                Changes apply without restart. Sweep interval is every 24 hours by default.
+              </p>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Stale device threshold</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    A device is marked stale after this many hours with no events. This also acts as the minimum stale window when heartbeat-based timing would otherwise be shorter.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="720"
+                    step="1"
+                    value={staleThresholdHoursInput}
+                    onChange={(e) => setStaleThresholdHoursInput(e.target.value)}
+                    className="w-24 text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-gray-500">hours</span>
+                  <button
+                    onClick={handleSaveStaleThreshold}
+                    disabled={saveRetentionMutation.isPending || !staleThresholdHoursInput.trim()}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {saveRetentionMutation.isPending ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Danger Zone ──────────────────────────────────────────────────── */}
+            <section className="border border-red-200 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setDangerOpen((o) => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-red-50 text-sm font-medium text-red-700 hover:bg-red-100 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <AlertTriangle size={14} />
+                  Danger Zone — delete accessory data
+                </span>
+                <ChevronDown
+                  size={14}
+                  className={clsx('transition-transform duration-200', dangerOpen && 'rotate-180')}
+                />
+              </button>
+
+              {dangerOpen && (
+                <div className="bg-white">
+                  <p className="px-4 py-3 text-xs text-gray-500 border-b border-gray-100">
+                    Delete stored event history for individual accessories, or wipe everything.
+                    This only removes logged data — it does not unpair devices.
+                  </p>
+
+                  {dbAccessories.length === 0 ? (
+                    <p className="px-4 py-4 text-xs text-gray-400 italic">No accessory data in the database.</p>
+                  ) : (
+                    <div className="divide-y divide-gray-100">
+                      {dbAccessories.map((acc) => {
+                        const isConfirming = confirmDeleteAccessory === acc.accessory_id;
+                        const isDeleting   = deleteAccessoryMutation.isPending && confirmDeleteAccessory === acc.accessory_id;
+                        return (
+                          <div key={acc.accessory_id} className="flex items-center gap-3 px-4 py-2.5">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-800 truncate">{acc.accessory_name}</div>
+                              <div className="text-xs text-gray-400">
+                                {acc.service_type ?? 'No events yet'}
+                                {acc.room_name && <span className="ml-1">· {acc.room_name}</span>}
+                              </div>
+                            </div>
+                            {isConfirming ? (
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="text-xs text-gray-500">Delete history?</span>
+                                <button
+                                  onClick={() => deleteAccessoryMutation.mutate(acc.accessory_id)}
+                                  disabled={isDeleting}
+                                  className="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 transition-colors"
+                                >
+                                  {isDeleting ? 'Deleting…' : 'Yes, delete'}
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeleteAccessory(null)}
+                                  disabled={isDeleting}
+                                  className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDeleteAccessory(acc.accessory_id)}
+                                className="flex-shrink-0 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+                              >
+                                Delete history
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Wipe all */}
+                  <div className="border-t border-red-100 bg-red-50/50 px-4 py-4">
+                    <p className="text-xs font-medium text-red-700 mb-2">
+                      Wipe all event data — type <code className="bg-red-100 px-1 rounded">DELETE</code> to confirm
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Type DELETE to confirm"
+                        value={wipeConfirmText}
+                        onChange={(e) => setWipeConfirmText(e.target.value)}
+                        className="flex-1 text-xs border border-red-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-400 bg-white placeholder-red-200"
+                      />
+                      <button
+                        onClick={handleWipeAll}
+                        disabled={wipeConfirmText !== 'DELETE' || wipePending}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                      >
+                        {wipePending ? <><Loader size={12} className="animate-spin" /> Wiping…</> : 'Wipe all data'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {saveRetentionMutation.isError && (
+              <p className="text-xs text-red-600">
+                Could not save settings: {saveRetentionMutation.error?.message}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -410,45 +612,6 @@ export default function Setup() {
         <p className="text-xs text-gray-400">
           Can't find a PIN? Click the "Can't find PIN?" link next to any device for step-by-step help.
         </p>
-      </div>
-
-      {/* Retention */}
-      <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <p className="text-sm font-medium text-gray-800">Retention cutoff</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Keep timeline data in the main table for this many days.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min="1"
-              max="3650"
-              step="1"
-              value={retentionDaysInput}
-              onChange={(e) => setRetentionDaysInput(e.target.value)}
-              className="w-24 text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <span className="text-xs text-gray-500">days</span>
-            <button
-              onClick={handleSaveRetention}
-              disabled={saveRetentionMutation.isPending || !retentionDaysInput.trim()}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {saveRetentionMutation.isPending ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-        </div>
-        <p className="text-[11px] text-gray-400 mt-2">
-          Changes apply without restart. Sweep interval is every 24 hours by default.
-        </p>
-        {saveRetentionMutation.isError && (
-          <p className="text-xs text-red-600 mt-1.5">
-            Could not save retention: {saveRetentionMutation.error?.message}
-          </p>
-        )}
       </div>
 
       {data?.cachedAt && (
@@ -730,103 +893,6 @@ export default function Setup() {
           </p>
         </div>
       )}
-
-      {/* ── Danger Zone ──────────────────────────────────────────────────── */}
-      <section className="border border-red-200 rounded-xl overflow-hidden">
-        <button
-          onClick={() => setDangerOpen((o) => !o)}
-          className="w-full flex items-center justify-between px-4 py-3 bg-red-50 text-sm font-medium text-red-700 hover:bg-red-100 transition-colors"
-        >
-          <span className="flex items-center gap-2">
-            <AlertTriangle size={14} />
-            Danger Zone — delete accessory data
-          </span>
-          <ChevronDown
-            size={14}
-            className={clsx('transition-transform duration-200', dangerOpen && 'rotate-180')}
-          />
-        </button>
-
-        {dangerOpen && (
-          <div className="bg-white">
-            <p className="px-4 py-3 text-xs text-gray-500 border-b border-gray-100">
-              Delete stored event history for individual accessories, or wipe everything.
-              This only removes logged data — it does not unpair devices.
-            </p>
-
-            {dbAccessories.length === 0 ? (
-              <p className="px-4 py-4 text-xs text-gray-400 italic">No accessory data in the database.</p>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {dbAccessories.map((acc) => {
-                  const isConfirming = confirmDeleteAccessory === acc.accessory_id;
-                  const isDeleting   = deleteAccessoryMutation.isPending && confirmDeleteAccessory === acc.accessory_id;
-                  return (
-                    <div key={acc.accessory_id} className="flex items-center gap-3 px-4 py-2.5">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-800 truncate">{acc.accessory_name}</div>
-                        <div className="text-xs text-gray-400">
-                          {acc.service_type ?? 'No events yet'}
-                          {acc.room_name && <span className="ml-1">· {acc.room_name}</span>}
-                        </div>
-                      </div>
-                      {isConfirming ? (
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-xs text-gray-500">Delete history?</span>
-                          <button
-                            onClick={() => deleteAccessoryMutation.mutate(acc.accessory_id)}
-                            disabled={isDeleting}
-                            className="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 transition-colors"
-                          >
-                            {isDeleting ? 'Deleting…' : 'Yes, delete'}
-                          </button>
-                          <button
-                            onClick={() => setConfirmDeleteAccessory(null)}
-                            disabled={isDeleting}
-                            className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setConfirmDeleteAccessory(acc.accessory_id)}
-                          className="flex-shrink-0 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors"
-                        >
-                          Delete history
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Wipe all */}
-            <div className="border-t border-red-100 bg-red-50/50 px-4 py-4">
-              <p className="text-xs font-medium text-red-700 mb-2">
-                Wipe all event data — type <code className="bg-red-100 px-1 rounded">DELETE</code> to confirm
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Type DELETE to confirm"
-                  value={wipeConfirmText}
-                  onChange={(e) => setWipeConfirmText(e.target.value)}
-                  className="flex-1 text-xs border border-red-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-400 bg-white placeholder-red-200"
-                />
-                <button
-                  onClick={handleWipeAll}
-                  disabled={wipeConfirmText !== 'DELETE' || wipePending}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                >
-                  {wipePending ? <><Loader size={12} className="animate-spin" /> Wiping…</> : 'Wipe all data'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
 
     </div>
   );

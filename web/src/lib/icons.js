@@ -42,8 +42,34 @@ const SERVICE_ICONS = {
   Doorbell:        Bell,
 };
 
+const SERVICE_LABELS = {
+  Lightbulb: 'Light',
+  Outlet: 'Outlet',
+  Switch: 'Switch',
+  Thermostat: 'Thermostat',
+  TemperatureSensor: 'Temperature Sensor',
+  HumiditySensor: 'Humidity Sensor',
+  MotionSensor: 'Motion Sensor',
+  ContactSensor: 'Contact Sensor',
+  OccupancySensor: 'Occupancy Sensor',
+  LockMechanism: 'Lock',
+  GarageDoorOpener: 'Garage Door',
+  Door: 'Door',
+  Window: 'Window',
+  SecuritySystem: 'Security System',
+  Camera: 'Camera',
+  Fan: 'Fan',
+  AirQualitySensor: 'Air Quality Sensor',
+  Doorbell: 'Doorbell',
+};
+
 export function getServiceIcon(serviceType) {
   return SERVICE_ICONS[serviceType] ?? Home;
+}
+
+export function getServiceLabel(serviceType) {
+  if (!serviceType) return 'Accessory';
+  return SERVICE_LABELS[serviceType] ?? serviceType.replace(/([a-z])([A-Z])/g, '$1 $2');
 }
 
 /**
