@@ -13,7 +13,7 @@ vi.mock('./components/WeekdayHeatmap.jsx', () => ({ default: () => <div>Weekday 
 vi.mock('./components/MonthlyHeatmap.jsx', () => ({ default: () => <div>Monthly Heatmap</div> }));
 vi.mock('./components/StaleDevicesPanel.jsx', () => ({ default: () => <div>Stale Devices Panel</div> }));
 vi.mock('./components/AccessoryList.jsx', () => ({ default: () => <div>Accessory List</div> }));
-vi.mock('./components/Setup.jsx', () => ({ default: () => <div>Setup View</div> }));
+vi.mock('./components/Setup.jsx', () => ({ default: () => <div>Manage View</div> }));
 
 describe('App smoke', () => {
   it('renders and switches top-level tabs', () => {
@@ -30,7 +30,7 @@ describe('App smoke', () => {
 
     expect(screen.queryByRole('button', { name: /alerts/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /setup/i }));
-    expect(screen.getByText('Setup View')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /manage/i }));
+    expect(screen.getByText('Manage View')).toBeInTheDocument();
   });
 });

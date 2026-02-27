@@ -1,0 +1,28 @@
+{
+  "name": "HomeChronicle",
+  "short_name": "HomeChronicle",
+  "description": "A dashboard for HomeKit event activity, trends, alerts, and device health.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7fafc",
+  "theme_color": "#1f75d8",
+  "icons": [
+    {
+      "src": "./hc-icon-blue-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./hc-icon-blue-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "./hc-icon-blue-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
