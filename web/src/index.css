@@ -134,14 +134,21 @@
 }
 
 @media (display-mode: standalone) {
+  .hc-app-header {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    min-height: 0;
+  }
+
   .hc-tab-nav {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+    bottom: 0;
     z-index: 40;
     margin-bottom: 0;
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 0.75rem calc(env(safe-area-inset-bottom) + 0.9rem);
     border-top: 1px solid var(--hc-panel-border);
     background-color: color-mix(in srgb, var(--hc-panel) 92%, transparent);
     backdrop-filter: blur(10px);
@@ -159,22 +166,29 @@
   }
 
   .hc-pwa-main {
-    padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
   }
 
   .hc-fab {
-    bottom: calc(5.25rem + env(safe-area-inset-bottom) + 1rem);
+    bottom: calc(5.75rem + env(safe-area-inset-bottom) + 1rem);
   }
+}
+
+html.hc-standalone .hc-app-header {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  min-height: 0;
 }
 
 html.hc-standalone .hc-tab-nav {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+  bottom: 0;
   z-index: 40;
   margin-bottom: 0;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem calc(env(safe-area-inset-bottom) + 0.9rem);
   border-top: 1px solid var(--hc-panel-border);
   background-color: color-mix(in srgb, var(--hc-panel) 92%, transparent);
   backdrop-filter: blur(10px);
@@ -192,11 +206,11 @@ html.hc-standalone .hc-tab-label {
 }
 
 html.hc-standalone .hc-pwa-main {
-  padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
 }
 
 html.hc-standalone .hc-fab {
-  bottom: calc(5.25rem + env(safe-area-inset-bottom) + 1rem);
+  bottom: calc(5.75rem + env(safe-area-inset-bottom) + 1rem);
 }
 
 @layer utilities {
