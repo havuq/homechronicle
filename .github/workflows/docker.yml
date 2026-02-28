@@ -43,18 +43,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check if this is the latest GitHub release
+        id: latest_release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const currentTag = context.payload.release.tag_name;
+            const latest = await github.rest.repos.getLatestRelease({ owner, repo });
+            core.setOutput("is_latest", String(latest.data.tag_name === currentTag));
+
       # Generates tags from the release version and adds OCI labels
       # (org.opencontainers.image.* — visible on the GHCR package page).
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
+        # Only the repository's actual latest release is allowed to move `latest`.
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.service }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ steps.latest_release.outputs.is_latest == 'true' }}
 
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v6
