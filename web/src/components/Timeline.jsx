@@ -16,6 +16,11 @@ import TimelineHeatmap from './TimelineHeatmap.jsx';
 const SCENE_WINDOW_MS = 5_000;
 const PAGE_SIZE = 50;
 
+function isValidTimestamp(value) {
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime());
+}
+
 function groupIntoScenes(events) {
   if (!events.length) return [];
   const groups = [];
@@ -124,14 +129,23 @@ export default function Timeline() {
   }, [data?.events, data?.pages, filters, muted, page]);
 
   // Filter muted devices after combining the current page + backfilled events.
-  const visibleEvents = useMemo(() => {
+  const { visibleEvents, droppedInvalidCount } = useMemo(() => {
     const seen = new Set();
     const combined = [...(data?.events ?? []), ...backfilledEvents].filter((e) => {
       if (seen.has(e.id)) return false;
       seen.add(e.id);
       return true;
     });
-    return combined.filter((e) => !muted.has(e.accessory_name));
+    let droppedInvalid = 0;
+    const safeEvents = combined.filter((e) => {
+      if (isValidTimestamp(e.timestamp)) return true;
+      droppedInvalid += 1;
+      return false;
+    });
+    return {
+      visibleEvents: safeEvents.filter((e) => !muted.has(e.accessory_name)),
+      droppedInvalidCount: droppedInvalid,
+    };
   }, [data?.events, backfilledEvents, muted]);
 
   /**
@@ -373,7 +387,11 @@ export default function Timeline() {
           <div className="flex flex-col items-center justify-center py-16 text-gray-400">
             <p className="text-lg font-medium">No visible events</p>
             <p className="text-sm mt-1 text-center px-6">
-              Your current filters only match muted devices. Clear filters or unmute devices to view results.
+              {muted.size > 0
+                ? 'Your current filters only match muted devices. Clear filters or unmute devices to view results.'
+                : droppedInvalidCount > 0
+                  ? 'Matching events were found, but could not be rendered because they contain invalid timestamps.'
+                  : 'No matching events could be rendered.'}
             </p>
           </div>
         )}
