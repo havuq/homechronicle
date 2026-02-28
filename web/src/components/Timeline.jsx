@@ -360,11 +360,20 @@ export default function Timeline() {
           </div>
         )}
 
-        {data && data.events.length === 0 && (
+        {data && (data.events?.length ?? 0) === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400">
             <p className="text-lg font-medium">No events yet</p>
             <p className="text-sm mt-1">
               Events will appear here as your HomeKit accessories change state.
+            </p>
+          </div>
+        )}
+
+        {!isLoading && !isError && data && (data.events?.length ?? 0) > 0 && visibleEvents.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+            <p className="text-lg font-medium">No visible events</p>
+            <p className="text-sm mt-1 text-center px-6">
+              Your current filters only match muted devices. Clear filters or unmute devices to view results.
             </p>
           </div>
         )}
