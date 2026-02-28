@@ -150,6 +150,7 @@ export default function Setup() {
 
   // Danger Zone
   const [dangerOpen, setDangerOpen]           = useState(false);
+  const [dangerPairFilter, setDangerPairFilter] = useState('all');
   const [confirmDeleteAccessory, setConfirmDeleteAccessory] = useState(null);
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [wipePending, setWipePending]         = useState(false);
@@ -257,6 +258,13 @@ export default function Setup() {
   const allSelected   = unpaired.length > 0 && selected.size === unpaired.length;
   const retentionDaysCurrent = retentionConfig?.retentionDays ?? null;
   const staleThresholdHoursCurrent = retentionConfig?.staleThresholdHours ?? null;
+  const dangerPairedCount = dbAccessories.filter((a) => Boolean(a.paired_at)).length;
+  const dangerUnpairedCount = dbAccessories.length - dangerPairedCount;
+  const visibleDangerAccessories = dbAccessories.filter((a) => {
+    if (dangerPairFilter === 'paired') return Boolean(a.paired_at);
+    if (dangerPairFilter === 'unpaired') return !a.paired_at;
+    return true;
+  });
 
   useEffect(() => {
     if (retentionDaysCurrent === null) return;
@@ -500,25 +508,80 @@ export default function Setup() {
                     This only removes logged data — it does not unpair devices.
                   </p>
 
+                  {dbAccessories.length > 0 && (
+                    <div className="px-4 py-2 border-b border-gray-100">
+                      <div className="inline-flex items-center gap-1 rounded-lg bg-gray-50 p-1">
+                        <button
+                          onClick={() => { setDangerPairFilter('all'); setConfirmDeleteAccessory(null); }}
+                          className={clsx(
+                            'px-2 py-1 text-xs rounded transition-colors',
+                            dangerPairFilter === 'all'
+                              ? 'bg-white text-gray-700 shadow-sm'
+                              : 'text-gray-500 hover:text-gray-700'
+                          )}
+                        >
+                          All ({dbAccessories.length})
+                        </button>
+                        <button
+                          onClick={() => { setDangerPairFilter('paired'); setConfirmDeleteAccessory(null); }}
+                          className={clsx(
+                            'px-2 py-1 text-xs rounded transition-colors',
+                            dangerPairFilter === 'paired'
+                              ? 'bg-white text-emerald-700 shadow-sm'
+                              : 'text-gray-500 hover:text-emerald-700'
+                          )}
+                        >
+                          Paired ({dangerPairedCount})
+                        </button>
+                        <button
+                          onClick={() => { setDangerPairFilter('unpaired'); setConfirmDeleteAccessory(null); }}
+                          className={clsx(
+                            'px-2 py-1 text-xs rounded transition-colors',
+                            dangerPairFilter === 'unpaired'
+                              ? 'bg-white text-red-700 shadow-sm'
+                              : 'text-gray-500 hover:text-red-700'
+                          )}
+                        >
+                          No longer paired ({dangerUnpairedCount})
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {dbAccessories.length === 0 ? (
                     <p className="px-4 py-4 text-xs text-gray-400 italic">No accessory data in the database.</p>
+                  ) : visibleDangerAccessories.length === 0 ? (
+                    <p className="px-4 py-4 text-xs text-gray-400 italic">
+                      No accessories match this filter.
+                    </p>
                   ) : (
                     <div className="divide-y divide-gray-100">
-                      {dbAccessories.map((acc) => {
+                      {visibleDangerAccessories.map((acc) => {
                         const isConfirming = confirmDeleteAccessory === acc.accessory_id;
                         const isDeleting   = deleteAccessoryMutation.isPending && confirmDeleteAccessory === acc.accessory_id;
+                        const isCurrentlyPaired = Boolean(acc.paired_at);
                         return (
                           <div key={acc.accessory_id} className="flex items-center gap-3 px-4 py-2.5">
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium text-gray-800 truncate">{acc.accessory_name}</div>
-                              <div className="text-xs text-gray-400">
+                              <div className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
                                 {acc.service_type ?? 'No events yet'}
                                 {acc.room_name && <span className="ml-1">· {acc.room_name}</span>}
+                                <span
+                                  className={clsx(
+                                    'ml-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium border',
+                                    isCurrentlyPaired
+                                      ? 'text-emerald-700 bg-emerald-50 border-emerald-100'
+                                      : 'text-red-700 bg-red-50 border-red-100'
+                                  )}
+                                >
+                                  {isCurrentlyPaired ? 'Currently paired' : 'No longer paired'}
+                                </span>
                               </div>
                             </div>
                             {isConfirming ? (
                               <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className="text-xs text-gray-500">Delete history?</span>
+                                <span className="text-xs text-gray-500">Delete history? This cannot be undone.</span>
                                 <button
                                   onClick={() => deleteAccessoryMutation.mutate(acc.accessory_id)}
                                   disabled={isDeleting}
