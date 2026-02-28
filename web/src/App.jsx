@@ -14,6 +14,7 @@ import StaleDevicesPanel from './components/StaleDevicesPanel.jsx';
 import AccessoryList from './components/AccessoryList.jsx';
 import Setup from './components/Setup.jsx';
 import Alerts from './components/Alerts.jsx';
+import BrandLogo from './components/BrandLogo.jsx';
 import { useTheme } from './hooks/useTheme.js';
 import { useSkin } from './hooks/useSkin.js';
 
@@ -55,7 +56,6 @@ const SKIN_SWATCH_DARK = {
 export default function App() {
   const [tab, setTab]               = useState('dashboard');
   const [alertsEnabled, setAlertsEnabled] = useState(false);
-  const [iconBroken, setIconBroken] = useState(false);
   const [isSkinPickerOpen, setIsSkinPickerOpen] = useState(false);
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
   const { preference, resolvedTheme, setPreference } = useTheme();
@@ -114,27 +114,7 @@ export default function App() {
       {/* Header */}
       <header className="hc-app-header bg-white border-b border-gray-200 px-3 sm:px-4 py-3 flex flex-wrap items-center gap-3">
         {!isStandalonePwa && (
-          <div className="flex items-center gap-3 min-w-0">
-            {iconBroken ? (
-              <div className="h-12 w-12 rounded-xl flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
-                <Home size={22} className="text-white" />
-              </div>
-            ) : (
-              <div className="h-12 w-12 rounded-xl overflow-hidden flex-shrink-0">
-                <img
-                  src="/hc-icon-blue.png"
-                  alt=""
-                  className="h-full w-full object-cover scale-[1.55]"
-                  style={{ objectPosition: 'center 64%' }}
-                  onError={() => setIconBroken(true)}
-                />
-              </div>
-            )}
-            <div className="min-w-0">
-              <h1 className="text-lg font-semibold text-gray-900 leading-tight truncate">HomeChronicle</h1>
-              <p className="text-xs text-gray-400 leading-tight truncate">Event Logging for Apple HomeKit</p>
-            </div>
-          </div>
+          <BrandLogo className="h-12 sm:h-14 w-auto max-w-[260px] sm:max-w-[300px] flex-shrink-0" />
         )}
         {!isStandalonePwa && <span className="flex-1 hidden md:block" />}
 
