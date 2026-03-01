@@ -69,6 +69,7 @@ discovery.on('serviceUp', async (service) => {
 
     const pairings = loadPairings();
     pairings[service.id] = {
+      protocol: 'homekit',
       name: service.name,
       address: service.address,
       port: service.port,

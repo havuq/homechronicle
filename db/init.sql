@@ -6,13 +6,18 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE TABLE IF NOT EXISTS event_logs (
     id              BIGSERIAL PRIMARY KEY,
     timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    accessory_id    TEXT        NOT NULL,   -- HAP aid (accessory identifier)
+    accessory_id    TEXT        NOT NULL,   -- protocol-specific accessory identifier
     accessory_name  TEXT        NOT NULL,
     room_name       TEXT,                   -- NULL if accessory has no room
     service_type    TEXT,                   -- e.g. "Lightbulb", "MotionSensor"
     characteristic  TEXT        NOT NULL,   -- e.g. "On", "MotionDetected"
     old_value       TEXT,                   -- NULL on first observation
     new_value       TEXT        NOT NULL,
+    protocol        TEXT        NOT NULL DEFAULT 'homekit',
+    transport       TEXT,
+    endpoint_id     INT,
+    cluster_id      BIGINT,
+    attribute_id    BIGINT,
     raw_iid         INT                     -- HAP instance ID, useful for debugging
 );
 
@@ -27,6 +32,11 @@ CREATE TABLE IF NOT EXISTS event_logs_archive (
     characteristic  TEXT        NOT NULL,
     old_value       TEXT,
     new_value       TEXT        NOT NULL,
+    protocol        TEXT        NOT NULL DEFAULT 'homekit',
+    transport       TEXT,
+    endpoint_id     INT,
+    cluster_id      BIGINT,
+    attribute_id    BIGINT,
     raw_iid         INT,
     archived_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

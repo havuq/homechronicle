@@ -18,13 +18,18 @@ pool.on('error', (err) => {
  * Insert a single HomeKit event into event_logs.
  *
  * @param {object} event
- * @param {string} event.accessoryId      - HAP accessory identifier
+ * @param {string} event.accessoryId      - protocol-specific accessory identifier
  * @param {string} event.accessoryName
  * @param {string|null} event.roomName
  * @param {string|null} event.serviceType - e.g. "Lightbulb"
  * @param {string} event.characteristic   - e.g. "On"
  * @param {string|null} event.oldValue
  * @param {string} event.newValue
+ * @param {string} event.protocol         - "homekit" | "matter"
+ * @param {string|null} event.transport   - e.g. "ip", "thread"
+ * @param {number|null} event.endpointId
+ * @param {number|null} event.clusterId
+ * @param {number|null} event.attributeId
  * @param {number|null} event.rawIid      - HAP instance ID
  */
 export async function insertEvent(event) {
@@ -36,17 +41,24 @@ export async function insertEvent(event) {
     characteristic,
     oldValue = null,
     newValue,
+    protocol = 'homekit',
+    transport = null,
+    endpointId = null,
+    clusterId = null,
+    attributeId = null,
     rawIid = null,
   } = event;
 
   const result = await pool.query(
     `INSERT INTO event_logs
        (accessory_id, accessory_name, room_name, service_type,
-        characteristic, old_value, new_value, raw_iid)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        characteristic, old_value, new_value, protocol, transport,
+        endpoint_id, cluster_id, attribute_id, raw_iid)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING id, timestamp`,
     [accessoryId, accessoryName, roomName, serviceType,
-      characteristic, oldValue, String(newValue), rawIid]
+      characteristic, oldValue, String(newValue), protocol, transport,
+      endpointId, clusterId, attributeId, rawIid]
   );
   return result.rows[0];
 }
@@ -69,6 +81,11 @@ export async function migrateDb() {
       characteristic  TEXT        NOT NULL,
       old_value       TEXT,
       new_value       TEXT        NOT NULL,
+      protocol        TEXT        NOT NULL DEFAULT 'homekit',
+      transport       TEXT,
+      endpoint_id     INT,
+      cluster_id      BIGINT,
+      attribute_id    BIGINT,
       raw_iid         INT
     );
 
@@ -83,9 +100,28 @@ export async function migrateDb() {
       characteristic  TEXT        NOT NULL,
       old_value       TEXT,
       new_value       TEXT        NOT NULL,
+      protocol        TEXT        NOT NULL DEFAULT 'homekit',
+      transport       TEXT,
+      endpoint_id     INT,
+      cluster_id      BIGINT,
+      attribute_id    BIGINT,
       raw_iid         INT,
       archived_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE event_logs
+      ADD COLUMN IF NOT EXISTS protocol TEXT NOT NULL DEFAULT 'homekit',
+      ADD COLUMN IF NOT EXISTS transport TEXT,
+      ADD COLUMN IF NOT EXISTS endpoint_id INT,
+      ADD COLUMN IF NOT EXISTS cluster_id BIGINT,
+      ADD COLUMN IF NOT EXISTS attribute_id BIGINT;
+
+    ALTER TABLE event_logs_archive
+      ADD COLUMN IF NOT EXISTS protocol TEXT NOT NULL DEFAULT 'homekit',
+      ADD COLUMN IF NOT EXISTS transport TEXT,
+      ADD COLUMN IF NOT EXISTS endpoint_id INT,
+      ADD COLUMN IF NOT EXISTS cluster_id BIGINT,
+      ADD COLUMN IF NOT EXISTS attribute_id BIGINT;
 
     CREATE TABLE IF NOT EXISTS alert_rules (
       id              BIGSERIAL PRIMARY KEY,
@@ -183,9 +219,11 @@ export async function runRetentionSweep({
         `WITH moved AS (
            INSERT INTO event_logs_archive
              (source_id, timestamp, accessory_id, accessory_name, room_name,
-              service_type, characteristic, old_value, new_value, raw_iid)
+              service_type, characteristic, old_value, new_value, protocol,
+              transport, endpoint_id, cluster_id, attribute_id, raw_iid)
            SELECT id, timestamp, accessory_id, accessory_name, room_name,
-                  service_type, characteristic, old_value, new_value, raw_iid
+                  service_type, characteristic, old_value, new_value, protocol,
+                  transport, endpoint_id, cluster_id, attribute_id, raw_iid
            FROM event_logs
            WHERE timestamp < NOW() - ($1::int * INTERVAL '1 day')
            ON CONFLICT (source_id) DO NOTHING
