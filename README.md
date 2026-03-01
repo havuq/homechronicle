@@ -55,6 +55,22 @@ Events will begin showing in the Timeline once pairing succeeds.
 - `docker compose logs -f listener web postgres` to view logs
 - `docker compose restart listener` if you need to reconnect device subscriptions
 
+## Matter (Phase 1 Runtime)
+
+Matter support currently uses the listener's Matter runtime endpoints plus externally configured commands:
+
+- `POST /api/setup/matter/pair` to register a Matter node (optionally commissions when `setupCode` is included)
+- `POST /api/setup/matter/commission` to run commissioning directly
+- `POST /api/matter/events` to ingest Matter events
+- `GET /api/setup/matter/runtime` to inspect runtime status
+
+Set the following in `.env` to enable runtime commissioning/polling:
+
+- `MATTER_COMMISSION_CMD`
+- `MATTER_POLL_CMD`
+- `MATTER_POLL_INTERVAL_MS`
+- `MATTER_COMMAND_TIMEOUT_MS`
+
 ## Update HomeChronicle
 
 ```bash

@@ -38,6 +38,7 @@ test('/api/setup/matter/pair stores Matter pairing metadata', async () => {
     savePairings: async (next) => { pairings = next; },
     loadRooms: () => ({}),
     saveRooms: async () => {},
+    matterRuntime: null,
   });
   const handler = getRouteHandler(router, 'POST', '/setup/matter/pair');
 
@@ -76,6 +77,7 @@ test('/api/matter/events inserts normalized Matter events', async () => {
     savePairings: async () => {},
     loadRooms: () => ({ '0X1A2B:1': 'Kitchen' }),
     saveRooms: async () => {},
+    matterRuntime: null,
   });
   const handler = getRouteHandler(router, 'POST', '/matter/events');
 
@@ -108,6 +110,7 @@ test('/api/matter/events validates required fields', async () => {
     savePairings: async () => {},
     loadRooms: () => ({}),
     saveRooms: async () => {},
+    matterRuntime: null,
   });
   const handler = getRouteHandler(router, 'POST', '/matter/events');
 
@@ -121,3 +124,71 @@ test('/api/matter/events validates required fields', async () => {
   assert.match(response.jsonBody.error, /nodeId/i);
 });
 
+test('/api/setup/matter/commission calls matter runtime', async () => {
+  const calls = [];
+  const runtime = {
+    getStatus() {
+      return { ok: true };
+    },
+    async commission(payload) {
+      calls.push(payload);
+      return { stdout: 'ok', stderr: '' };
+    },
+  };
+  const router = createMatterRouter({
+    insertEvent: async () => ({ id: 1, timestamp: new Date().toISOString() }),
+    loadPairings: () => ({}),
+    savePairings: async () => {},
+    loadRooms: () => ({}),
+    saveRooms: async () => {},
+    matterRuntime: runtime,
+  });
+  const handler = getRouteHandler(router, 'POST', '/setup/matter/commission');
+
+  const response = await invoke(handler, {
+    body: { nodeId: '0xabc', setupCode: 'MT:1234', transport: 'thread' },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.jsonBody.success, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].nodeId, '0XABC');
+  assert.equal(calls[0].setupCode, 'MT:1234');
+});
+
+test('/api/setup/matter/pair commissions when setupCode is provided', async () => {
+  let pairings = {};
+  const calls = [];
+  const runtime = {
+    getStatus() {
+      return { ok: true };
+    },
+    async commission(payload) {
+      calls.push(payload);
+      return { stdout: 'ok', stderr: '' };
+    },
+  };
+  const router = createMatterRouter({
+    insertEvent: async () => ({ id: 1, timestamp: new Date().toISOString() }),
+    loadPairings: () => pairings,
+    savePairings: async (next) => { pairings = next; },
+    loadRooms: () => ({}),
+    saveRooms: async () => {},
+    matterRuntime: runtime,
+  });
+  const handler = getRouteHandler(router, 'POST', '/setup/matter/pair');
+
+  const response = await invoke(handler, {
+    body: {
+      nodeId: '0x2a',
+      name: 'Door Sensor',
+      setupCode: 'MT:AAAA',
+      commissioningMethod: 'code',
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.jsonBody.success, true);
+  assert.equal(calls.length, 1);
+  assert.equal(pairings['0X2A'].protocol, 'matter');
+});
