@@ -5,7 +5,7 @@ export default function BrandLogo({ className }) {
     <svg
       viewBox="0 0 420 120"
       role="img"
-      aria-label="Home Chronical"
+      aria-label="Home Chronicle"
       className={clsx('hc-brand-logo', className)}
     >
       <defs>
@@ -63,7 +63,7 @@ export default function BrandLogo({ className }) {
         letterSpacing="0.2"
         fill="var(--hc-accent-strong)"
       >
-        chronical
+        chronicle
       </text>
     </svg>
   );
