@@ -37,8 +37,45 @@ export function createMatterRouter({
   savePairings,
   loadRooms,
   saveRooms,
+  matterRuntime = null,
 }) {
   const router = express.Router();
+
+  router.get('/setup/matter/runtime', (_req, res) => {
+    if (!matterRuntime) {
+      return res.status(503).json({ error: 'Matter runtime unavailable' });
+    }
+    return res.json(matterRuntime.getStatus());
+  });
+
+  router.post('/setup/matter/commission', async (req, res) => {
+    if (!matterRuntime) {
+      return res.status(503).json({ error: 'Matter runtime unavailable' });
+    }
+    try {
+      const nodeId = normalizeNodeId(req.body?.nodeId);
+      const setupCode = toOptionalText(req.body?.setupCode);
+      if (!nodeId || !setupCode) {
+        return res.status(400).json({ error: 'nodeId and setupCode are required' });
+      }
+      const result = await matterRuntime.commission({
+        nodeId,
+        setupCode,
+        address: req.body?.address,
+        port: req.body?.port,
+        transport: req.body?.transport,
+        commissioningMethod: req.body?.commissioningMethod,
+      });
+      return res.json({
+        success: true,
+        nodeId,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      });
+    } catch (err) {
+      return res.status(400).json({ error: err.message ?? String(err) });
+    }
+  });
 
   router.get('/setup/matter/pairings', (_req, res) => {
     const pairings = loadPairings();
@@ -63,6 +100,24 @@ export function createMatterRouter({
     const name = toOptionalText(req.body?.name);
     if (!nodeId || !name) {
       return res.status(400).json({ error: 'nodeId and name are required' });
+    }
+
+    const setupCode = toOptionalText(req.body?.setupCode);
+    if (setupCode && matterRuntime) {
+      try {
+        await matterRuntime.commission({
+          nodeId,
+          setupCode,
+          address: req.body?.address,
+          port: req.body?.port,
+          transport: req.body?.transport,
+          commissioningMethod: req.body?.commissioningMethod,
+        });
+      } catch (err) {
+        return res.status(400).json({ error: err.message ?? String(err) });
+      }
+    } else if (setupCode && !matterRuntime) {
+      return res.status(503).json({ error: 'Matter runtime unavailable for commissioning' });
     }
 
     const pairings = loadPairings();
@@ -181,4 +236,3 @@ export function createMatterRouter({
 
   return router;
 }
-

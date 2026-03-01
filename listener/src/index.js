@@ -15,6 +15,7 @@ import { JsonObjectStore } from './store.js';
 import { createEventsRouter, parentBridgeId, parseIntInRange } from './events-router.js';
 import { createAlertsRouter } from './alerts-router.js';
 import { createMatterRouter } from './matter-router.js';
+import { createMatterRuntime } from './matter-runtime.js';
 import { deriveDeviceHealth } from './device-health.js';
 import { detectOutliers } from './anomaly-detection.js';
 import {
@@ -50,6 +51,7 @@ const retentionStore = new JsonObjectStore(RETENTION_FILE, {
   archiveBeforeDelete: RETENTION_ARCHIVE_DEFAULT,
   staleThresholdHours: STALE_THRESHOLD_HOURS_DEFAULT,
 });
+let matterRuntime = null;
 
 function normalizePairingRecord(id, pairing = {}) {
   const protocol = String(pairing?.protocol ?? 'homekit').toLowerCase() === 'matter'
@@ -107,7 +109,9 @@ function loadPairings() {
 }
 
 async function savePairings(pairings) {
-  await pairingsStore.write(normalizePairingsMap(pairings));
+  const normalized = normalizePairingsMap(pairings);
+  await pairingsStore.write(normalized);
+  if (matterRuntime) matterRuntime.syncPairings(normalized);
 }
 
 function loadRooms() {
@@ -150,6 +154,10 @@ await migrateDb();
 await pairingsStore.init();
 await roomsStore.init();
 await retentionStore.init();
+matterRuntime = createMatterRuntime({
+  insertEvent,
+  loadRooms,
+});
 
 let retentionSettings = loadRetentionSettings();
 
@@ -158,6 +166,13 @@ if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5
     void pairingsStore.refresh().catch((err) => {
       console.warn('[store] pairings refresh failed:', err.message ?? err.stack ?? err);
     });
+    if (matterRuntime) {
+      try {
+        matterRuntime.syncPairings(loadPairings());
+      } catch (err) {
+        console.warn('[matter] pairing sync failed:', err.message ?? err.stack ?? err);
+      }
+    }
     void roomsStore.refresh().catch((err) => {
       console.warn('[store] rooms refresh failed:', err.message ?? err.stack ?? err);
     });
@@ -176,6 +191,7 @@ if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5
 const pairings = loadPairings();
 const homeKitPairings = getHomeKitPairings(pairings);
 const pairedCount = Object.keys(homeKitPairings).length;
+matterRuntime.syncPairings(pairings);
 
 if (pairedCount > 0) {
   console.log(`[init] Loaded ${pairedCount} pairing(s) from ${PAIRINGS_FILE}`);
@@ -220,7 +236,8 @@ function runDiscoveryScan() {
         try {
           try { discovery.stop(); } catch { /* ignore stop errors */ }
           await pairingsStore.refresh();
-          const currentPairings = getHomeKitPairings(loadPairings());
+          const allPairings = loadPairings();
+          const currentPairings = getHomeKitPairings(allPairings);
           discoveryCache = [...found.values()].map((s) => ({
             id: s.id,
             protocol: 'homekit',
@@ -246,7 +263,12 @@ function runDiscoveryScan() {
               pairingsUpdated = true;
             }
           }
-          if (pairingsUpdated) await savePairings(currentPairings);
+          if (pairingsUpdated) {
+            await savePairings({
+              ...allPairings,
+              ...currentPairings,
+            });
+          }
 
           resolve(discoveryCache);
         } catch (err) {
@@ -613,6 +635,7 @@ app.use('/api', createMatterRouter({
   savePairings,
   loadRooms,
   saveRooms,
+  matterRuntime,
 }));
 
 // Stats routes
@@ -1084,10 +1107,16 @@ app.get('/api/stats/anomalies', async (_req, res) => {
 });
 
 app.get('/api/health', (_req, res) => {
+  const runtimeStatus = matterRuntime?.getStatus?.() ?? null;
   res.json({
     status: 'ok',
     paired: Object.keys(loadPairings()).length,
     alertsEnabled: ALERTS_ENABLED,
+    matter: runtimeStatus ? {
+      commissionConfigured: runtimeStatus.commissionConfigured,
+      pollingConfigured: runtimeStatus.pollingConfigured,
+      activeNodes: runtimeStatus.nodes?.length ?? 0,
+    } : null,
   });
 });
 
