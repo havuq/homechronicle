@@ -23,6 +23,7 @@ Thumbs.db
 
 # Docker volumes / local data
 postgres-data/
+docker-compose.override.yml
 
 # Local helper scripts
 scripts/dev-local.sh
