@@ -52,6 +52,7 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       LISTENER_HOST: ${LISTENER_HOST:-host.docker.internal}
+      LISTENER_PORT: ${API_PORT:-3001}
       API_TOKEN: ${API_TOKEN:-}
       TZ: ${TZ:-UTC}
 
