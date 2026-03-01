@@ -35,3 +35,4 @@ services:
     environment:
       # Nginx proxies /api to the native listener on the host machine
       - LISTENER_HOST=host.docker.internal
+      - LISTENER_PORT=${API_PORT:-3001}
