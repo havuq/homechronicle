@@ -13,7 +13,7 @@ server {
     #   - local dev (bridge network): "listener"  (Docker DNS)
     #   - NAS (host network):         "127.0.0.1"
     location /api/ {
-        proxy_pass http://${LISTENER_HOST}:3001;
+        proxy_pass http://${LISTENER_HOST}:${LISTENER_PORT};
         # Keep a valid two-argument directive even when API_TOKEN is empty.
         proxy_set_header X-API-Token "${API_TOKEN}";
         # Preserve Nginx runtime variables through envsubst.
