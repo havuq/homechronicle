@@ -122,10 +122,10 @@ export default function AccessoryList() {
                 <span>Theme-accent service icon: accessory type (light, switch, sensor, lock, and others)</span>
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-600">
-                <span className="w-7 h-7 rounded-full flex items-center justify-center bg-purple-50">
-                  <Network size={14} className="text-purple-500" />
+                <span className="w-7 h-7 rounded-full flex items-center justify-center bg-blue-50">
+                  <Network size={14} className="text-blue-600" />
                 </span>
-                <span>Purple network icon: bridge device</span>
+                <span>Theme-accent network icon: bridge device</span>
               </div>
             </div>
           </div>
@@ -198,8 +198,8 @@ export default function AccessoryList() {
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
 
                   {/* Icon */}
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${isBridge ? 'bg-purple-50' : 'bg-blue-50'}`}>
-                    <Icon size={18} className={isBridge ? 'text-purple-500' : 'text-blue-600'} />
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-blue-50">
+                    <Icon size={18} className="text-blue-600" />
                   </div>
 
                   {/* Text */}

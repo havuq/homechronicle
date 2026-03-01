@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HomeChronicle — Event Logging for Apple HomeKit</title>
+  <meta name="description" content="Self-hosted dashboard that captures every state change from your HomeKit accessories. Searchable timeline, activity analytics, and device management.">
+  <meta property="og:title" content="HomeChronicle">
+  <meta property="og:description" content="Event Logging for Apple HomeKit — searchable timeline, activity analytics, and device management.">
+  <meta property="og:image" content="screenshots/dashboard-lite-page.png">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="assets/icon.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #4f46e5;
+      --primary-light: #6366f1;
+      --primary-dark: #3730a3;
+      --accent: #10b981;
+      --accent-light: #34d399;
+      --bg: #ffffff;
+      --bg-alt: #f8fafc;
+      --bg-dark: #0f172a;
+      --bg-dark-card: #1e293b;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-light: #94a3b8;
+      --text-on-dark: #f1f5f9;
+      --border: #e2e8f0;
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+      --shadow-screenshot: 0 25px 50px -12px rgba(0,0,0,0.15);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --max-width: 1200px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      line-height: 1.6;
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    img { max-width: 100%; height: auto; display: block; }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: var(--primary-light); }
+    .container { max-width: var(--max-width); margin: 0 auto; padding: 0 24px; }
+
+    /* ── Navigation ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 0;
+    }
+
+    nav .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-logo svg.brand-svg { height: 48px; width: auto; }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .github-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      background: var(--text);
+      color: white !important;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .github-btn:hover { background: var(--primary); color: white !important; }
+    .github-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: #f0fdf4;
+      color: #166534;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 28px;
+      border: 1px solid #bbf7d0;
+    }
+
+    .hero h1 {
+      font-size: clamp(42px, 6vw, 72px);
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 .brand-home {
+      color: var(--text);
+    }
+
+    .hero h1 .brand-chronicle {
+      color: var(--primary);
+    }
+
+    .hero h2 {
+      font-size: clamp(18px, 2.5vw, 24px);
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    .hero p {
+      font-size: 17px;
+      color: var(--text-secondary);
+      max-width: 640px;
+      margin: 0 auto 36px;
+      line-height: 1.7;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 64px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-light);
+      color: white;
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-secondary {
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+
+    /* ── Screenshots ── */
+    .screenshot {
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-screenshot);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .hero-screenshot {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    /* ── Features Grid ── */
+    .features-grid-section {
+      padding: 80px 0;
+      background: var(--bg-alt);
+    }
+
+    .section-label {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--primary);
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+
+    .section-desc {
+      font-size: 17px;
+      color: var(--text-secondary);
+      max-width: 600px;
+      line-height: 1.7;
+      margin-bottom: 48px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .feature-card {
+      padding: 28px;
+      background: var(--bg);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      margin-bottom: 16px;
+    }
+
+    .fi-blue   { background: #eff6ff; }
+    .fi-green  { background: #f0fdf4; }
+    .fi-purple { background: #faf5ff; }
+    .fi-amber  { background: #fffbeb; }
+    .fi-rose   { background: #fff1f2; }
+    .fi-cyan   { background: #ecfeff; }
+
+    .feature-card h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ── Feature Sections ── */
+    .feature-section { padding: 100px 0; }
+    .feature-section.alt-bg { background: var(--bg-alt); }
+
+    .feature-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+
+    .feature-row.reverse .feature-text { order: 2; }
+    .feature-row.reverse .feature-media { order: 1; }
+
+    .feature-text h2 {
+      font-size: clamp(24px, 3vw, 36px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+
+    .feature-text p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-bottom: 12px;
+    }
+
+    .feature-list {
+      list-style: none;
+      padding: 0;
+      margin-top: 20px;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+
+    .feature-list li::before {
+      content: "\2713";
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .screenshot-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* ── Wide Screenshot Section ── */
+    .wide-screenshots {
+      padding: 60px 0 100px;
+    }
+
+    .wide-screenshots .section-label,
+    .wide-screenshots .section-title,
+    .wide-screenshots .section-desc { text-align: center; }
+
+    .wide-screenshots .section-desc {
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .detail-card {
+      background: var(--bg);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+
+    .detail-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .detail-card img {
+      width: 100%;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .detail-card .detail-caption {
+      padding: 16px 20px;
+    }
+
+    .detail-card h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .detail-card p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ── Dark Mode Section ── */
+    .dark-section {
+      background: var(--bg-dark);
+      padding: 100px 0;
+      color: var(--text-on-dark);
+    }
+
+    .dark-section .section-label { color: var(--accent-light); }
+    .dark-section .section-desc { color: var(--text-light); }
+    .dark-section .feature-text p { color: var(--text-light); }
+    .dark-section .feature-list li { color: var(--text-light); }
+    .dark-section .screenshot { border-color: rgba(255,255,255,0.1); }
+
+    .themes-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .theme-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.15);
+      transition: transform 0.2s;
+    }
+
+    .theme-dot:hover { transform: scale(1.2); }
+
+    /* ── Tech Stack ── */
+    .tech-section {
+      padding: 80px 0;
+      background: var(--bg-alt);
+      text-align: center;
+    }
+
+    .tech-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 16px;
+    }
+
+    .tech-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* ── Getting Started ── */
+    .getting-started {
+      padding: 100px 0;
+      text-align: center;
+    }
+
+    .getting-started .section-desc {
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .code-block {
+      background: var(--bg-dark);
+      color: #e2e8f0;
+      padding: 28px 32px;
+      border-radius: var(--radius-md);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 14px;
+      line-height: 1.8;
+      text-align: left;
+      max-width: 680px;
+      margin: 0 auto 48px;
+      overflow-x: auto;
+    }
+
+    .code-block .comment { color: var(--text-light); }
+    .code-block .cmd { color: var(--accent-light); }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      text-align: center;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .step-number {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: white;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .steps h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .steps p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--bg-dark);
+      color: var(--text-light);
+      padding: 48px 0;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    footer a { color: var(--text-on-dark); }
+    footer a:hover { color: var(--accent-light); }
+
+    .footer-links {
+      display: flex;
+      gap: 32px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .footer-license { color: var(--text-light); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .nav-links a:not(.github-btn) { display: none; }
+
+      .features-grid { grid-template-columns: 1fr; }
+
+      .feature-row {
+        grid-template-columns: 1fr;
+        gap: 32px;
+      }
+
+      .feature-row.reverse .feature-text { order: 1; }
+      .feature-row.reverse .feature-media { order: 2; }
+
+      .screenshot-grid,
+      .detail-grid { grid-template-columns: 1fr; }
+
+      .steps { grid-template-columns: 1fr; }
+
+      .hero { padding: 48px 0 40px; }
+      .feature-section { padding: 60px 0; }
+      .dark-section { padding: 60px 0; }
+      .hero-buttons { margin-bottom: 40px; }
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .feature-row { gap: 40px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ════════ Navigation ════════ -->
+  <nav>
+    <div class="container">
+      <a href="#" class="nav-logo">
+        <svg viewBox="0 0 420 120" role="img" aria-label="Home Chronicle" class="brand-svg">
+          <defs>
+            <linearGradient id="hcNavAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#1d4ed8" />
+              <stop offset="100%" stop-color="#1e40af" />
+            </linearGradient>
+          </defs>
+          <g transform="translate(4 8)">
+            <path d="M18 45.5L62 12.5C64.6 10.5 68.2 10.5 70.8 12.5L114.8 45.5" fill="none" stroke="url(#hcNavAccent)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M24 53V84C24 89.5 28.5 94 34 94H100C105.5 94 110 89.5 110 84V53" fill="none" stroke="url(#hcNavAccent)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M40 74L57 57L74 67L91 49" fill="none" stroke="url(#hcNavAccent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="57" cy="57" r="5.5" fill="#ffffff" stroke="url(#hcNavAccent)" stroke-width="5"/>
+            <circle cx="74" cy="67" r="5.5" fill="#ffffff" stroke="url(#hcNavAccent)" stroke-width="5"/>
+            <circle cx="91" cy="49" r="5.5" fill="#ffffff" stroke="url(#hcNavAccent)" stroke-width="5"/>
+          </g>
+          <text x="136" y="58" font-size="50" font-weight="700" letter-spacing="0.2" font-family="Inter, -apple-system, sans-serif" fill="#0f172a">home</text>
+          <text x="136" y="98" font-size="50" font-weight="700" letter-spacing="0.2" font-family="Inter, -apple-system, sans-serif" fill="#1d4ed8">chronicle</text>
+        </svg>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#timeline">Timeline</a>
+        <a href="#dashboard">Dashboard</a>
+        <a href="#getting-started">Get Started</a>
+        <a href="https://github.com/havuq/homechronicle" class="github-btn">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ════════ Hero ════════ -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">Self-hosted &middot; Open Source &middot; MIT License</div>
+      <h1><span class="brand-home">home</span><span class="brand-chronicle">chronicle</span></h1>
+      <h2>Event Logging for Apple HomeKit</h2>
+      <p>
+        Apple's Home app shows the current state of your accessories &mdash;
+        HomeChronicle shows you everything that <em>happened</em> and when.
+        A self-hosted dashboard with a searchable timeline, activity analytics, and device management.
+      </p>
+      <div class="hero-buttons">
+        <a href="#getting-started" class="btn btn-primary">Get Started</a>
+        <a href="https://github.com/havuq/homechronicle" class="btn btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <div class="hero-screenshot">
+        <img src="screenshots/dashboard-lite-page.png" alt="HomeChronicle Dashboard — activity analytics, trend charts, heatmaps, and device rankings" class="screenshot">
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Features Grid ════════ -->
+  <section id="features" class="features-grid-section">
+    <div class="container">
+      <div class="section-label">Capabilities</div>
+      <div class="section-title">Everything you need to monitor your smart home</div>
+      <div class="section-desc">HomeChronicle captures every state change from your HomeKit accessories and turns raw events into actionable insights.</div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon fi-blue">&#x1F4CB;</div>
+          <h3>Real-time Event Timeline</h3>
+          <p>Scrollable, day-grouped event feed with auto-refresh. Filter by room, accessory, characteristic, or date range.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon fi-green">&#x1F4CA;</div>
+          <h3>Activity Analytics</h3>
+          <p>Daily trends, hourly distribution charts, room breakdowns, weekday and monthly heatmaps at a glance.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon fi-purple">&#x1F4F1;</div>
+          <h3>Device Inventory</h3>
+          <p>Complete list of paired accessories with room grouping, activity status indicators, bridge info, and event counts.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon fi-amber">&#x26A1;</div>
+          <h3>In-Browser Setup</h3>
+          <p>Discover, pair, and configure accessories directly from the UI. Bulk pairing, PIN vault, and bridge child expansion.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon fi-rose">&#x1F3A8;</div>
+          <h3>Themes &amp; Dark Mode</h3>
+          <p>Light and dark modes with six color themes. Customize the look to match your preference.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon fi-cyan">&#x1F310;</div>
+          <h3>Installable PWA</h3>
+          <p>Add to your home screen on iOS or Android. Works like a native app with responsive mobile-first design.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Timeline ════════ -->
+  <section id="timeline" class="feature-section">
+    <div class="container">
+      <div class="feature-row">
+        <div class="feature-text">
+          <div class="section-label">Timeline</div>
+          <h2>Every event, searchable and filterable</h2>
+          <p>
+            A live, scrollable timeline grouped by day shows every state change across your home.
+            Scene grouping bundles events that fire within seconds of each other.
+          </p>
+          <ul class="feature-list">
+            <li>Filter by room, accessory name, characteristic, or date range</li>
+            <li>Activity heatmap with click-to-jump navigation</li>
+            <li>Human-readable service type labels instead of raw HAP UUIDs</li>
+            <li>Auto-refreshes every 10 seconds</li>
+          </ul>
+        </div>
+        <div class="feature-media">
+          <img src="screenshots/timeline-lite-page.png" alt="Timeline — live event feed grouped by day" class="screenshot">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Timeline Heatmap Detail ════════ -->
+  <section class="feature-section alt-bg">
+    <div class="container">
+      <div class="feature-row reverse">
+        <div class="feature-text">
+          <div class="section-label">Jump Navigation</div>
+          <h2>Visual heatmap for fast navigation</h2>
+          <p>
+            The activity heatmap shows event density by device and time of day.
+            Click any cell to jump directly to that moment in the timeline.
+            Combined with powerful search filters, finding any event is instant.
+          </p>
+          <ul class="feature-list">
+            <li>Per-device hourly heatmap with color-coded density</li>
+            <li>Deterministic page targeting for stable navigation</li>
+            <li>Combine with room and accessory filters to narrow results</li>
+          </ul>
+        </div>
+        <div class="feature-media">
+          <img src="screenshots/timeline-search-heatmap.png" alt="Timeline — search filters with activity heatmap for jump navigation" class="screenshot">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Dashboard ════════ -->
+  <section id="dashboard" class="wide-screenshots">
+    <div class="container">
+      <div class="section-label">Dashboard</div>
+      <div class="section-title">Activity analytics at a glance</div>
+      <div class="section-desc">
+        KPI cards, trend lines, hourly distributions, room breakdowns, device rankings, and heatmaps &mdash;
+        everything you need to understand your smart home's behavior.
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-card">
+          <img src="screenshots/dashboard-daily-activity.png" alt="KPI cards and daily activity trend">
+          <div class="detail-caption">
+            <h3>KPI Cards &amp; Daily Trend</h3>
+            <p>Today's count, weekly total, top device, and busiest room. Trend line with 7/30/90-day ranges.</p>
+          </div>
+        </div>
+        <div class="detail-card">
+          <img src="screenshots/dashboard-most-active-devices.png" alt="Most active devices ranking">
+          <div class="detail-caption">
+            <h3>Most Active Devices</h3>
+            <p>Ranked list of your busiest accessories over the last 7 days with room labels and event counts.</p>
+          </div>
+        </div>
+        <div class="detail-card">
+          <img src="screenshots/dashboard-weekly-monthly-heatmaps.png" alt="Weekday and monthly activity heatmaps">
+          <div class="detail-caption">
+            <h3>Weekday &amp; Monthly Heatmaps</h3>
+            <p>Spot patterns in your home's activity. See which hours and days are busiest over 30, 90, or 365 days.</p>
+          </div>
+        </div>
+        <div class="detail-card">
+          <img src="screenshots/dashboard-stale-devices.png" alt="Stale device alerts">
+          <div class="detail-caption">
+            <h3>Stale Device Alerts</h3>
+            <p>Devices that have gone silent are flagged with missed heartbeat counts so you can investigate.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Accessories ════════ -->
+  <section class="feature-section alt-bg">
+    <div class="container">
+      <div class="feature-row reverse">
+        <div class="feature-text">
+          <div class="section-label">Accessories</div>
+          <h2>Know every device in your home</h2>
+          <p>
+            A live inventory of all paired accessories, organized by room.
+            At a glance, see which devices are active, which are stale, and how many events each has generated.
+          </p>
+          <ul class="feature-list">
+            <li>Activity dots: green (active &lt; 1h), yellow (&lt; 24h), grey (older)</li>
+            <li>Bridge IP addresses and pairing timestamps</li>
+            <li>Child device attribution showing which bridge each device belongs to</li>
+            <li>Total event counts per accessory</li>
+          </ul>
+        </div>
+        <div class="feature-media">
+          <img src="screenshots/accessories-lite-page.png" alt="Accessories — device inventory grouped by room" class="screenshot">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Setup & Manage ════════ -->
+  <section class="feature-section">
+    <div class="container">
+      <div class="feature-row">
+        <div class="feature-text">
+          <div class="section-label">Setup &amp; Manage</div>
+          <h2>Pair devices right from your browser</h2>
+          <p>
+            No command line needed. Discover accessories on your network, enter PINs, and pair
+            directly from the web UI. Homebridge support lets you pair a bridge once and log all
+            child accessories automatically.
+          </p>
+          <ul class="feature-list">
+            <li>Network scanning discovers accessories via mDNS</li>
+            <li>Bulk pairing with shared PIN and progress bar</li>
+            <li>PIN vault saves codes after first use</li>
+            <li>Room assignment for accessories and bridge children</li>
+            <li>Configurable retention and stale device thresholds</li>
+          </ul>
+        </div>
+        <div class="feature-media">
+          <div class="screenshot-grid">
+            <img src="screenshots/manage-lite-page.png" alt="Manage — accessory pairing wizard" class="screenshot">
+            <img src="screenshots/manage-settings.png" alt="Manage — retention and threshold settings" class="screenshot">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Dark Mode & Themes ════════ -->
+  <section class="dark-section">
+    <div class="container">
+      <div class="feature-row">
+        <div class="feature-text">
+          <div class="section-label">Appearance</div>
+          <h2>Dark mode &amp; color themes</h2>
+          <p>
+            Switch between light and dark modes, or let the app follow your system preference.
+            Choose from six color themes to personalize the interface.
+          </p>
+          <div class="themes-row">
+            <div class="theme-dot" style="background: #4f8cf7;" title="Ocean"></div>
+            <div class="theme-dot" style="background: #475569;" title="Graphite"></div>
+            <div class="theme-dot" style="background: #e87e5f;" title="Sunrise"></div>
+            <div class="theme-dot" style="background: #e54560;" title="Red"></div>
+            <div class="theme-dot" style="background: #eab308;" title="Yellow"></div>
+            <div class="theme-dot" style="background: #8b5cf6;" title="Purple"></div>
+          </div>
+        </div>
+        <div class="feature-media">
+          <img src="screenshots/dashboard-dark-page.png" alt="Dashboard in dark mode" class="screenshot">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Tech Stack ════════ -->
+  <section class="tech-section">
+    <div class="container">
+      <div class="section-label">Built With</div>
+      <div class="section-title">Modern, self-hosted stack</div>
+      <div class="section-desc" style="margin-left:auto;margin-right:auto;">
+        Runs entirely on your local network in Docker. No cloud, no subscriptions, no data leaving your home.
+      </div>
+      <div class="tech-grid">
+        <div class="tech-badge">&#x1F433; Docker Compose</div>
+        <div class="tech-badge">&#x269B;&#xFE0F; React 18</div>
+        <div class="tech-badge">&#x26A1; Vite</div>
+        <div class="tech-badge">&#x1F418; PostgreSQL 16</div>
+        <div class="tech-badge">&#x1F4E1; Express</div>
+        <div class="tech-badge">&#x1F3E0; hap-controller</div>
+        <div class="tech-badge">&#x1F4CA; Recharts</div>
+        <div class="tech-badge">&#x1F3A8; Tailwind CSS</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Getting Started ════════ -->
+  <section id="getting-started" class="getting-started">
+    <div class="container">
+      <div class="section-label">Quick Start</div>
+      <div class="section-title">Up and running in minutes</div>
+      <div class="section-desc">
+        Clone the repo, start Docker Compose, and open the browser. Pair your first device from the built-in setup wizard.
+      </div>
+
+      <div class="code-block">
+        <span class="comment"># Clone the repository</span><br>
+        <span class="cmd">git clone</span> https://github.com/havuq/homechronicle.git<br>
+        <span class="cmd">cd</span> homechronicle<br><br>
+        <span class="comment"># Copy and configure environment</span><br>
+        <span class="cmd">cp</span> .env.example .env<br><br>
+        <span class="comment"># Start all services</span><br>
+        <span class="cmd">docker compose up -d</span><br><br>
+        <span class="comment"># Open the dashboard</span><br>
+        <span class="cmd">open</span> http://localhost:3000
+      </div>
+
+      <div class="steps">
+        <div>
+          <div class="step-number">1</div>
+          <h3>Deploy</h3>
+          <p>Run Docker Compose on any machine &mdash; NAS, Raspberry Pi, or desktop.</p>
+        </div>
+        <div>
+          <div class="step-number">2</div>
+          <h3>Pair</h3>
+          <p>Open the Manage tab, scan your network, and pair accessories with their PINs.</p>
+        </div>
+        <div>
+          <div class="step-number">3</div>
+          <h3>Monitor</h3>
+          <p>Events stream in automatically. Explore the timeline, dashboard, and analytics.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ Footer ════════ -->
+  <footer>
+    <div class="container">
+      <div class="footer-links">
+        <a href="https://github.com/havuq/homechronicle">GitHub</a>
+        <a href="https://github.com/havuq/homechronicle#readme">Documentation</a>
+        <a href="https://github.com/havuq/homechronicle/issues">Issues</a>
+      </div>
+      <p class="footer-license">
+        MIT License &middot; HomeChronicle is not affiliated with or endorsed by Apple Inc.
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>
