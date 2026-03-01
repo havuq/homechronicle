@@ -502,6 +502,18 @@
 
     .code-block .comment { color: var(--text-light); }
     .code-block .cmd { color: var(--accent-light); }
+    .code-block .code-caption {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--text-light);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    .code-block pre {
+      margin: 0;
+      white-space: pre;
+    }
 
     .steps {
       display: grid;
@@ -909,6 +921,30 @@
         <span class="cmd">docker compose up -d</span><br><br>
         <span class="comment"># Open the dashboard</span><br>
         <span class="cmd">open</span> http://localhost:3000
+      </div>
+
+      <div class="code-block">
+        <span class="code-caption">docker-compose.yml example (trimmed, see repo root for full file)</span>
+<pre>services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+
+  listener:
+    image: ghcr.io/havuq/homechronicle/listener:latest
+    network_mode: host
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}
+
+  web:
+    image: ghcr.io/havuq/homechronicle/web:latest
+    ports:
+      - "3000:80"</pre>
       </div>
 
       <div class="steps">
