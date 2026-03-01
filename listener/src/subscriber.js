@@ -204,6 +204,8 @@ function connectAccessory(session, pairing) {
           characteristic: meta.characteristicName,
           oldValue,
           newValue,
+          protocol:       'homekit',
+          transport:      'ip',
           rawIid:         change.iid,
         };
 

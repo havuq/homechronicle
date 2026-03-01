@@ -9,11 +9,13 @@ import { networkInterfaces } from 'os';
 import express from 'express';
 import cors from 'cors';
 import { IPDiscovery, HttpClient } from 'hap-controller';
-import { pool, migrateDb, runRetentionSweep } from './db.js';
+import { insertEvent, pool, migrateDb, runRetentionSweep } from './db.js';
 import { startSubscribers, stopSubscriber, getSubscriberStats } from './subscriber.js';
 import { JsonObjectStore } from './store.js';
 import { createEventsRouter, parentBridgeId, parseIntInRange } from './events-router.js';
 import { createAlertsRouter } from './alerts-router.js';
+import { createMatterRouter } from './matter-router.js';
+import { createMatterRuntime } from './matter-runtime.js';
 import { deriveDeviceHealth } from './device-health.js';
 import { detectOutliers } from './anomaly-detection.js';
 import {
@@ -49,6 +51,43 @@ const retentionStore = new JsonObjectStore(RETENTION_FILE, {
   archiveBeforeDelete: RETENTION_ARCHIVE_DEFAULT,
   staleThresholdHours: STALE_THRESHOLD_HOURS_DEFAULT,
 });
+let matterRuntime = null;
+
+function normalizePairingRecord(id, pairing = {}) {
+  const protocol = String(pairing?.protocol ?? 'homekit').toLowerCase() === 'matter'
+    ? 'matter'
+    : 'homekit';
+  if (protocol === 'matter') {
+    return {
+      ...pairing,
+      protocol: 'matter',
+      nodeId: pairing?.nodeId ?? id,
+      name: pairing?.name ?? pairing?.nodeId ?? id,
+    };
+  }
+  return {
+    ...pairing,
+    protocol: 'homekit',
+  };
+}
+
+function normalizePairingsMap(input = {}) {
+  const output = {};
+  for (const [id, pairing] of Object.entries(input ?? {})) {
+    output[id] = normalizePairingRecord(id, pairing);
+  }
+  return output;
+}
+
+function isHomeKitPairing(pairing) {
+  return String(pairing?.protocol ?? 'homekit').toLowerCase() === 'homekit';
+}
+
+function getHomeKitPairings(pairings = {}) {
+  return Object.fromEntries(
+    Object.entries(pairings).filter(([, pairing]) => isHomeKitPairing(pairing))
+  );
+}
 
 function normalizeRetentionSettings(input = {}) {
   const days = Number.parseInt(String(input.retentionDays ?? ''), 10);
@@ -66,11 +105,13 @@ function normalizeRetentionSettings(input = {}) {
 }
 
 function loadPairings() {
-  return pairingsStore.getSnapshot();
+  return normalizePairingsMap(pairingsStore.getSnapshot());
 }
 
 async function savePairings(pairings) {
-  await pairingsStore.write(pairings);
+  const normalized = normalizePairingsMap(pairings);
+  await pairingsStore.write(normalized);
+  if (matterRuntime) matterRuntime.syncPairings(normalized);
 }
 
 function loadRooms() {
@@ -113,6 +154,10 @@ await migrateDb();
 await pairingsStore.init();
 await roomsStore.init();
 await retentionStore.init();
+matterRuntime = createMatterRuntime({
+  insertEvent,
+  loadRooms,
+});
 
 let retentionSettings = loadRetentionSettings();
 
@@ -121,6 +166,13 @@ if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5
     void pairingsStore.refresh().catch((err) => {
       console.warn('[store] pairings refresh failed:', err.message ?? err.stack ?? err);
     });
+    if (matterRuntime) {
+      try {
+        matterRuntime.syncPairings(loadPairings());
+      } catch (err) {
+        console.warn('[matter] pairing sync failed:', err.message ?? err.stack ?? err);
+      }
+    }
     void roomsStore.refresh().catch((err) => {
       console.warn('[store] rooms refresh failed:', err.message ?? err.stack ?? err);
     });
@@ -137,11 +189,17 @@ if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5
 // ---------------------------------------------------------------------------
 
 const pairings = loadPairings();
-const pairedCount = Object.keys(pairings).length;
+const homeKitPairings = getHomeKitPairings(pairings);
+const pairedCount = Object.keys(homeKitPairings).length;
+matterRuntime.syncPairings(pairings);
 
 if (pairedCount > 0) {
   console.log(`[init] Loaded ${pairedCount} pairing(s) from ${PAIRINGS_FILE}`);
-  startSubscribers(pairings, loadRooms(), (id) => pairingsStore.getByKey(id));
+  startSubscribers(homeKitPairings, loadRooms(), (id) => {
+    const pairing = pairingsStore.getByKey(id);
+    if (!pairing || !isHomeKitPairing(pairing)) return null;
+    return normalizePairingRecord(id, pairing);
+  });
 } else {
   console.warn('[init] No pairings found — use the Setup tab in the web UI to discover and pair accessories.');
 }
@@ -178,9 +236,11 @@ function runDiscoveryScan() {
         try {
           try { discovery.stop(); } catch { /* ignore stop errors */ }
           await pairingsStore.refresh();
-          const currentPairings = loadPairings();
+          const allPairings = loadPairings();
+          const currentPairings = getHomeKitPairings(allPairings);
           discoveryCache = [...found.values()].map((s) => ({
             id: s.id,
+            protocol: 'homekit',
             name: s.name,
             address: s.address,
             port: s.port,
@@ -203,7 +263,12 @@ function runDiscoveryScan() {
               pairingsUpdated = true;
             }
           }
-          if (pairingsUpdated) await savePairings(currentPairings);
+          if (pairingsUpdated) {
+            await savePairings({
+              ...allPairings,
+              ...currentPairings,
+            });
+          }
 
           resolve(discoveryCache);
         } catch (err) {
@@ -275,7 +340,7 @@ app.use((req, res, next) => {
 
 // Setup endpoints
 app.get('/api/setup/discovered', (_req, res) => {
-  const currentPairings = loadPairings();
+  const currentPairings = getHomeKitPairings(loadPairings());
   const results = discoveryCache.map((s) => ({
     ...s,
     paired: s.alreadyPaired || !!currentPairings[s.id],
@@ -300,7 +365,10 @@ app.post('/api/setup/scan', async (_req, res) => {
 });
 
 app.post('/api/setup/pair', async (req, res) => {
-  const { deviceId, pin } = req.body ?? {};
+  const { deviceId, pin, protocol = 'homekit' } = req.body ?? {};
+  if (String(protocol).toLowerCase() !== 'homekit') {
+    return res.status(400).json({ error: 'Unsupported protocol for this endpoint. Use /api/setup/matter/pair.' });
+  }
   if (!deviceId || !pin) {
     return res.status(400).json({ error: 'deviceId and pin are required' });
   }
@@ -321,6 +389,7 @@ app.post('/api/setup/pair', async (req, res) => {
 
     const updatedPairings = loadPairings();
     updatedPairings[deviceId] = {
+      protocol: 'homekit',
       name: cached.name,
       address: cached.address,
       port: cached.port,
@@ -362,6 +431,9 @@ app.get('/api/setup/bridge-children/:deviceId', async (req, res) => {
   const currentPairings = loadPairings();
   const pairing = currentPairings[deviceId];
   if (!pairing) return res.status(404).json({ error: 'Pairing not found' });
+  if (!isHomeKitPairing(pairing)) {
+    return res.status(400).json({ error: 'Bridge children are only available for HomeKit pairings' });
+  }
 
   try {
     const client = new HttpClient(deviceId, pairing.address, pairing.port, pairing.longTermData);
@@ -392,6 +464,9 @@ app.get('/api/accessories/:accessoryId/capabilities', async (req, res) => {
   const currentPairings = loadPairings();
   const pairing = currentPairings[bridgeId];
   if (!pairing) return res.status(404).json({ error: 'Accessory not found' });
+  if (!isHomeKitPairing(pairing)) {
+    return res.status(400).json({ error: 'Capabilities query currently supports HomeKit pairings only' });
+  }
 
   try {
     const client = new HttpClient(bridgeId, pairing.address, pairing.port, pairing.longTermData);
@@ -415,6 +490,7 @@ app.get('/api/setup/pairings', (_req, res) => {
   const currentPairings = loadPairings();
   const list = Object.entries(currentPairings).map(([id, p]) => ({
     id,
+    protocol: p.protocol ?? 'homekit',
     name: p.name,
     address: p.address,
     port: p.port,
@@ -430,6 +506,9 @@ app.delete('/api/setup/pairing/:deviceId', async (req, res) => {
 
   if (!currentPairings[deviceId]) {
     return res.status(404).json({ error: 'Pairing not found' });
+  }
+  if (!isHomeKitPairing(currentPairings[deviceId])) {
+    return res.status(400).json({ error: 'Use /api/setup/matter/pairing/:nodeId for Matter pairings' });
   }
 
   const name = currentPairings[deviceId].name;
@@ -550,6 +629,14 @@ app.use('/api', createEventsRouter({
 if (ALERTS_ENABLED) {
   app.use('/api/alerts', createAlertsRouter({ pool }));
 }
+app.use('/api', createMatterRouter({
+  insertEvent,
+  loadPairings,
+  savePairings,
+  loadRooms,
+  saveRooms,
+  matterRuntime,
+}));
 
 // Stats routes
 app.get('/api/accessories', async (_req, res) => {
@@ -561,6 +648,7 @@ app.get('/api/accessories', async (_req, res) => {
           accessory_name,
           room_name,
           service_type,
+          protocol,
           timestamp AS last_seen
         FROM event_logs
         ORDER BY accessory_id, timestamp DESC, id DESC
@@ -575,6 +663,7 @@ app.get('/api/accessories', async (_req, res) => {
         latest.accessory_name,
         latest.room_name,
         latest.service_type,
+        latest.protocol,
         latest.last_seen,
         counts.event_count
       FROM latest
@@ -625,8 +714,14 @@ app.get('/api/accessories', async (_req, res) => {
     );
 
     const dbRows = result.rows.map((r) => {
-      const bridgeId = parentBridgeId(r.accessory_id);
-      const bridgePairing = currentPairings[bridgeId];
+      const protocol = String(r.protocol ?? 'homekit').toLowerCase();
+      const bridgeId = protocol === 'homekit' ? parentBridgeId(r.accessory_id) : r.accessory_id;
+      const matterNodeId = protocol === 'matter'
+        ? String(r.accessory_id).split(':')[0]
+        : null;
+      const bridgePairing = currentPairings[bridgeId]
+        ?? currentPairings[r.accessory_id]
+        ?? (matterNodeId ? currentPairings[matterNodeId] : null);
       const heartbeat = heartbeatById[r.accessory_id] ?? {};
       const identity = getAccessoryIdentity(r.accessory_id)
         ?? getAccessoryIdentity(bridgeId);
@@ -641,6 +736,7 @@ app.get('/api/accessories', async (_req, res) => {
       });
       return {
         ...r,
+        protocol,
         room_name: rooms[r.accessory_id] ?? r.room_name,
         address: bridgePairing?.address ?? null,
         paired_at: bridgePairing?.pairedAt ?? null,
@@ -678,6 +774,7 @@ app.get('/api/accessories', async (_req, res) => {
         return {
           accessory_id: id,
           accessory_name: p.name,
+          protocol: p.protocol ?? 'homekit',
           room_name: rooms[id] ?? null,
           service_type: null,
           category: p.category ?? null,
@@ -1010,10 +1107,16 @@ app.get('/api/stats/anomalies', async (_req, res) => {
 });
 
 app.get('/api/health', (_req, res) => {
+  const runtimeStatus = matterRuntime?.getStatus?.() ?? null;
   res.json({
     status: 'ok',
     paired: Object.keys(loadPairings()).length,
     alertsEnabled: ALERTS_ENABLED,
+    matter: runtimeStatus ? {
+      commissionConfigured: runtimeStatus.commissionConfigured,
+      pollingConfigured: runtimeStatus.pollingConfigured,
+      activeNodes: runtimeStatus.nodes?.length ?? 0,
+    } : null,
   });
 });
 

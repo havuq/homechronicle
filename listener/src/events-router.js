@@ -37,7 +37,8 @@ export function createEventsRouter({ pool, getRooms }) {
       params.push(limit, offset);
       const dataResult = await pool.query(
         `SELECT id, timestamp, accessory_id, accessory_name, room_name,
-                service_type, characteristic, old_value, new_value, raw_iid
+                service_type, characteristic, old_value, new_value, protocol,
+                transport, endpoint_id, cluster_id, attribute_id, raw_iid
          FROM event_logs ${where}
          ORDER BY timestamp DESC, id DESC
          LIMIT $${params.length - 1} OFFSET $${params.length}`,
