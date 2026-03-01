@@ -500,6 +500,50 @@
       overflow-x: auto;
     }
 
+    .code-tabs {
+      max-width: 680px;
+      margin: 0 auto 48px;
+    }
+
+    .code-tab-list {
+      display: inline-flex;
+      gap: 8px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px;
+      margin-bottom: 14px;
+    }
+
+    .code-tab {
+      border: 0;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+      padding: 10px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .code-tab:hover {
+      color: var(--text);
+      background: #eef2ff;
+    }
+
+    .code-tab[aria-selected="true"] {
+      color: #fff;
+      background: var(--primary);
+    }
+
+    .code-tab-panel[hidden] { display: none; }
+    .code-tabs .code-block {
+      max-width: none;
+      margin: 0;
+    }
+
     .code-block .comment { color: var(--text-light); }
     .code-block .cmd { color: var(--accent-light); }
     .code-block .code-caption {
@@ -911,20 +955,29 @@
         Clone the repo, start Docker Compose, and open the browser. Pair your first device from the built-in setup wizard.
       </div>
 
-      <div class="code-block">
-        <span class="comment"># Clone the repository</span><br>
-        <span class="cmd">git clone</span> https://github.com/havuq/homechronicle.git<br>
-        <span class="cmd">cd</span> homechronicle<br><br>
-        <span class="comment"># Copy and configure environment</span><br>
-        <span class="cmd">cp</span> .env.example .env<br><br>
-        <span class="comment"># Start all services</span><br>
-        <span class="cmd">docker compose up -d</span><br><br>
-        <span class="comment"># Open the dashboard</span><br>
-        <span class="cmd">open</span> http://localhost:3000
-      </div>
+      <div class="code-tabs">
+        <div class="code-tab-list" role="tablist" aria-label="Getting started examples">
+          <button type="button" class="code-tab" role="tab" aria-selected="true" aria-controls="tab-quickstart" id="tab-btn-quickstart">Clone + Run</button>
+          <button type="button" class="code-tab" role="tab" aria-selected="false" aria-controls="tab-compose" id="tab-btn-compose">docker-compose.yml</button>
+        </div>
 
-      <div class="code-block">
-        <span class="code-caption">docker-compose.yml example (trimmed, see repo root for full file)</span>
+        <div class="code-tab-panel" role="tabpanel" id="tab-quickstart" aria-labelledby="tab-btn-quickstart">
+          <div class="code-block">
+            <span class="comment"># Clone the repository</span><br>
+            <span class="cmd">git clone</span> https://github.com/havuq/homechronicle.git<br>
+            <span class="cmd">cd</span> homechronicle<br><br>
+            <span class="comment"># Copy and configure environment</span><br>
+            <span class="cmd">cp</span> .env.example .env<br><br>
+            <span class="comment"># Start all services</span><br>
+            <span class="cmd">docker compose up -d</span><br><br>
+            <span class="comment"># Open the dashboard</span><br>
+            <span class="cmd">open</span> http://localhost:3000
+          </div>
+        </div>
+
+        <div class="code-tab-panel" role="tabpanel" id="tab-compose" aria-labelledby="tab-btn-compose" hidden>
+          <div class="code-block">
+            <span class="code-caption">docker-compose.yml example (trimmed, see repo root for full file)</span>
 <pre>services:
   postgres:
     image: postgres:16-alpine
@@ -945,6 +998,8 @@
     image: ghcr.io/havuq/homechronicle/web:latest
     ports:
       - "3000:80"</pre>
+          </div>
+        </div>
       </div>
 
       <div class="steps">
@@ -980,6 +1035,51 @@
       </p>
     </div>
   </footer>
+
+  <script>
+    (function () {
+      const tabs = Array.from(document.querySelectorAll('.code-tab'));
+      const panels = Array.from(document.querySelectorAll('.code-tab-panel'));
+      if (!tabs.length || !panels.length) return;
+
+      function setActiveTab(nextTab) {
+        tabs.forEach((tab) => {
+          const active = tab === nextTab;
+          const panelId = tab.getAttribute('aria-controls');
+          const panel = panelId ? document.getElementById(panelId) : null;
+          tab.setAttribute('aria-selected', active ? 'true' : 'false');
+          if (panel) panel.hidden = !active;
+        });
+      }
+
+      tabs.forEach((tab) => {
+        tab.addEventListener('click', () => setActiveTab(tab));
+        tab.addEventListener('keydown', (event) => {
+          const index = tabs.indexOf(tab);
+          if (index === -1) return;
+          if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            const next = tabs[(index + 1) % tabs.length];
+            setActiveTab(next);
+            next.focus();
+          } else if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            const next = tabs[(index - 1 + tabs.length) % tabs.length];
+            setActiveTab(next);
+            next.focus();
+          } else if (event.key === 'Home') {
+            event.preventDefault();
+            setActiveTab(tabs[0]);
+            tabs[0].focus();
+          } else if (event.key === 'End') {
+            event.preventDefault();
+            setActiveTab(tabs[tabs.length - 1]);
+            tabs[tabs.length - 1].focus();
+          }
+        });
+      });
+    })();
+  </script>
 
 </body>
 </html>
