@@ -1,16 +1,11 @@
 import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const projectRoot = resolve(__dirname, '..', '..', '..');
-const storageDir = process.env.MATTER_CHIP_TOOL_STATE_DIR
-  ? resolve(process.env.MATTER_CHIP_TOOL_STATE_DIR)
-  : resolve(projectRoot, 'listener', 'data', 'chip-tool-state');
+const explicitStateDir = process.env.MATTER_CHIP_TOOL_STATE_DIR?.trim() || null;
+const volumeName = process.env.MATTER_CHIP_TOOL_VOLUME || 'hc-chiptool-state';
 const chipToolImage = process.env.MATTER_CHIP_TOOL_IMAGE || 'atios/chip-tool:latest';
 const commandTimeoutSeconds = Number.parseInt(process.env.MATTER_CHIP_TOOL_TIMEOUT_SEC ?? '90', 10);
 
@@ -126,7 +121,7 @@ async function main() {
     throw new Error('setupCode is required');
   }
 
-  mkdirSync(storageDir, { recursive: true });
+  if (explicitStateDir) mkdirSync(explicitStateDir, { recursive: true });
 
   const chipToolArgs = [];
   if (address || port) {
@@ -147,11 +142,15 @@ async function main() {
   chipToolArgs.push('--storage-directory', '/chipdata');
   chipToolArgs.push('--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 90));
 
+  const volumeArg = explicitStateDir
+    ? `${resolve(explicitStateDir)}:/chipdata`
+    : `${volumeName}:/chipdata`;
+
   const args = [
     'run', '--rm',
     '--network', 'host',
     '--platform', 'linux/amd64',
-    '-v', `${storageDir}:/chipdata`,
+    '-v', volumeArg,
     chipToolImage,
     ...chipToolArgs,
   ];
