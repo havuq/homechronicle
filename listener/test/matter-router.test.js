@@ -59,6 +59,67 @@ test('/api/setup/matter/pair stores Matter pairing metadata', async () => {
   assert.equal(pairings['0X1234ABCD'].transport, 'thread');
 });
 
+test('/api/setup/matter/pair generates nodeId when missing', async () => {
+  let pairings = {};
+  const calls = [];
+  const runtime = {
+    getStatus() {
+      return { ok: true };
+    },
+    async commission(payload) {
+      calls.push(payload);
+      return { stdout: 'ok', stderr: '' };
+    },
+  };
+  const router = createMatterRouter({
+    insertEvent: async () => ({ id: 1, timestamp: new Date().toISOString() }),
+    loadPairings: () => pairings,
+    savePairings: async (next) => { pairings = next; },
+    loadRooms: () => ({}),
+    saveRooms: async () => {},
+    matterRuntime: runtime,
+  });
+  const handler = getRouteHandler(router, 'POST', '/setup/matter/pair');
+
+  const response = await invoke(handler, {
+    body: {
+      name: 'Generated Node',
+      setupCode: 'MT:GENERATE',
+      transport: 'ip',
+      address: '192.168.1.55',
+      port: 5540,
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.jsonBody.success, true);
+  assert.match(response.jsonBody.pairing.nodeId, /^0X[0-9A-F]{16}$/);
+  assert.equal(pairings[response.jsonBody.pairing.nodeId].name, 'Generated Node');
+  assert.equal(pairings[response.jsonBody.pairing.nodeId].protocol, 'matter');
+  assert.equal(calls.length, 1);
+});
+
+test('/api/setup/matter/pair requires nodeId when setupCode is missing', async () => {
+  const router = createMatterRouter({
+    insertEvent: async () => ({ id: 1, timestamp: new Date().toISOString() }),
+    loadPairings: () => ({}),
+    savePairings: async () => {},
+    loadRooms: () => ({}),
+    saveRooms: async () => {},
+    matterRuntime: null,
+  });
+  const handler = getRouteHandler(router, 'POST', '/setup/matter/pair');
+
+  const response = await invoke(handler, {
+    body: {
+      name: 'Missing IDs',
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.match(response.jsonBody.error, /nodeId is required/i);
+});
+
 test('/api/matter/events inserts normalized Matter events', async () => {
   const inserted = [];
   const router = createMatterRouter({
