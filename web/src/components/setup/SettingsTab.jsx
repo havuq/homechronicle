@@ -151,23 +151,43 @@ export default function SettingsTab({ setup }) {
       {/* Matter runtime status */}
       <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 space-y-3">
         <p className="text-sm font-medium text-gray-800">Matter Runtime</p>
+        <p className="text-xs text-gray-500">
+          Optional support for Matter devices already paired in Apple Home.
+          Add the lines below to your <code className="bg-gray-100 px-1 rounded">.env</code> file
+          and restart the listener to enable Matter.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
           <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
             <p className="text-gray-600 font-medium">Commission Command</p>
             <p className={clsx('mt-0.5', matterRuntime?.commissionConfigured ? 'text-green-600' : 'text-gray-400')}>
               {matterRuntime?.commissionConfigured ? 'Configured' : 'Not configured'}
             </p>
+            <p className="mt-1 text-gray-400 leading-snug">
+              Pairs a Matter device using a setup code from Apple Home. Add to .env:
+            </p>
+            <code className="mt-1 block bg-gray-100 text-gray-600 px-2 py-1 rounded text-[10px] leading-relaxed break-all select-all">
+              MATTER_COMMISSION_CMD=node src/matter-chiptool/commission.mjs {'{nodeId}'} {'{setupCode}'} {'{address}'} {'{port}'}
+            </code>
           </div>
           <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
             <p className="text-gray-600 font-medium">Polling Command</p>
             <p className={clsx('mt-0.5', pollingConfigured ? 'text-green-600' : 'text-gray-400')}>
               {pollingConfigured ? 'Configured' : 'Not configured'}
             </p>
+            <p className="mt-1 text-gray-400 leading-snug">
+              Periodically reads device state and logs changes as events. Add to .env:
+            </p>
+            <code className="mt-1 block bg-gray-100 text-gray-600 px-2 py-1 rounded text-[10px] leading-relaxed break-all select-all">
+              MATTER_POLL_CMD=node src/matter-chiptool/poll.mjs {'{nodeId}'}
+            </code>
           </div>
           <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
             <p className="text-gray-600 font-medium">Tracked Nodes</p>
             <p className="text-gray-700 mt-0.5">
               {Array.isArray(matterRuntime?.nodes) ? matterRuntime.nodes.length : 0}
+            </p>
+            <p className="mt-1 text-gray-400 leading-snug">
+              Matter devices currently being polled for state changes.
             </p>
           </div>
         </div>
@@ -176,15 +196,9 @@ export default function SettingsTab({ setup }) {
             {matterRuntimeErrorValue?.message ?? 'Matter runtime unavailable.'}
           </p>
         )}
-        {missingMatterConfig.length > 0 && (
+        {matterPairings.length > 0 && missingMatterConfig.length > 0 && (
           <p className="text-xs text-amber-700">
-            Missing: {missingMatterConfig.join(', ')}. Set these in <code className="bg-gray-100 px-1 rounded">.env</code> and restart the listener.
-          </p>
-        )}
-        {matterPairings.length > 0 && !pollingConfigured && (
-          <p className="text-xs text-amber-700">
-            Matter nodes are saved, but event logging is off until{' '}
-            <code className="bg-gray-100 px-1 rounded">MATTER_POLL_CMD</code> is configured.
+            Matter devices added but not fully configured. Set {missingMatterConfig.join(' and ')} in <code className="bg-gray-100 px-1 rounded">.env</code> and restart the listener.
           </p>
         )}
       </div>

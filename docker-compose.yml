@@ -37,6 +37,7 @@ services:
       ALERTS_ENABLED: ${ALERTS_ENABLED:-false}
     volumes:
       - ./listener/data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy
