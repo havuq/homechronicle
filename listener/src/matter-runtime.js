@@ -118,9 +118,13 @@ export function createMatterRuntime({
         lastEventAt: session.lastEventAt,
       });
     }
+    const missingConfig = [];
+    if (!COMMISSION_CMD_TEMPLATE) missingConfig.push('MATTER_COMMISSION_CMD');
+    if (!POLL_CMD_TEMPLATE) missingConfig.push('MATTER_POLL_CMD');
     return {
       pollingConfigured: Boolean(POLL_CMD_TEMPLATE),
       commissionConfigured: Boolean(COMMISSION_CMD_TEMPLATE),
+      missingConfig,
       pollIntervalMs: POLL_INTERVAL_MS,
       commandTimeoutMs: COMMAND_TIMEOUT_MS,
       nodes,
@@ -286,4 +290,3 @@ export function createMatterRuntime({
     getStatus,
   };
 }
-

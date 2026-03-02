@@ -1,4 +1,5 @@
 import express from 'express';
+import { randomBytes } from 'crypto';
 
 function toOptionalText(value) {
   if (value === undefined || value === null) return null;
@@ -17,6 +18,14 @@ function normalizeNodeId(value) {
   if (!text) return null;
   // Allow decimal or hex Matter node ids; store uppercase for stable keys.
   return text.toUpperCase();
+}
+
+function generateNodeId(pairings) {
+  for (let i = 0; i < 8; i += 1) {
+    const candidate = `0X${randomBytes(8).toString('hex').toUpperCase()}`;
+    if (!pairings[candidate]) return candidate;
+  }
+  throw new Error('Could not allocate unique Matter nodeId');
 }
 
 function buildMatterAccessoryId(nodeId, endpointId) {
@@ -96,13 +105,18 @@ export function createMatterRouter({
   // Phase 1 import path: register a pre-commissioned Matter node.
   // Commissioning workflows (BLE/thread dataset orchestration) are handled later.
   router.post('/setup/matter/pair', async (req, res) => {
-    const nodeId = normalizeNodeId(req.body?.nodeId);
+    const requestedNodeId = normalizeNodeId(req.body?.nodeId);
     const name = toOptionalText(req.body?.name);
-    if (!nodeId || !name) {
-      return res.status(400).json({ error: 'nodeId and name are required' });
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    const setupCode = toOptionalText(req.body?.setupCode);
+    if (!requestedNodeId && !setupCode) {
+      return res.status(400).json({ error: 'nodeId is required when setupCode is not provided' });
     }
 
-    const setupCode = toOptionalText(req.body?.setupCode);
+    const pairings = loadPairings();
+    const nodeId = requestedNodeId ?? generateNodeId(pairings);
     if (setupCode && matterRuntime) {
       try {
         await matterRuntime.commission({
@@ -117,10 +131,11 @@ export function createMatterRouter({
         return res.status(400).json({ error: err.message ?? String(err) });
       }
     } else if (setupCode && !matterRuntime) {
-      return res.status(503).json({ error: 'Matter runtime unavailable for commissioning' });
+      return res.status(503).json({
+        error: 'Matter commissioning is not configured on this server (set MATTER_COMMISSION_CMD)',
+      });
     }
 
-    const pairings = loadPairings();
     const nowIso = new Date().toISOString();
     const existing = pairings[nodeId] ?? null;
 

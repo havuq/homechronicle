@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Tag, Package, Smartphone, QrCode, LifeBuoy, AlertTriangle, Server } from 'lucide-react';
+import { X, Tag, Package, Smartphone, LifeBuoy, AlertTriangle, Server } from 'lucide-react';
 import clsx from 'clsx';
 
 // Category-specific tips for where the PIN is most likely located
@@ -25,7 +25,7 @@ const CATEGORY_TIPS = {
 const HOMEBRIDGE_STEP = {
   id: 'homebridge',
   icon: Server,
-  title: 'Find your Homebridge PIN',
+  title: 'Fastest way to add devices: use a Homebridge bridge',
   color: 'green',
   content: () => (
     <div className="space-y-3">
@@ -97,14 +97,14 @@ const STEPS = [
     },
   },
   {
-    id: 'box',
+    id: 'box-qr',
     icon: Package,
-    title: 'Check the original packaging',
-    color: 'purple',
+    title: 'Check packaging and QR code on device or box',
+    color: 'green',
     content: () => (
       <div className="space-y-3">
         <p className="text-sm text-gray-700">
-          If you still have the box or paperwork, the PIN is almost always printed there.
+          If you still have the box, paperwork, or a QR sticker, the setup code is usually there.
         </p>
         <ul className="text-sm text-gray-600 space-y-1.5 list-none">
           {[
@@ -113,34 +113,19 @@ const STEPS = [
             'Inside the box lid',
             'Instruction manual — look for the HomeKit section',
             'A small sticker sheet separate from the main device',
+            'QR label on the device body, underside, or product box',
           ].map((loc) => (
             <li key={loc} className="flex items-start gap-2">
-              <span className="mt-0.5 text-purple-400 text-xs">▸</span>
+              <span className="mt-0.5 text-green-400 text-xs">▸</span>
               {loc}
             </li>
           ))}
         </ul>
-      </div>
-    ),
-  },
-  {
-    id: 'qr',
-    icon: QrCode,
-    title: 'QR code on the device or box',
-    color: 'green',
-    content: () => (
-      <div className="space-y-3">
-        <p className="text-sm text-gray-700">
-          Many HomeKit accessories print a QR code instead of (or alongside) the 8-digit PIN. The QR code encodes the setup code.
-        </p>
         <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 text-sm text-green-800">
-          <span className="font-medium">To decode a QR code:</span> Open the Apple Home app → tap{' '}
+          <span className="font-medium">To read a QR code:</span> Open the Apple Home app → tap{' '}
           <span className="font-mono bg-white px-1 rounded text-xs">+</span> → Add Accessory → point your camera at
           the QR code. The 8-digit PIN will appear in the Home app — note it down for use here.
         </div>
-        <p className="text-sm text-gray-500">
-          Look for the QR code on the same label as the serial number, or as a separate sticker.
-        </p>
       </div>
     ),
   },
@@ -246,7 +231,6 @@ const STEPS = [
 
 const COLOR_MAP = {
   blue:   'bg-blue-100 text-blue-700',
-  purple: 'bg-purple-100 text-purple-700',
   green:  'bg-green-100 text-green-700',
   orange: 'bg-orange-100 text-orange-700',
   teal:   'bg-teal-100 text-teal-700',
@@ -254,9 +238,7 @@ const COLOR_MAP = {
 };
 
 export default function PinHelpModal({ deviceName, category, onClose }) {
-  const isbridge = category === 2;
-  // For bridges, open the Homebridge step by default; otherwise open the physical device step
-  const [open, setOpen] = useState(new Set([isbridge ? 'homebridge' : 'device']));
+  const [open, setOpen] = useState(new Set(['homebridge']));
 
   function toggle(id) {
     setOpen((prev) => {
@@ -291,7 +273,7 @@ export default function PinHelpModal({ deviceName, category, onClose }) {
 
         {/* Scrollable steps */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-2">
-          {(isbridge ? [HOMEBRIDGE_STEP, ...STEPS] : STEPS).map(({ id, icon: Icon, title, color, content }) => {
+          {[HOMEBRIDGE_STEP, ...STEPS].map(({ id, icon: Icon, title, color, content }) => {
             const isOpen = open.has(id);
             return (
               <div key={id} className="border border-gray-200 rounded-xl overflow-hidden">
