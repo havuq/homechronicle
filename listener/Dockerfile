@@ -2,7 +2,7 @@
 FROM --platform=linux/amd64 atios/chip-tool:latest AS chiptool
 
 # --- Stage 2: build listener -----------------------------------------------
-FROM node:20-slim
+FROM node:22-slim
 
 # Runtime libs for chip-tool (glib, openssl) + mDNS + native-addon build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
