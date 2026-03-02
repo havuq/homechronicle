@@ -2,8 +2,8 @@ import { spawn } from 'child_process';
 
 const POLL_INTERVAL_MS = Number.parseInt(process.env.MATTER_POLL_INTERVAL_MS ?? '30000', 10);
 const COMMAND_TIMEOUT_MS = Number.parseInt(process.env.MATTER_COMMAND_TIMEOUT_MS ?? '20000', 10);
-const COMMISSION_CMD_TEMPLATE = (process.env.MATTER_COMMISSION_CMD ?? '').trim();
-const POLL_CMD_TEMPLATE = (process.env.MATTER_POLL_CMD ?? '').trim();
+const COMMISSION_CMD_TEMPLATE = (process.env.MATTER_COMMISSION_CMD ?? 'node src/matter-chiptool/commission.mjs {nodeId} {setupCode} {address} {port}').trim();
+const POLL_CMD_TEMPLATE = (process.env.MATTER_POLL_CMD ?? 'node src/matter-chiptool/poll.mjs {nodeId}').trim();
 
 function nowIso() {
   return new Date().toISOString();
@@ -34,7 +34,7 @@ function applyTemplate(template, vars) {
 
 function runShellCommand(command, timeoutMs) {
   return new Promise((resolve, reject) => {
-    const child = spawn('/bin/zsh', ['-lc', command], {
+    const child = spawn('/bin/sh', ['-c', command], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
     });
