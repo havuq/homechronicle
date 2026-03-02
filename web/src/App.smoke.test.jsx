@@ -19,7 +19,7 @@ describe('App smoke', () => {
   it('renders and switches top-level tabs', () => {
     render(<App />);
 
-    expect(screen.getByText('HomeChronicle')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /home chronicle/i })).toBeInTheDocument();
     expect(screen.getByText('Stats Cards')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /timeline/i }));
