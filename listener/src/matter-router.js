@@ -132,7 +132,7 @@ export function createMatterRouter({
       }
     } else if (setupCode && !matterRuntime) {
       return res.status(503).json({
-        error: 'Matter commissioning is not configured on this server (set MATTER_COMMISSION_CMD)',
+        error: 'Matter commissioning is not available. Check listener logs for details.',
       });
     }
 
