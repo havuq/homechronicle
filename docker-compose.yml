@@ -35,6 +35,8 @@ services:
       API_TOKEN: ${API_TOKEN:-}
       TZ: ${TZ:-UTC}
       ALERTS_ENABLED: ${ALERTS_ENABLED:-false}
+      MATTER_COMMISSION_CMD: ${MATTER_COMMISSION_CMD:-node src/matter-chiptool/commission.mjs {nodeId} {setupCode} {address} {port}}
+      MATTER_POLL_CMD: ${MATTER_POLL_CMD:-node src/matter-chiptool/poll.mjs {nodeId}}
     volumes:
       - ./listener/data:/app/data
     depends_on:
