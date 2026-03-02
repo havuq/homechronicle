@@ -4,9 +4,7 @@ import { spawn } from 'node:child_process';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
-const explicitStateDir = process.env.MATTER_CHIP_TOOL_STATE_DIR?.trim() || null;
-const volumeName = process.env.MATTER_CHIP_TOOL_VOLUME || 'hc-chiptool-state';
-const chipToolImage = process.env.MATTER_CHIP_TOOL_IMAGE || 'atios/chip-tool:latest';
+const storageDir = resolve(process.env.MATTER_CHIP_TOOL_STATE_DIR?.trim() || '/app/data/chip-tool-state');
 const commandTimeoutSeconds = Number.parseInt(process.env.MATTER_CHIP_TOOL_TIMEOUT_SEC ?? '90', 10);
 
 function normalizeNodeId(raw) {
@@ -40,7 +38,7 @@ async function resolveAddress(raw) {
   const debracketed = text.replace(/^\[([^\]]+)\]$/, '$1').replace(/\.$/, '');
   if (isIP(debracketed) === 6) return debracketed;
   if (isIP(debracketed) === 4) {
-    throw new Error('Direct commissioning requires IPv6 for this chip-tool image; IPv4 is not supported');
+    throw new Error('Direct commissioning requires IPv6; IPv4 is not supported');
   }
 
   let records;
@@ -54,14 +52,14 @@ async function resolveAddress(raw) {
 
   const ipv6 = records.find((row) => row.family === 6)?.address ?? null;
   if (!ipv6) {
-    throw new Error(`Resolved "${text}" but no IPv6 address was found; this chip-tool image requires IPv6 for direct commissioning`);
+    throw new Error(`Resolved "${text}" but no IPv6 address was found; chip-tool requires IPv6 for direct commissioning`);
   }
   return ipv6;
 }
 
-function run(command, args) {
+function run(args) {
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(command, args, {
+    const child = spawn('chip-tool', args, {
       stdio: 'inherit',
       env: process.env,
     });
@@ -73,9 +71,9 @@ function run(command, args) {
   });
 }
 
-function runCapture(command, args) {
+function runCapture(args) {
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(command, args, {
+    const child = spawn('chip-tool', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
     });
@@ -93,15 +91,7 @@ function runCapture(command, args) {
 }
 
 async function extractPasscodeFromSetupCode(setupCode) {
-  const args = [
-    'run', '--rm',
-    '--platform', 'linux/amd64',
-    chipToolImage,
-    'payload', 'parse-setup-payload',
-    setupCode,
-  ];
-
-  const { stdout, stderr } = await runCapture('docker', args);
+  const { stdout, stderr } = await runCapture(['payload', 'parse-setup-payload', setupCode]);
   const combined = `${stdout}\n${stderr}`;
   const match = combined.match(/Passcode:\s+([0-9]+)/i);
   if (!match) {
@@ -121,7 +111,7 @@ async function main() {
     throw new Error('setupCode is required');
   }
 
-  if (explicitStateDir) mkdirSync(explicitStateDir, { recursive: true });
+  mkdirSync(storageDir, { recursive: true });
 
   const chipToolArgs = [];
   if (address || port) {
@@ -139,23 +129,10 @@ async function main() {
   } else {
     chipToolArgs.push('pairing', 'code', nodeId, setupCode, '--use-only-onnetwork-discovery', 'true');
   }
-  chipToolArgs.push('--storage-directory', '/chipdata');
+  chipToolArgs.push('--storage-directory', storageDir);
   chipToolArgs.push('--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 90));
 
-  const volumeArg = explicitStateDir
-    ? `${resolve(explicitStateDir)}:/chipdata`
-    : `${volumeName}:/chipdata`;
-
-  const args = [
-    'run', '--rm',
-    '--network', 'host',
-    '--platform', 'linux/amd64',
-    '-v', volumeArg,
-    chipToolImage,
-    ...chipToolArgs,
-  ];
-
-  await run('docker', args);
+  await run(chipToolArgs);
 }
 
 main().catch((err) => {
