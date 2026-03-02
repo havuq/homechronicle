@@ -2,9 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
-const explicitStateDir = process.env.MATTER_CHIP_TOOL_STATE_DIR?.trim() || null;
-const volumeName = process.env.MATTER_CHIP_TOOL_VOLUME || 'hc-chiptool-state';
-const chipToolImage = process.env.MATTER_CHIP_TOOL_IMAGE || 'atios/chip-tool:latest';
+const storageDir = resolve(process.env.MATTER_CHIP_TOOL_STATE_DIR?.trim() || '/app/data/chip-tool-state');
 const commandTimeoutSeconds = Number.parseInt(process.env.MATTER_CHIP_TOOL_TIMEOUT_SEC ?? '20', 10);
 
 const clusterIds = '0x0006,0x0008,0x0045,0x0402,0x0405,0x0406';
@@ -93,9 +91,9 @@ function parseEvents(output, nodeIdHex) {
   return events;
 }
 
-function run(command, args) {
+function run(args) {
   return new Promise((resolvePromise) => {
-    const child = spawn(command, args, {
+    const child = spawn('chip-tool', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
     });
@@ -125,28 +123,19 @@ async function main() {
   const nodeIdDecimal = normalizeNodeId(nodeIdRaw);
   const nodeIdHex = `0X${BigInt(nodeIdDecimal).toString(16).toUpperCase()}`;
 
-  if (explicitStateDir) mkdirSync(explicitStateDir, { recursive: true });
-
-  const volumeArg = explicitStateDir
-    ? `${resolve(explicitStateDir)}:/chipdata`
-    : `${volumeName}:/chipdata`;
+  mkdirSync(storageDir, { recursive: true });
 
   const args = [
-    'run', '--rm',
-    '--network', 'host',
-    '--platform', 'linux/amd64',
-    '-v', volumeArg,
-    chipToolImage,
     'any', 'read-by-id',
     clusterIds,
     attributeIds,
     nodeIdDecimal,
     '0xFFFF',
-    '--storage-directory', '/chipdata',
+    '--storage-directory', storageDir,
     '--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 20),
   ];
 
-  const result = await run('docker', args);
+  const result = await run(args);
   if (result.code !== 0) {
     const reason = result.stderr || result.stdout || `code=${result.code} signal=${result.signal}`;
     throw new Error(`poll read failed for ${nodeIdHex}: ${String(reason).trim()}`);

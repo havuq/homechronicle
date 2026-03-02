@@ -61,31 +61,17 @@ If Setup shows `Scan failed: HTTP 502`, verify:
 
 ## Matter
 
-Matter support currently uses the listener's Matter runtime endpoints plus externally configured commands:
+Matter works out of the box — chip-tool is bundled in the listener image. Just pair devices through the Setup UI.
 
-- `POST /api/setup/matter/pair` to register a Matter node (optionally commissions when `setupCode` is included)
-- `POST /api/setup/matter/commission` to run commissioning directly
-- `POST /api/matter/events` to ingest Matter events
-- `GET /api/setup/matter/runtime` to inspect runtime status
+### Adding a Matter Device
 
-Set the following in `.env` to enable runtime commissioning/polling:
-
-- `MATTER_COMMISSION_CMD`
-- `MATTER_POLL_CMD`
-- `MATTER_POLL_INTERVAL_MS`
-- `MATTER_COMMAND_TIMEOUT_MS`
-
-### Already Added In Apple Home? (Matter)
-
-If your Matter accessory is already in Apple Home, you can still add it to HomeChronicle without knowing `nodeId`:
+If your Matter accessory is already in Apple Home, you can add it to HomeChronicle:
 
 1. In Apple Home, open the accessory settings.
 2. Open Matter settings and generate a setup code for another controller (wording varies by device/app).
-3. In HomeChronicle Setup -> Matter Devices, choose **Add From Apple Home**.
+3. In HomeChronicle Setup → Matter Devices, choose **Add From Apple Home**.
 4. Enter a label + the setup code from Apple Home.
 5. HomeChronicle commissions its own Matter controller entry and auto-allocates a `nodeId`.
-
-This flow requires `MATTER_COMMISSION_CMD` to be configured.
 ## Update HomeChronicle
 
 ```bash

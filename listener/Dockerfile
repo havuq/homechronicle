@@ -1,9 +1,18 @@
-FROM node:20-alpine
+# --- Stage 1: grab the pre-built chip-tool binary --------------------------
+FROM --platform=linux/amd64 atios/chip-tool:latest AS chiptool
 
-# Build tools needed for native addons (hap-controller pulls in @stoprocent/noble
-# which requires node-gyp compilation). python3/make/g++ are only used at build time.
-# avahi-compat-libdns_sd is needed at runtime for mDNS discovery.
-RUN apk add --no-cache python3 make g++ avahi-compat-libdns_sd dbus docker-cli
+# --- Stage 2: build listener -----------------------------------------------
+FROM node:20-slim
+
+# Runtime libs for chip-tool (glib, openssl) + mDNS + native-addon build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ \
+    libavahi-compat-libdnssd-dev dbus \
+    libglib2.0-0 libssl3 \
+  && rm -rf /var/lib/apt/lists/*
+
+# chip-tool binary from stage 1
+COPY --from=chiptool /usr/local/bin/chip-tool /usr/local/bin/chip-tool
 
 WORKDIR /app
 

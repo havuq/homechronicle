@@ -102,7 +102,7 @@ export default function AddDevicesTab({ setup }) {
       if (!commissionConfigured) {
         setMatterFeedback({
           type: 'error',
-          message: 'Matter commissioning is not configured. Set MATTER_COMMISSION_CMD in .env and restart listener.',
+          message: 'Matter commissioning is not available. Check listener logs for details.',
         });
         return;
       }
@@ -129,7 +129,7 @@ export default function AddDevicesTab({ setup }) {
     pairMatterMutation.mutate(payload, {
       onSuccess: (result) => {
         const id = result?.pairing?.nodeId ?? result?.pairing?.id ?? 'device';
-        const pollHint = pollingConfigured ? '' : ' Configure MATTER_POLL_CMD to start event logging.';
+        const pollHint = '';
         setMatterFeedback({ type: 'success', message: `Matter device "${name}" added (${id}).${pollHint}` });
         setMatterForm((prev) => ({ ...prev, nodeId: '', name: '', setupCode: '', address: '', port: '' }));
       },
