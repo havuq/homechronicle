@@ -19,6 +19,7 @@ COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 # LISTENER_HOST default: 127.0.0.1 (NAS host-network mode)
 # Override to "listener" when running in bridge mode (local dev via override file)
 ENV LISTENER_HOST=127.0.0.1
+ENV LISTENER_PORT=3001
 ENV API_TOKEN=
 ENV DOLLAR=$
 
