@@ -58,6 +58,47 @@ Events will begin showing in the Timeline once pairing succeeds.
 If Setup shows `Scan failed: HTTP 502`, verify:
 - `LISTENER_HOST` is reachable from the web container (`host.docker.internal` or your Pi/NAS LAN IP in Portainer/Swarm)
 - `API_PORT` matches the listener port (default `3001`)
+
+## Matter (Phase 1 Runtime)
+
+Matter support currently uses the listener's Matter runtime endpoints plus externally configured commands:
+
+- `POST /api/setup/matter/pair` to register a Matter node (optionally commissions when `setupCode` is included)
+- `POST /api/setup/matter/commission` to run commissioning directly
+- `POST /api/matter/events` to ingest Matter events
+- `GET /api/setup/matter/runtime` to inspect runtime status
+
+Set the following in `.env` to enable runtime commissioning/polling:
+
+- `MATTER_COMMISSION_CMD`
+- `MATTER_POLL_CMD`
+- `MATTER_POLL_INTERVAL_MS`
+- `MATTER_COMMAND_TIMEOUT_MS`
+
+### Quick Start On macOS (native listener + Docker chip-tool)
+
+If you're running the listener on macOS (`npm start` in `listener/`) you can use the built-in helper scripts:
+
+- `MATTER_COMMISSION_CMD=node src/matter-chiptool/commission.mjs {nodeId} {setupCode} {address} {port} {transport} {method}`
+- `MATTER_POLL_CMD=node src/matter-chiptool/poll.mjs {nodeId} {name} {address} {port} {transport}`
+- `MATTER_CHIP_TOOL_IMAGE=atios/chip-tool:latest`
+
+Requirements:
+
+- Docker Desktop running (the helper scripts run chip-tool in Docker)
+- Listener started from `listener/` with `npm start` (loads `../.env`)
+
+### Already Added In Apple Home? (Matter)
+
+If your Matter accessory is already in Apple Home, you can still add it to HomeChronicle without knowing `nodeId`:
+
+1. In Apple Home, open the accessory settings.
+2. Open Matter settings and generate a setup code for another controller (wording varies by device/app).
+3. In HomeChronicle Setup -> Matter Devices, choose **Add From Apple Home**.
+4. Enter a label + the setup code from Apple Home.
+5. HomeChronicle commissions its own Matter controller entry and auto-allocates a `nodeId`.
+
+This flow requires `MATTER_COMMISSION_CMD` to be configured.
 ## Update HomeChronicle
 
 ```bash
