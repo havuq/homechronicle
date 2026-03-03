@@ -19,5 +19,7 @@ server {
         # Preserve Nginx runtime variables through envsubst.
         proxy_set_header Host ${DOLLAR}host;
         proxy_set_header X-Real-IP ${DOLLAR}remote_addr;
+        # Matter commissioning can take 2+ minutes; default 60s is too short.
+        proxy_read_timeout 300s;
     }
 }
