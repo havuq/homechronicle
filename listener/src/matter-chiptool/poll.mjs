@@ -14,6 +14,15 @@ const clusterTargets = [
   { clusterIdHex: '0x0406', attributeIdHex: '0x0000' }, // OccupancySensing
 ];
 
+const namedReadTargets = [
+  { cluster: 'onoff', attribute: 'on-off' },
+  { cluster: 'levelcontrol', attribute: 'current-level' },
+  { cluster: 'booleanstate', attribute: 'state-value' },
+  { cluster: 'temperaturemeasurement', attribute: 'measured-value' },
+  { cluster: 'relativehumiditymeasurement', attribute: 'measured-value' },
+  { cluster: 'occupancysensing', attribute: 'occupancy' },
+];
+
 const clusterLabels = {
   0x0006: { serviceType: 'OnOff', characteristic: 'OnOff' },
   0x0008: { serviceType: 'LevelControl', characteristic: 'CurrentLevel' },
@@ -179,6 +188,41 @@ async function runPerClusterFallback(nodeIdDecimal, endpointId) {
   return { outputs, failures };
 }
 
+async function runNamedRead({
+  nodeIdDecimal,
+  endpointId,
+  cluster,
+  attribute,
+}) {
+  return run([
+    '--storage-directory', storageDir,
+    '--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 20),
+    cluster, 'read', attribute, nodeIdDecimal, endpointId,
+  ]);
+}
+
+async function runNamedReadFallback(nodeIdDecimal, endpointId) {
+  const outputs = [];
+  const failures = [];
+
+  for (const target of namedReadTargets) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await runNamedRead({
+      nodeIdDecimal,
+      endpointId,
+      cluster: target.cluster,
+      attribute: target.attribute,
+    });
+    if (result.code === 0) {
+      outputs.push(`${result.stdout}\n${result.stderr}`);
+      continue;
+    }
+    failures.push(`${target.cluster} ${target.attribute}: ${summarizeFailure(result)}`);
+  }
+
+  return { outputs, failures };
+}
+
 async function main() {
   const [nodeIdRaw] = process.argv.slice(2);
   const nodeIdDecimal = normalizeNodeId(nodeIdRaw);
@@ -221,9 +265,20 @@ async function main() {
       outputText = fallback.outputs.join('\n');
       break;
     }
-    endpointFailures.push(
-      `endpoint ${endpointId}: batch read failed: ${batchReason}${fallback.failures.length ? `\nper-cluster failures:\n${fallback.failures.join('\n')}` : ''}`
-    );
+
+    // Some chip-tool builds reject read-by-id entirely; try named reads.
+    // eslint-disable-next-line no-await-in-loop
+    const namedFallback = await runNamedReadFallback(nodeIdDecimal, endpointId);
+    if (namedFallback.outputs.length) {
+      outputText = namedFallback.outputs.join('\n');
+      break;
+    }
+
+    endpointFailures.push([
+      `endpoint ${endpointId}: batch read failed: ${batchReason}`,
+      fallback.failures.length ? `per-cluster failures:\n${fallback.failures.join('\n')}` : null,
+      namedFallback.failures.length ? `named-read failures:\n${namedFallback.failures.join('\n')}` : null,
+    ].filter(Boolean).join('\n'));
   }
 
   if (!outputText) {
