@@ -38,6 +38,7 @@ const RESCAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const STORE_REFRESH_INTERVAL_MS = Number.parseInt(process.env.STORE_REFRESH_INTERVAL_MS ?? '30000', 10);
 const API_TOKEN = (process.env.API_TOKEN ?? '').trim();
 const ALERTS_ENABLED = !/^(0|false|no|off)$/i.test(process.env.ALERTS_ENABLED ?? 'false');
+const DISCOVERY_SCAN_ENABLED = !/^(0|false|no|off)$/i.test(process.env.DISCOVERY_SCAN_ENABLED ?? 'true');
 
 const RETENTION_SWEEP_MS = Number.parseInt(process.env.RETENTION_SWEEP_MS ?? `${24 * 60 * 60 * 1000}`, 10);
 const RETENTION_DAYS_DEFAULT = Number.parseInt(process.env.RETENTION_DAYS ?? '365', 10);
@@ -211,9 +212,27 @@ if (pairedCount > 0) {
 let discoveryCache = []; // last scan results
 
 function runDiscoveryScan() {
+  if (!DISCOVERY_SCAN_ENABLED) {
+    return Promise.resolve(discoveryCache);
+  }
+
   return new Promise((resolve, reject) => {
     const found = new Map();
     let discovery;
+    let settled = false;
+
+    function fail(err) {
+      if (settled) return;
+      settled = true;
+      try { discovery?.stop?.(); } catch { /* ignore */ }
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
+
+    function succeed(value) {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    }
 
     try {
       discovery = new IPDiscovery(DISCOVER_IFACE);
@@ -224,15 +243,19 @@ function runDiscoveryScan() {
     discovery.on('serviceUp', (service) => {
       if (!found.has(service.id)) found.set(service.id, service);
     });
+    discovery.on('error', (err) => {
+      fail(err);
+    });
 
     try {
       discovery.start();
     } catch (err) {
-      return reject(err);
+      return fail(err);
     }
 
     setTimeout(() => {
       void (async () => {
+        if (settled) return;
         try {
           try { discovery.stop(); } catch { /* ignore stop errors */ }
           await pairingsStore.refresh();
@@ -270,9 +293,9 @@ function runDiscoveryScan() {
             });
           }
 
-          resolve(discoveryCache);
+          succeed(discoveryCache);
         } catch (err) {
-          reject(err);
+          fail(err);
         }
       })();
     }, 10_000);
@@ -286,8 +309,12 @@ function safeDiscoveryScan() {
   });
 }
 
-safeDiscoveryScan();
-setInterval(safeDiscoveryScan, RESCAN_INTERVAL_MS);
+if (DISCOVERY_SCAN_ENABLED) {
+  safeDiscoveryScan();
+  setInterval(safeDiscoveryScan, RESCAN_INTERVAL_MS);
+} else {
+  console.log('[discovery] Disabled via DISCOVERY_SCAN_ENABLED=false');
+}
 
 // ---------------------------------------------------------------------------
 // 2b. Retention / archival sweep
