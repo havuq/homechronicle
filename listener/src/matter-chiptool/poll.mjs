@@ -5,8 +5,14 @@ import { spawn } from 'node:child_process';
 const storageDir = resolve(process.env.MATTER_CHIP_TOOL_STATE_DIR?.trim() || '/app/data/chip-tool-state');
 const commandTimeoutSeconds = Number.parseInt(process.env.MATTER_CHIP_TOOL_TIMEOUT_SEC ?? '20', 10);
 
-const clusterIds = '0x0006,0x0008,0x0045,0x0402,0x0405,0x0406';
-const attributeIds = '0x0000';
+const clusterTargets = [
+  { clusterIdHex: '0x0006', attributeIdHex: '0x0000' }, // OnOff
+  { clusterIdHex: '0x0008', attributeIdHex: '0x0000' }, // LevelControl
+  { clusterIdHex: '0x0045', attributeIdHex: '0x0000' }, // BooleanState
+  { clusterIdHex: '0x0402', attributeIdHex: '0x0000' }, // TemperatureMeasurement
+  { clusterIdHex: '0x0405', attributeIdHex: '0x0000' }, // RelativeHumidityMeasurement
+  { clusterIdHex: '0x0406', attributeIdHex: '0x0000' }, // OccupancySensing
+];
 
 const clusterLabels = {
   0x0006: { serviceType: 'OnOff', characteristic: 'OnOff' },
@@ -129,6 +135,48 @@ function summarizeFailure(result) {
   return (useful.slice(-8).join('\n') || lines.slice(-8).join('\n') || `code=${result.code} signal=${result.signal}`).trim();
 }
 
+function shouldFallbackToPerClusterRead(reason) {
+  return /Error 0x0000002F|CHIP_ERROR_INVALID_ARGUMENT|Invalid argument|Missing command|Usage:/i.test(reason);
+}
+
+async function runReadById({
+  nodeIdDecimal,
+  clusterIdHex,
+  attributeIdHex,
+}) {
+  return run([
+    '--storage-directory', storageDir,
+    '--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 20),
+    'any', 'read-by-id',
+    clusterIdHex,
+    attributeIdHex,
+    nodeIdDecimal,
+    '0xFFFF',
+  ]);
+}
+
+async function runPerClusterFallback(nodeIdDecimal) {
+  const outputs = [];
+  const failures = [];
+
+  for (const target of clusterTargets) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await runReadById({
+      nodeIdDecimal,
+      clusterIdHex: target.clusterIdHex,
+      attributeIdHex: target.attributeIdHex,
+    });
+    if (result.code === 0) {
+      outputs.push(`${result.stdout}\n${result.stderr}`);
+      continue;
+    }
+    const reason = summarizeFailure(result);
+    failures.push(`${target.clusterIdHex}/${target.attributeIdHex}: ${reason}`);
+  }
+
+  return { outputs, failures };
+}
+
 async function main() {
   const [nodeIdRaw] = process.argv.slice(2);
   const nodeIdDecimal = normalizeNodeId(nodeIdRaw);
@@ -136,26 +184,41 @@ async function main() {
 
   mkdirSync(storageDir, { recursive: true });
 
-  const args = [
-    '--storage-directory', storageDir,
-    '--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 20),
-    'any', 'read-by-id',
-    clusterIds,
-    attributeIds,
+  const batchResult = await runReadById({
     nodeIdDecimal,
-    '0xFFFF',
-  ];
+    clusterIdHex: clusterTargets.map((target) => target.clusterIdHex).join(','),
+    attributeIdHex: clusterTargets.map((target) => target.attributeIdHex).join(','),
+  });
 
-  const result = await run(args);
-  if (result.code !== 0) {
-    let reason = summarizeFailure(result);
-    if (/CHIP Error 0x00000046|No endpoint was available to send the message/i.test(reason)) {
-      reason = `${reason}\nHint: Matter transport endpoint unavailable. Ensure listener is using host networking and IPv6/mDNS is reachable (LISTENER_NETWORK_MODE=host).`;
+  let outputText = '';
+
+  if (batchResult.code === 0) {
+    outputText = `${batchResult.stdout}\n${batchResult.stderr}`;
+  } else {
+    const batchReason = summarizeFailure(batchResult);
+    if (!shouldFallbackToPerClusterRead(batchReason)) {
+      let reason = batchReason;
+      if (/CHIP Error 0x00000046|No endpoint was available to send the message/i.test(reason)) {
+        reason = `${reason}\nHint: Matter transport endpoint unavailable. Ensure listener is using host networking and IPv6/mDNS is reachable (LISTENER_NETWORK_MODE=host).`;
+      }
+      throw new Error(`poll read failed for ${nodeIdHex}: ${reason}`);
     }
-    throw new Error(`poll read failed for ${nodeIdHex}: ${reason}`);
+
+    const fallback = await runPerClusterFallback(nodeIdDecimal);
+    if (!fallback.outputs.length) {
+      let reason = `batch read failed: ${batchReason}`;
+      if (fallback.failures.length) {
+        reason = `${reason}\nper-cluster failures:\n${fallback.failures.join('\n')}`;
+      }
+      if (/CHIP Error 0x00000046|No endpoint was available to send the message/i.test(reason)) {
+        reason = `${reason}\nHint: Matter transport endpoint unavailable. Ensure listener is using host networking and IPv6/mDNS is reachable (LISTENER_NETWORK_MODE=host).`;
+      }
+      throw new Error(`poll read failed for ${nodeIdHex}: ${reason}`);
+    }
+    outputText = fallback.outputs.join('\n');
   }
 
-  const events = parseEvents(`${result.stdout}\n${result.stderr}`, nodeIdHex);
+  const events = parseEvents(outputText, nodeIdHex);
   process.stdout.write(`${JSON.stringify(events)}\n`);
 }
 
