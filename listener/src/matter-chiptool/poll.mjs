@@ -61,7 +61,10 @@ function normalizeValue(raw) {
 function parseEvents(output, nodeIdHex) {
   const events = [];
   const lines = String(output ?? '').split(/\r?\n/);
-  const headerPattern = /CHIP:TOO:\s*Endpoint:\s*(\d+)\s+Cluster:\s*0x([0-9A-Fa-f_]+)\s+Attribute:\s*0x([0-9A-Fa-f_]+)/;
+  // chip-tool output format varies by build:
+  // - "Attribute: 0x0000_0000"
+  // - "Attribute 0x0000_0000"
+  const headerPattern = /CHIP:TOO:\s*Endpoint:\s*(\d+)\s+Cluster:\s*0x([0-9A-Fa-f_]+)\s+Attribute:?\s*0x([0-9A-Fa-f_]+)/;
   const valuePattern = /CHIP:TOO:\s*([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.+)$/;
 
   let current = null;
