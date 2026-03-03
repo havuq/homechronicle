@@ -143,6 +143,7 @@ async function main() {
   }
   chipToolArgs.push('--storage-directory', storageDir);
   chipToolArgs.push('--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 90));
+  chipToolArgs.push('--bypass-attestation-verifier', 'true');
 
   await run(chipToolArgs);
 }
