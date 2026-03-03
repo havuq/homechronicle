@@ -155,13 +155,13 @@ async function runReadById({
   endpointId = '0xFFFF',
 }) {
   return run([
-    '--storage-directory', storageDir,
-    '--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 20),
     'any', 'read-by-id',
     clusterIdHex,
     attributeIdHex,
     nodeIdDecimal,
     endpointId,
+    '--storage-directory', storageDir,
+    '--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 20),
   ]);
 }
 
@@ -195,9 +195,9 @@ async function runNamedRead({
   attribute,
 }) {
   return run([
+    cluster, 'read', attribute, nodeIdDecimal, endpointId,
     '--storage-directory', storageDir,
     '--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 20),
-    cluster, 'read', attribute, nodeIdDecimal, endpointId,
   ]);
 }
 
