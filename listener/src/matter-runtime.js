@@ -1,10 +1,10 @@
 import { spawn } from 'child_process';
 
-const POLL_INTERVAL_MS = Number.parseInt(process.env.MATTER_POLL_INTERVAL_MS ?? '30000', 10);
+const POLL_INTERVAL_MS = Number.parseInt(process.env.MATTER_POLL_INTERVAL_MS ?? '5000', 10);
 const COMMAND_TIMEOUT_MS = Number.parseInt(process.env.MATTER_COMMAND_TIMEOUT_MS ?? '20000', 10);
 const COMMISSION_TIMEOUT_MS = Number.parseInt(process.env.MATTER_COMMISSION_TIMEOUT_MS ?? '180000', 10);
-const COMMISSION_CMD_TEMPLATE = (process.env.MATTER_COMMISSION_CMD ?? 'node src/matter-chiptool/commission.mjs {nodeId} {setupCode} {address} {port}').trim();
-const POLL_CMD_TEMPLATE = (process.env.MATTER_POLL_CMD ?? 'node src/matter-chiptool/poll.mjs {nodeId}').trim();
+const COMMISSION_CMD_TEMPLATE = 'node src/matter-chiptool/commission.mjs {nodeId} {setupCode} {address} {port}';
+const POLL_CMD_TEMPLATE = 'node src/matter-chiptool/poll.mjs {nodeId}';
 
 function nowIso() {
   return new Date().toISOString();
@@ -119,13 +119,10 @@ export function createMatterRuntime({
         lastEventAt: session.lastEventAt,
       });
     }
-    const missingConfig = [];
-    if (!COMMISSION_CMD_TEMPLATE) missingConfig.push('MATTER_COMMISSION_CMD');
-    if (!POLL_CMD_TEMPLATE) missingConfig.push('MATTER_POLL_CMD');
     return {
-      pollingConfigured: Boolean(POLL_CMD_TEMPLATE),
-      commissionConfigured: Boolean(COMMISSION_CMD_TEMPLATE),
-      missingConfig,
+      pollingConfigured: true,
+      commissionConfigured: true,
+      missingConfig: [],
       pollIntervalMs: POLL_INTERVAL_MS,
       commandTimeoutMs: COMMAND_TIMEOUT_MS,
       commissionTimeoutMs: COMMISSION_TIMEOUT_MS,
@@ -134,10 +131,6 @@ export function createMatterRuntime({
   }
 
   async function commission(payload = {}) {
-    if (!COMMISSION_CMD_TEMPLATE) {
-      throw new Error('Matter commissioning command is not configured (set MATTER_COMMISSION_CMD)');
-    }
-
     const nodeId = toOptionalText(payload.nodeId);
     if (!nodeId) throw new Error('nodeId is required');
     const setupCode = toOptionalText(payload.setupCode);
@@ -152,7 +145,7 @@ export function createMatterRuntime({
       method: toOptionalText(payload.commissioningMethod) ?? 'code',
     });
 
-    if (!command.trim()) throw new Error('Rendered MATTER_COMMISSION_CMD is empty');
+    if (!command.trim()) throw new Error('Rendered commissioning command is empty');
     return runShellCommand(command, COMMISSION_TIMEOUT_MS);
   }
 
@@ -183,7 +176,7 @@ export function createMatterRuntime({
         port: toOptionalInt(pairing?.port) ?? '',
         transport: toOptionalText(pairing?.transport) ?? '',
       });
-      if (!command.trim()) throw new Error('Rendered MATTER_POLL_CMD is empty');
+      if (!command.trim()) throw new Error('Rendered polling command is empty');
 
       const { stdout } = await runShellCommand(command, COMMAND_TIMEOUT_MS);
       const polledEvents = parsePollOutput(stdout);
@@ -248,7 +241,7 @@ export function createMatterRuntime({
     const session = {
       nodeId,
       pairing,
-      pollingEnabled: Boolean(POLL_CMD_TEMPLATE),
+      pollingEnabled: true,
       stopped: false,
       timer: null,
       lastPolledAt: null,

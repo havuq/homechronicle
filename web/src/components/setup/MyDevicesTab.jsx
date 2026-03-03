@@ -4,10 +4,18 @@ import clsx from 'clsx';
 import { CATEGORY_LABELS } from './constants.js';
 import BridgeChildrenRow from './BridgeChildrenRow.jsx';
 
+function summarizeMatterError(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) return '';
+  const firstLine = text.split(/\r?\n/).find((line) => line.trim()) ?? text;
+  return firstLine.length > 140 ? `${firstLine.slice(0, 140)}...` : firstLine;
+}
+
 export default function MyDevicesTab({ setup }) {
   const {
     paired,
     matterPairings,
+    dbAccessories,
     savedRooms,
     roomInputs,
     setRoomInputs,
@@ -21,9 +29,12 @@ export default function MyDevicesTab({ setup }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteMatter, setConfirmDeleteMatter] = useState(null);
   const [expandedBridges, setExpandedBridges] = useState(new Set());
+  const [expandedMatterEndpoints, setExpandedMatterEndpoints] = useState(new Set());
+  const [expandedMatterErrors, setExpandedMatterErrors] = useState(new Set());
 
   const totalCount = paired.length + matterPairings.length;
   const matterNodes = Array.isArray(matterRuntime?.nodes) ? matterRuntime.nodes : [];
+  const accessories = Array.isArray(dbAccessories) ? dbAccessories : [];
 
   if (totalCount === 0) {
     return (
@@ -155,6 +166,16 @@ export default function MyDevicesTab({ setup }) {
           const isConfirming = confirmDeleteMatter === nodeId;
           const isDeleting = deleteMatterPairingMutation.isPending && isConfirming;
           const nodeStatus = matterNodes.find((n) => n.nodeId === nodeId);
+          const roomVal = roomInputs[nodeId] ?? savedRooms[nodeId] ?? '';
+          const endpointRows = accessories
+            .filter((row) => row?.protocol === 'matter')
+            .filter((row) => typeof row?.accessory_id === 'string')
+            .filter((row) => row.accessory_id.startsWith(`${nodeId}:`))
+            .sort((a, b) => a.accessory_id.localeCompare(b.accessory_id, undefined, { numeric: true }));
+          const endpointCount = endpointRows.length;
+          const isEndpointsExpanded = expandedMatterEndpoints.has(nodeId);
+          const isErrorExpanded = expandedMatterErrors.has(nodeId);
+          const errorSummary = summarizeMatterError(nodeStatus?.lastError);
           return (
             <div key={`matter-${nodeId}`} className="px-4 py-3">
               <div className="flex items-center gap-3">
@@ -171,15 +192,74 @@ export default function MyDevicesTab({ setup }) {
                     {pairing.address ? ` \u00b7 ${pairing.address}` : ''}
                     {pairing.port ? `:${pairing.port}` : ''}
                   </div>
+                  <div className="flex items-center gap-1 mt-1.5">
+                    <MapPin size={10} className="text-gray-300 flex-shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Add room name\u2026"
+                      value={roomVal}
+                      onChange={(e) => setRoomInputs((r) => ({ ...r, [nodeId]: e.target.value }))}
+                      onBlur={() => handleRoomBlur(nodeId)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleRoomBlur(nodeId)}
+                      className="text-xs border border-gray-200 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                    />
+                  </div>
                   {nodeStatus && (
                     <div className="text-xs text-gray-400 mt-0.5">
                       {nodeStatus.active
                         ? <span className="text-green-600">Polling active</span>
                         : <span className="text-gray-400">Polling inactive</span>}
-                      {nodeStatus.lastError && (
-                        <span className="text-red-500 ml-2">Last error: {nodeStatus.lastError}</span>
+                    </div>
+                  )}
+                  {nodeStatus?.lastError && (
+                    <div className="mt-1.5">
+                      <p className="text-xs text-red-500">
+                        Last error: {errorSummary}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <button
+                          onClick={() => setExpandedMatterErrors((s) => {
+                            const next = new Set(s);
+                            next.has(nodeId) ? next.delete(nodeId) : next.add(nodeId);
+                            return next;
+                          })}
+                          className="text-[11px] text-blue-600 hover:text-blue-800 transition-colors"
+                        >
+                          {isErrorExpanded ? 'Hide details' : 'Show details'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                              void navigator.clipboard.writeText(String(nodeStatus.lastError));
+                            }
+                          }}
+                          className="text-[11px] text-blue-600 hover:text-blue-800 transition-colors"
+                        >
+                          Copy diagnostics
+                        </button>
+                      </div>
+                      {isErrorExpanded && (
+                        <pre className="mt-1.5 p-2 rounded bg-red-50 border border-red-100 text-[11px] text-red-700 whitespace-pre-wrap break-all max-h-40 overflow-auto">
+                          {nodeStatus.lastError}
+                        </pre>
                       )}
                     </div>
+                  )}
+                  {endpointCount > 0 && (
+                    <button
+                      onClick={() => setExpandedMatterEndpoints((s) => {
+                        const next = new Set(s);
+                        next.has(nodeId) ? next.delete(nodeId) : next.add(nodeId);
+                        return next;
+                      })}
+                      className="mt-1.5 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                    >
+                      <ChevronDown
+                        size={11}
+                        className={clsx('transition-transform duration-200', isEndpointsExpanded && 'rotate-180')}
+                      />
+                      {isEndpointsExpanded ? 'Hide' : 'Show'} endpoint rooms ({endpointCount})
+                    </button>
                   )}
                 </div>
 
@@ -216,6 +296,33 @@ export default function MyDevicesTab({ setup }) {
                   </div>
                 )}
               </div>
+              {isEndpointsExpanded && endpointRows.length > 0 && (
+                <div className="mt-2 pl-8 space-y-2">
+                  {endpointRows.map((row) => {
+                    const endpointId = row.accessory_id;
+                    const endpointRoom = roomInputs[endpointId] ?? savedRooms[endpointId] ?? '';
+                    return (
+                      <div key={endpointId} className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 w-28 truncate">
+                          {endpointId.split(':').slice(-1)[0]} {row.accessory_name ? `· ${row.accessory_name}` : ''}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <MapPin size={10} className="text-gray-300 flex-shrink-0" />
+                          <input
+                            type="text"
+                            placeholder="Add room name\u2026"
+                            value={endpointRoom}
+                            onChange={(e) => setRoomInputs((r) => ({ ...r, [endpointId]: e.target.value }))}
+                            onBlur={() => handleRoomBlur(endpointId)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleRoomBlur(endpointId)}
+                            className="text-xs border border-gray-200 rounded px-2 py-0.5 w-40 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
