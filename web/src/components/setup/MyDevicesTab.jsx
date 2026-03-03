@@ -79,7 +79,7 @@ export default function MyDevicesTab({ setup }) {
                     <MapPin size={10} className="text-gray-300 flex-shrink-0" />
                     <input
                       type="text"
-                      placeholder="Add room name\u2026"
+                      placeholder="Add room name..."
                       value={roomVal}
                       onChange={(e) => setRoomInputs((r) => ({ ...r, [acc.id]: e.target.value }))}
                       onBlur={() => handleRoomBlur(acc.id)}
@@ -196,7 +196,7 @@ export default function MyDevicesTab({ setup }) {
                     <MapPin size={10} className="text-gray-300 flex-shrink-0" />
                     <input
                       type="text"
-                      placeholder="Add room name\u2026"
+                      placeholder="Add room name..."
                       value={roomVal}
                       onChange={(e) => setRoomInputs((r) => ({ ...r, [nodeId]: e.target.value }))}
                       onBlur={() => handleRoomBlur(nodeId)}
@@ -310,7 +310,7 @@ export default function MyDevicesTab({ setup }) {
                           <MapPin size={10} className="text-gray-300 flex-shrink-0" />
                           <input
                             type="text"
-                            placeholder="Add room name\u2026"
+                            placeholder="Add room name..."
                             value={endpointRoom}
                             onChange={(e) => setRoomInputs((r) => ({ ...r, [endpointId]: e.target.value }))}
                             onBlur={() => handleRoomBlur(endpointId)}
