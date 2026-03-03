@@ -57,20 +57,6 @@ async function resolveAddress(raw) {
   return ipv6;
 }
 
-function run(args) {
-  return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn('chip-tool', args, {
-      stdio: 'inherit',
-      env: process.env,
-    });
-    child.on('error', rejectPromise);
-    child.on('exit', (code, signal) => {
-      if (code === 0) return resolvePromise();
-      rejectPromise(new Error(`chip-tool exited code=${code ?? 'null'} signal=${signal ?? 'null'}`));
-    });
-  });
-}
-
 function runCapture(args) {
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn('chip-tool', args, {
@@ -80,12 +66,24 @@ function runCapture(args) {
 
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.stdout.on('data', (chunk) => {
+      const text = chunk.toString();
+      stdout += text;
+      process.stderr.write(text); // stream to logs in real time
+    });
+    child.stderr.on('data', (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      process.stderr.write(text);
+    });
     child.on('error', rejectPromise);
     child.on('exit', (code, signal) => {
       if (code === 0) return resolvePromise({ stdout, stderr });
-      rejectPromise(new Error(`chip-tool exited code=${code ?? 'null'} signal=${signal ?? 'null'}: ${stderr || stdout}`));
+      // Extract the most useful error line(s) from chip-tool's verbose output.
+      const combined = `${stderr}\n${stdout}`;
+      const errorLines = combined.split('\n').filter((l) => /error|fail|timeout/i.test(l));
+      const summary = errorLines.slice(-5).join('\n').trim() || combined.slice(-500).trim();
+      rejectPromise(new Error(`chip-tool exited code=${code ?? 'null'} signal=${signal ?? 'null'}:\n${summary}`));
     });
   });
 }
@@ -145,7 +143,7 @@ async function main() {
   chipToolArgs.push('--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 90));
   chipToolArgs.push('--bypass-attestation-verifier', 'true');
 
-  await run(chipToolArgs);
+  await runCapture(chipToolArgs);
 }
 
 main().catch((err) => {
