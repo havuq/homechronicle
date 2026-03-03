@@ -145,7 +145,7 @@ async function main() {
     '--bypass-attestation-verifier', 'true',
   ];
 
-  await runCapture([...globalArgs, ...chipToolArgs]);
+  await runCapture([...chipToolArgs, ...globalArgs]);
 }
 
 main().catch((err) => {
