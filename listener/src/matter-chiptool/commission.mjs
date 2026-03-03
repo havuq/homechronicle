@@ -139,11 +139,13 @@ async function main() {
     const passcode = await extractPasscodeFromSetupCode(setupCode);
     chipToolArgs.push('pairing', 'onnetwork', nodeId, passcode);
   }
-  chipToolArgs.push('--storage-directory', storageDir);
-  chipToolArgs.push('--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 90));
-  chipToolArgs.push('--bypass-attestation-verifier', 'true');
+  const globalArgs = [
+    '--storage-directory', storageDir,
+    '--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 90),
+    '--bypass-attestation-verifier', 'true',
+  ];
 
-  await runCapture(chipToolArgs);
+  await runCapture([...globalArgs, ...chipToolArgs]);
 }
 
 main().catch((err) => {

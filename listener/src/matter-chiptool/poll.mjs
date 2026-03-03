@@ -118,6 +118,17 @@ function run(args) {
   });
 }
 
+function summarizeFailure(result) {
+  const combined = `${result.stderr ?? ''}\n${result.stdout ?? ''}`;
+  const lines = combined
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const useful = lines.filter((line) => /CHIP Error|No endpoint|Run command failure|error|fail/i.test(line));
+  return (useful.slice(-8).join('\n') || lines.slice(-8).join('\n') || `code=${result.code} signal=${result.signal}`).trim();
+}
+
 async function main() {
   const [nodeIdRaw] = process.argv.slice(2);
   const nodeIdDecimal = normalizeNodeId(nodeIdRaw);
@@ -126,19 +137,22 @@ async function main() {
   mkdirSync(storageDir, { recursive: true });
 
   const args = [
+    '--storage-directory', storageDir,
+    '--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 20),
     'any', 'read-by-id',
     clusterIds,
     attributeIds,
     nodeIdDecimal,
     '0xFFFF',
-    '--storage-directory', storageDir,
-    '--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 20),
   ];
 
   const result = await run(args);
   if (result.code !== 0) {
-    const reason = result.stderr || result.stdout || `code=${result.code} signal=${result.signal}`;
-    throw new Error(`poll read failed for ${nodeIdHex}: ${String(reason).trim()}`);
+    let reason = summarizeFailure(result);
+    if (/CHIP Error 0x00000046|No endpoint was available to send the message/i.test(reason)) {
+      reason = `${reason}\nHint: Matter transport endpoint unavailable. Ensure listener is using host networking and IPv6/mDNS is reachable (LISTENER_NETWORK_MODE=host).`;
+    }
+    throw new Error(`poll read failed for ${nodeIdHex}: ${reason}`);
   }
 
   const events = parseEvents(`${result.stdout}\n${result.stderr}`, nodeIdHex);

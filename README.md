@@ -90,6 +90,10 @@ Detailed guides have been moved to the GitHub Wiki:
 
 You can also browse all docs here: [HomeChronicle Wiki](https://github.com/havuq/homechronicle/wiki)
 
+## Known Limitations
+
+Current product constraints and Matter caveats are documented in [limitations.md](limitations.md).
+
 ## License
 
 MIT
