@@ -29,6 +29,10 @@ cp .env.example .env
 
 Open `.env` and set a strong `POSTGRES_PASSWORD`.
 
+For a complete list of available settings:
+- Environment variables: [docs/environment-variables.md](docs/environment-variables.md)
+- Minimal compose example: [docs/docker-compose.example.yml](docs/docker-compose.example.yml)
+
 ### 3. Start HomeChronicle
 
 ```bash
@@ -58,6 +62,7 @@ Events will begin showing in the Timeline once pairing succeeds.
 If Setup shows `Scan failed: HTTP 502`, verify:
 - `LISTENER_HOST` is reachable from the web container (`host.docker.internal` or your Pi/NAS LAN IP in Portainer/Swarm)
 - `API_PORT` matches the listener port (default `3001`)
+- If you use a custom compose file, either include `env_file: .env` or map required variables in each service `environment` block.
 
 ## Matter
 
