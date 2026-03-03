@@ -143,6 +143,7 @@ async function runReadById({
   nodeIdDecimal,
   clusterIdHex,
   attributeIdHex,
+  endpointId = '0xFFFF',
 }) {
   return run([
     '--storage-directory', storageDir,
@@ -151,11 +152,11 @@ async function runReadById({
     clusterIdHex,
     attributeIdHex,
     nodeIdDecimal,
-    '0xFFFF',
+    endpointId,
   ]);
 }
 
-async function runPerClusterFallback(nodeIdDecimal) {
+async function runPerClusterFallback(nodeIdDecimal, endpointId) {
   const outputs = [];
   const failures = [];
 
@@ -165,6 +166,7 @@ async function runPerClusterFallback(nodeIdDecimal) {
       nodeIdDecimal,
       clusterIdHex: target.clusterIdHex,
       attributeIdHex: target.attributeIdHex,
+      endpointId,
     });
     if (result.code === 0) {
       outputs.push(`${result.stdout}\n${result.stderr}`);
@@ -184,17 +186,26 @@ async function main() {
 
   mkdirSync(storageDir, { recursive: true });
 
-  const batchResult = await runReadById({
-    nodeIdDecimal,
-    clusterIdHex: clusterTargets.map((target) => target.clusterIdHex).join(','),
-    attributeIdHex: clusterTargets.map((target) => target.attributeIdHex).join(','),
-  });
-
+  // Different chip-tool builds disagree on wildcard endpoint support.
+  // Try common endpoint forms in order before failing hard.
+  const endpointCandidates = ['0xFFFF', '1', '0'];
+  const endpointFailures = [];
   let outputText = '';
 
-  if (batchResult.code === 0) {
-    outputText = `${batchResult.stdout}\n${batchResult.stderr}`;
-  } else {
+  for (const endpointId of endpointCandidates) {
+    // eslint-disable-next-line no-await-in-loop
+    const batchResult = await runReadById({
+      nodeIdDecimal,
+      clusterIdHex: clusterTargets.map((target) => target.clusterIdHex).join(','),
+      attributeIdHex: clusterTargets.map((target) => target.attributeIdHex).join(','),
+      endpointId,
+    });
+
+    if (batchResult.code === 0) {
+      outputText = `${batchResult.stdout}\n${batchResult.stderr}`;
+      break;
+    }
+
     const batchReason = summarizeFailure(batchResult);
     if (!shouldFallbackToPerClusterRead(batchReason)) {
       let reason = batchReason;
@@ -204,18 +215,23 @@ async function main() {
       throw new Error(`poll read failed for ${nodeIdHex}: ${reason}`);
     }
 
-    const fallback = await runPerClusterFallback(nodeIdDecimal);
-    if (!fallback.outputs.length) {
-      let reason = `batch read failed: ${batchReason}`;
-      if (fallback.failures.length) {
-        reason = `${reason}\nper-cluster failures:\n${fallback.failures.join('\n')}`;
-      }
-      if (/CHIP Error 0x00000046|No endpoint was available to send the message/i.test(reason)) {
-        reason = `${reason}\nHint: Matter transport endpoint unavailable. Ensure listener is using host networking and IPv6/mDNS is reachable (LISTENER_NETWORK_MODE=host).`;
-      }
-      throw new Error(`poll read failed for ${nodeIdHex}: ${reason}`);
+    // eslint-disable-next-line no-await-in-loop
+    const fallback = await runPerClusterFallback(nodeIdDecimal, endpointId);
+    if (fallback.outputs.length) {
+      outputText = fallback.outputs.join('\n');
+      break;
     }
-    outputText = fallback.outputs.join('\n');
+    endpointFailures.push(
+      `endpoint ${endpointId}: batch read failed: ${batchReason}${fallback.failures.length ? `\nper-cluster failures:\n${fallback.failures.join('\n')}` : ''}`
+    );
+  }
+
+  if (!outputText) {
+    let reason = endpointFailures.join('\n\n') || 'all read attempts failed';
+    if (/CHIP Error 0x00000046|No endpoint was available to send the message/i.test(reason)) {
+      reason = `${reason}\nHint: Matter transport endpoint unavailable. Ensure listener is using host networking and IPv6/mDNS is reachable (LISTENER_NETWORK_MODE=host).`;
+    }
+    throw new Error(`poll read failed for ${nodeIdHex}: ${reason}`);
   }
 
   const events = parseEvents(outputText, nodeIdHex);
