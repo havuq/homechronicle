@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 
 const POLL_INTERVAL_MS = Number.parseInt(process.env.MATTER_POLL_INTERVAL_MS ?? '30000', 10);
 const COMMAND_TIMEOUT_MS = Number.parseInt(process.env.MATTER_COMMAND_TIMEOUT_MS ?? '20000', 10);
+const COMMISSION_TIMEOUT_MS = Number.parseInt(process.env.MATTER_COMMISSION_TIMEOUT_MS ?? '180000', 10);
 const COMMISSION_CMD_TEMPLATE = (process.env.MATTER_COMMISSION_CMD ?? 'node src/matter-chiptool/commission.mjs {nodeId} {setupCode} {address} {port}').trim();
 const POLL_CMD_TEMPLATE = (process.env.MATTER_POLL_CMD ?? 'node src/matter-chiptool/poll.mjs {nodeId}').trim();
 
@@ -127,6 +128,7 @@ export function createMatterRuntime({
       missingConfig,
       pollIntervalMs: POLL_INTERVAL_MS,
       commandTimeoutMs: COMMAND_TIMEOUT_MS,
+      commissionTimeoutMs: COMMISSION_TIMEOUT_MS,
       nodes,
     };
   }
@@ -151,7 +153,7 @@ export function createMatterRuntime({
     });
 
     if (!command.trim()) throw new Error('Rendered MATTER_COMMISSION_CMD is empty');
-    return runShellCommand(command, COMMAND_TIMEOUT_MS);
+    return runShellCommand(command, COMMISSION_TIMEOUT_MS);
   }
 
   function stopNode(nodeId) {
