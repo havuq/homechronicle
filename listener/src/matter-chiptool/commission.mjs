@@ -113,6 +113,9 @@ async function main() {
 
   mkdirSync(storageDir, { recursive: true });
 
+  // Detect whether setupCode is a QR payload (MT:...) or a numeric Manual Pairing Code.
+  const isQrPayload = /^MT:/i.test(setupCode);
+
   const chipToolArgs = [];
   if (address || port) {
     if (!address || !port) {
@@ -124,10 +127,19 @@ async function main() {
       chipToolArgs.push('pairing', 'already-discovered', nodeId, setupPinCode, resolvedAddress, String(toPort(port)));
     } catch (err) {
       console.warn(`[matter-chiptool] direct commissioning unavailable (${err.message ?? err}); falling back to on-network discovery`);
-      chipToolArgs.push('pairing', 'code', nodeId, setupCode, '--use-only-onnetwork-discovery', 'true');
+      if (isQrPayload) {
+        chipToolArgs.push('pairing', 'code', nodeId, setupCode, '--use-only-onnetwork-discovery', 'true');
+      } else {
+        const passcode = await extractPasscodeFromSetupCode(setupCode);
+        chipToolArgs.push('pairing', 'onnetwork', nodeId, passcode);
+      }
     }
-  } else {
+  } else if (isQrPayload) {
     chipToolArgs.push('pairing', 'code', nodeId, setupCode, '--use-only-onnetwork-discovery', 'true');
+  } else {
+    // Numeric manual pairing code — extract passcode and use onnetwork discovery.
+    const passcode = await extractPasscodeFromSetupCode(setupCode);
+    chipToolArgs.push('pairing', 'onnetwork', nodeId, passcode);
   }
   chipToolArgs.push('--storage-directory', storageDir);
   chipToolArgs.push('--timeout', String(Number.isFinite(commandTimeoutSeconds) ? commandTimeoutSeconds : 90));
