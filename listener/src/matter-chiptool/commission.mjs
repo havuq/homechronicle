@@ -83,9 +83,27 @@ function runCapture(args) {
       const combined = `${stderr}\n${stdout}`;
       const errorLines = combined.split('\n').filter((l) => /error|fail|timeout/i.test(l));
       const summary = errorLines.slice(-5).join('\n').trim() || combined.slice(-500).trim();
-      rejectPromise(new Error(`chip-tool exited code=${code ?? 'null'} signal=${signal ?? 'null'}:\n${summary}`));
+      const error = new Error(`chip-tool exited code=${code ?? 'null'} signal=${signal ?? 'null'}:\n${summary}`);
+      error.fullOutput = combined;
+      error.summary = summary;
+      rejectPromise(error);
     });
   });
+}
+
+function isRecoverableFindOperationalTimeout(err) {
+  const full = String(err?.fullOutput ?? '');
+  const summary = String(err?.summary ?? err?.message ?? '');
+  // Some devices accept operational credentials but do not respond to the immediate
+  // post-commission CASE check from this controller/runtime.
+  const hasOperationalCredentials =
+    /Operational credentials provisioned on device/i.test(full)
+    || /Device returned status 0 on receiving the NOC/i.test(full);
+  const isFindOperationalTimeout =
+    /FindOperational/i.test(full)
+    && /CASESession\.cpp:553: CHIP Error 0x00000032: Timeout/i.test(full);
+  const timeoutInSummary = /CASESession\.cpp:553: CHIP Error 0x00000032: Timeout/i.test(summary);
+  return hasOperationalCredentials && (isFindOperationalTimeout || timeoutInSummary);
 }
 
 async function extractPasscodeFromSetupCode(setupCode) {
@@ -145,7 +163,15 @@ async function main() {
     '--bypass-attestation-verifier', 'true',
   ];
 
-  await runCapture([...chipToolArgs, ...globalArgs]);
+  try {
+    await runCapture([...chipToolArgs, ...globalArgs]);
+  } catch (err) {
+    if (isRecoverableFindOperationalTimeout(err)) {
+      console.warn('[matter-chiptool] commissioning reached operational credential provisioning but timed out during FindOperational CASE check; treating as success');
+      return;
+    }
+    throw err;
+  }
 }
 
 main().catch((err) => {
