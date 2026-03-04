@@ -8,6 +8,8 @@ const SUBSCRIBE_RESTART_DELAY_MS = Number.parseInt(process.env.MATTER_SUBSCRIBE_
 const COMMISSION_CMD_TEMPLATE = 'node src/matter-chiptool/commission.mjs {nodeId} {setupCode} {address} {port}';
 const POLL_CMD_TEMPLATE = 'node src/matter-chiptool/poll.mjs {nodeId}';
 const SUBSCRIBE_CMD_TEMPLATE = 'node src/matter-chiptool/subscribe.mjs {nodeId}';
+const DISCOVER_CMD_TEMPLATE = 'node src/matter-chiptool/discover.mjs';
+const DISCOVER_TIMEOUT_MS = Number.parseInt(process.env.MATTER_SCAN_TIMEOUT_MS ?? '15000', 10);
 
 function nowIso() {
   return new Date().toISOString();
@@ -428,8 +430,23 @@ export function createMatterRuntime({
     }
   }
 
+  async function scan() {
+    const command = DISCOVER_CMD_TEMPLATE;
+    if (!command.trim()) throw new Error('Rendered discover command is empty');
+    const { stdout } = await runShellCommand(command, DISCOVER_TIMEOUT_MS);
+    const text = String(stdout ?? '').trim();
+    if (!text) return [];
+    try {
+      const parsed = JSON.parse(text);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
   return {
     commission,
+    scan,
     syncPairings,
     stopNode,
     getStatus,

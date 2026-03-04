@@ -656,6 +656,7 @@ app.use('/api', createEventsRouter({
 if (ALERTS_ENABLED) {
   app.use('/api/alerts', createAlertsRouter({ pool }));
 }
+let matterDiscoveryCache = [];
 app.use('/api', createMatterRouter({
   insertEvent,
   loadPairings,
@@ -663,6 +664,8 @@ app.use('/api', createMatterRouter({
   loadRooms,
   saveRooms,
   matterRuntime,
+  getMatterDiscoveryCache: () => matterDiscoveryCache,
+  setMatterDiscoveryCache: (cache) => { matterDiscoveryCache = cache; },
 }));
 
 // Stats routes
