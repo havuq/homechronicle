@@ -15,6 +15,7 @@ Use `.env.example` for a minimal setup, then add only what you need from this re
 | `WEB_PORT` | `3000` | compose | Host port mapped to web container port 80. |
 | `POSTGRES_PORT` | `5432` | compose | Host port mapped to Postgres port 5432. |
 | `LISTENER_NETWORK_MODE` | `host` | compose | Listener network mode (`host` recommended for mDNS/HomeKit). |
+| `HOST_DBUS_SOCKET` | `/run/dbus/system_bus_socket` | compose listener volume | Host D-Bus socket mounted into listener so libdns_sd can use host `avahi-daemon`. |
 | `LISTENER_HOST` | `host.docker.internal` | web proxy | Host/IP web uses to proxy `/api` to listener. |
 | `LISTENER_PORT` | `3001` | web proxy | Listener API port used by web proxy. |
 | `DATABASE_URL` | auto-built from PG vars | listener | Explicit PostgreSQL connection string. |
