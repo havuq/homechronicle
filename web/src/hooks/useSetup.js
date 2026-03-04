@@ -51,6 +51,13 @@ export function useSetup() {
     refetchInterval: 30_000,
   });
 
+  const { data: matterDiscoveredData, isLoading: matterDiscoveredLoading } = useQuery({
+    queryKey: ['setup', 'matter', 'discovered'],
+    queryFn: () => fetchJson('/api/setup/matter/discovered'),
+    refetchInterval: false,
+    staleTime: Infinity,
+  });
+
   const {
     data: matterPairings = [],
     isError: matterPairingsError,
@@ -132,6 +139,13 @@ export function useSetup() {
     },
   });
 
+  const matterScanMutation = useMutation({
+    mutationFn: () => fetchJson('/api/setup/matter/scan', { method: 'POST' }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['setup', 'matter', 'discovered'], data);
+    },
+  });
+
   const pairMatterMutation = useMutation({
     mutationFn: (payload) => fetchJson('/api/setup/matter/pair', {
       method: 'POST',
@@ -141,6 +155,7 @@ export function useSetup() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setup', 'matter', 'pairings'] });
       queryClient.invalidateQueries({ queryKey: ['setup', 'matter', 'runtime'] });
+      queryClient.invalidateQueries({ queryKey: ['setup', 'matter', 'discovered'] });
       queryClient.invalidateQueries({ queryKey: ['accessories'] });
     },
   });
@@ -239,6 +254,8 @@ export function useSetup() {
     matterRuntimeError,
     matterRuntimeErrorValue,
     refetchMatterRuntime,
+    matterDiscoveredData,
+    matterDiscoveredLoading,
     matterPairings,
     matterPairingsError,
     matterPairingsErrorValue,
@@ -254,6 +271,7 @@ export function useSetup() {
 
     // Mutations
     scanMutation,
+    matterScanMutation,
     deletePairingMutation,
     saveRoomMutation,
     saveRetentionMutation,

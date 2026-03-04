@@ -23,6 +23,9 @@ export default function AddDevicesTab({ setup }) {
     pollingConfigured,
     pairMatterMutation,
     matterRuntime,
+    matterDiscoveredData,
+    matterDiscoveredLoading,
+    matterScanMutation,
   } = setup;
 
   // HomeKit local state
@@ -352,153 +355,346 @@ export default function AddDevicesTab({ setup }) {
         </div>
 
         {/* ── Matter Card ───────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl shadow-sm p-4 space-y-3 border border-gray-100">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-gray-900">Matter</h3>
-              <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">Alpha</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              For devices already paired in Apple Home that also support Matter.
-              Enter the setup code from Apple Home to start logging events.
-            </p>
-          </div>
-
-          {matterFeedback && (
-            <div
-              className={clsx(
-                'rounded-lg px-3 py-2 text-xs border',
-                matterFeedback.type === 'success'
-                  ? 'bg-green-50 border-green-200 text-green-700'
-                  : 'bg-red-50 border-red-200 text-red-700',
-              )}
-            >
-              {matterFeedback.message}
-            </div>
-          )}
-
-          <form onSubmit={handleMatterSubmit} className="space-y-2">
-            <input
-              type="text"
-              value={matterForm.name}
-              onChange={(e) => setMatterForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Device name (e.g. Office Plug)"
-              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {matterMode === 'commission' ? (
-              <input
-                type="text"
-                value={matterForm.setupCode}
-                onChange={(e) => setMatterForm((f) => ({ ...f, setupCode: e.target.value }))}
-                placeholder="Setup code from Apple Home"
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            ) : (
-              <input
-                type="text"
-                value={matterForm.nodeId}
-                onChange={(e) => setMatterForm((f) => ({ ...f, nodeId: e.target.value }))}
-                placeholder="Node ID"
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            )}
-
-            <button
-              type="button"
-              onClick={() => setMatterAdvancedOpen((open) => !open)}
-              className="text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
-            >
-              {matterAdvancedOpen ? 'Hide advanced options' : 'Advanced options'}
-            </button>
-
-            {matterAdvancedOpen && (
-              <div className="space-y-2 bg-gray-50 rounded-lg p-2.5">
-                <div className="inline-flex items-center gap-1 rounded-lg bg-white p-1 border border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => { setMatterMode('commission'); setMatterFeedback(null); }}
-                    className={clsx(
-                      'px-2.5 py-1 text-xs rounded transition-colors',
-                      matterMode === 'commission' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
-                    )}
-                  >
-                    Setup code
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setMatterMode('import'); setMatterFeedback(null); }}
-                    className={clsx(
-                      'px-2.5 py-1 text-xs rounded transition-colors',
-                      matterMode === 'import' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
-                    )}
-                  >
-                    Import by Node ID
-                  </button>
-                </div>
-                <p className="text-[11px] text-gray-400">
-                  {matterMode === 'commission'
-                    ? 'Use a setup code from Apple Home to commission the device. This is the standard way to add Matter devices.'
-                    : 'Import a device that was already commissioned outside of HomeChronicle. You\'ll need the node ID from your existing controller. Most users won\'t need this.'}
-                </p>
-                <div className="grid grid-cols-1 gap-2">
-                  <select
-                    value={matterForm.transport}
-                    onChange={(e) => setMatterForm((f) => ({ ...f, transport: e.target.value }))}
-                    className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  >
-                    <option value="ip">Transport: IP</option>
-                    <option value="thread">Transport: Thread</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={matterForm.address}
-                    onChange={(e) => setMatterForm((f) => ({ ...f, address: e.target.value }))}
-                    placeholder="Address (optional)"
-                    className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <input
-                    type="text"
-                    value={matterForm.port}
-                    onChange={(e) => setMatterForm((f) => ({ ...f, port: e.target.value }))}
-                    placeholder="Port (optional)"
-                    className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={pairMatterMutation.isPending || (matterMode === 'commission' && !commissionConfigured)}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {pairMatterMutation.isPending && <Loader size={14} className="animate-spin" />}
-              {pairMatterMutation.isPending ? 'Adding\u2026' : 'Add Device'}
-            </button>
-          </form>
-
-          {matterMode === 'commission' && !commissionConfigured && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-              Matter commissioning is not configured yet. Check the Settings tab for details.
-            </p>
-          )}
-
-          {/* How-to hint */}
-          {matterMode === 'commission' && commissionConfigured && (
-            <div className="text-xs text-gray-500 space-y-0.5">
-              <p className="font-medium text-gray-600">How to get a setup code:</p>
-              <p>1. Open Apple Home &rarr; device settings &rarr; Matter</p>
-              <p>2. Turn on pairing mode or generate a code</p>
-              <p>3. Paste the code above</p>
-            </div>
-          )}
-
-          <p className="text-[11px] text-gray-400 italic">
-            Matter support is in early testing. Some devices or setups may not work as expected.
-          </p>
-        </div>
+        <MatterCard
+          setup={setup}
+          matterForm={matterForm}
+          setMatterForm={setMatterForm}
+          matterFeedback={matterFeedback}
+          setMatterFeedback={setMatterFeedback}
+          matterMode={matterMode}
+          setMatterMode={setMatterMode}
+          matterAdvancedOpen={matterAdvancedOpen}
+          setMatterAdvancedOpen={setMatterAdvancedOpen}
+          handleMatterSubmit={handleMatterSubmit}
+        />
       </div>
 
+    </div>
+  );
+}
+
+/* ── Matter Card ────────────────────────────────────────────────────────── */
+
+function MatterCard({
+  setup,
+  matterForm,
+  setMatterForm,
+  matterFeedback,
+  setMatterFeedback,
+  matterMode,
+  setMatterMode,
+  matterAdvancedOpen,
+  setMatterAdvancedOpen,
+  handleMatterSubmit,
+}) {
+  const {
+    commissionConfigured,
+    pairMatterMutation,
+    matterDiscoveredData,
+    matterDiscoveredLoading,
+    matterScanMutation,
+  } = setup;
+
+  const [matterPairingStatus, setMatterPairingStatus] = useState({});
+  const matterScanning = matterScanMutation.isPending;
+  const matterDevices = matterDiscoveredData?.devices ?? [];
+  const unpaired = matterDevices.filter((d) => !d.alreadyPaired && matterPairingStatus[d.id]?.state !== 'success');
+
+  function handleMatterPairOne(device) {
+    const name = matterForm[`name_${device.id}`]?.trim();
+    const setupCode = matterForm[`code_${device.id}`]?.trim();
+    if (!name) {
+      setMatterPairingStatus((s) => ({
+        ...s, [device.id]: { state: 'error', message: 'Enter a device name.' },
+      }));
+      return;
+    }
+    if (!setupCode) {
+      setMatterPairingStatus((s) => ({
+        ...s, [device.id]: { state: 'error', message: 'Enter the setup code from Apple Home.' },
+      }));
+      return;
+    }
+
+    setMatterPairingStatus((s) => ({
+      ...s, [device.id]: { state: 'loading', message: 'Commissioning\u2026' },
+    }));
+
+    const payload = {
+      name,
+      setupCode,
+      transport: 'ip',
+      address: device.address ?? undefined,
+      port: device.port ?? undefined,
+    };
+
+    pairMatterMutation.mutate(payload, {
+      onSuccess: (result) => {
+        const id = result?.pairing?.nodeId ?? result?.pairing?.id ?? 'device';
+        setMatterPairingStatus((s) => ({
+          ...s, [device.id]: { state: 'success', message: `Paired \u2014 now logging ${name} (${id})` },
+        }));
+      },
+      onError: (err) => {
+        setMatterPairingStatus((s) => ({
+          ...s, [device.id]: { state: 'error', message: err.message ?? 'Commissioning failed.' },
+        }));
+      },
+    });
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-4 space-y-3 border border-gray-100">
+      <div>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-gray-900">Matter</h3>
+          <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">Alpha</span>
+        </div>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Scan for Matter devices in commissioning mode, then enter a setup code to start logging.
+        </p>
+      </div>
+
+      {/* Scan button */}
+      <button
+        onClick={() => { matterScanMutation.mutate(); setMatterPairingStatus({}); }}
+        disabled={matterScanning || !commissionConfigured}
+        className={clsx(
+          'w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+          matterScanning ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                         : !commissionConfigured ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                         : 'bg-blue-600 text-white hover:bg-blue-700',
+        )}
+      >
+        <RefreshCw size={15} className={matterScanning ? 'animate-spin' : ''} />
+        {matterScanning ? 'Scanning\u2026' : 'Scan Network'}
+      </button>
+
+      {!commissionConfigured && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+          Matter commissioning is not available. Check listener logs for details.
+        </p>
+      )}
+
+      {matterDiscoveredData?.cachedAt && (
+        <p className="text-xs text-gray-400">
+          Last scan: {formatDistanceToNow(new Date(matterDiscoveredData.cachedAt), { addSuffix: true })}
+        </p>
+      )}
+
+      {matterScanMutation.isError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs">
+          Scan failed: {matterScanMutation.error?.message}
+        </div>
+      )}
+
+      {matterDiscoveredData?.warning && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-3 py-2 text-xs">
+          {matterDiscoveredData.warning}
+        </div>
+      )}
+
+      {matterDiscoveredLoading && (
+        <div className="flex justify-center py-8 text-gray-400 gap-2 text-sm">
+          <Loader size={16} className="animate-spin" /> Loading...
+        </div>
+      )}
+
+      {/* Discovered device list */}
+      {unpaired.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-gray-400">{unpaired.length} commissionable</span>
+          </div>
+          <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg">
+            {unpaired.map((device) => {
+              const status = matterPairingStatus[device.id];
+              const isPairing = status?.state === 'loading';
+              const isSuccess = status?.state === 'success';
+              const isError = status?.state === 'error';
+              return (
+                <div key={device.id} className="px-3 py-2.5 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    {isPairing
+                      ? <Loader size={14} className="text-blue-400 animate-spin flex-shrink-0" />
+                      : isSuccess
+                        ? <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
+                        : <Circle size={14} className="text-gray-300 flex-shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 text-xs truncate">
+                        {device.deviceName ?? device.name}
+                      </div>
+                      <div className="text-[11px] text-gray-400 space-x-2">
+                        {device.address && <span>{device.address}{device.port ? `:${device.port}` : ''}</span>}
+                        {device.discriminator != null && <span>Disc: {device.discriminator}</span>}
+                        {device.vendorId != null && <span>VID: {device.vendorId}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  {!isSuccess && (
+                    <div className="ml-6 space-y-1.5">
+                      <input
+                        type="text"
+                        placeholder="Device name (e.g. Office Plug)"
+                        value={matterForm[`name_${device.id}`] ?? ''}
+                        onChange={(e) => setMatterForm((f) => ({ ...f, [`name_${device.id}`]: e.target.value }))}
+                        disabled={isPairing}
+                        className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+                      />
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          placeholder="Setup code from Apple Home"
+                          value={matterForm[`code_${device.id}`] ?? ''}
+                          onChange={(e) => setMatterForm((f) => ({ ...f, [`code_${device.id}`]: e.target.value }))}
+                          disabled={isPairing}
+                          className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+                        />
+                        <button
+                          onClick={() => handleMatterPairOne(device)}
+                          disabled={isPairing}
+                          className="text-[10px] px-2.5 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                        >
+                          {isPairing ? 'Pairing\u2026' : 'Pair'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {isSuccess && (
+                    <p className="ml-6 text-xs text-green-600">{status.message}</p>
+                  )}
+                  {isError && (
+                    <div className="ml-6 bg-red-50 border border-red-100 rounded px-2 py-1">
+                      <p className="text-xs text-red-700">{status.message}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state after scan */}
+      {!matterDiscoveredLoading && matterDiscoveredData && matterDevices.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-4 text-gray-400 text-center">
+          <Wifi size={20} className="mb-1.5 opacity-40" />
+          <p className="text-xs font-medium">No commissionable devices found</p>
+          <p className="text-[11px] mt-0.5">Put a device in pairing mode from Apple Home, then scan again.</p>
+        </div>
+      )}
+
+      {/* Manual add fallback */}
+      {matterFeedback && (
+        <div
+          className={clsx(
+            'rounded-lg px-3 py-2 text-xs border',
+            matterFeedback.type === 'success'
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : 'bg-red-50 border-red-200 text-red-700',
+          )}
+        >
+          {matterFeedback.message}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setMatterAdvancedOpen((open) => !open)}
+        className="text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
+      >
+        {matterAdvancedOpen ? 'Hide manual setup' : 'Add manually\u2026'}
+      </button>
+
+      {matterAdvancedOpen && (
+        <form onSubmit={handleMatterSubmit} className="space-y-2 bg-gray-50 rounded-lg p-2.5">
+          <p className="text-[11px] text-gray-400">
+            Add a device without scanning. Use this if the scan doesn't find your device.
+          </p>
+          <input
+            type="text"
+            value={matterForm.name}
+            onChange={(e) => setMatterForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="Device name (e.g. Office Plug)"
+            className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <div className="inline-flex items-center gap-1 rounded-lg bg-white p-1 border border-gray-200">
+            <button
+              type="button"
+              onClick={() => { setMatterMode('commission'); setMatterFeedback(null); }}
+              className={clsx(
+                'px-2.5 py-1 text-xs rounded transition-colors',
+                matterMode === 'commission' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+              )}
+            >
+              Setup code
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMatterMode('import'); setMatterFeedback(null); }}
+              className={clsx(
+                'px-2.5 py-1 text-xs rounded transition-colors',
+                matterMode === 'import' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+              )}
+            >
+              Import by Node ID
+            </button>
+          </div>
+          {matterMode === 'commission' ? (
+            <input
+              type="text"
+              value={matterForm.setupCode}
+              onChange={(e) => setMatterForm((f) => ({ ...f, setupCode: e.target.value }))}
+              placeholder="Setup code from Apple Home"
+              className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          ) : (
+            <input
+              type="text"
+              value={matterForm.nodeId}
+              onChange={(e) => setMatterForm((f) => ({ ...f, nodeId: e.target.value }))}
+              placeholder="Node ID"
+              className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          )}
+          <div className="grid grid-cols-1 gap-2">
+            <select
+              value={matterForm.transport}
+              onChange={(e) => setMatterForm((f) => ({ ...f, transport: e.target.value }))}
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="ip">Transport: IP</option>
+              <option value="thread">Transport: Thread</option>
+            </select>
+            <input
+              type="text"
+              value={matterForm.address}
+              onChange={(e) => setMatterForm((f) => ({ ...f, address: e.target.value }))}
+              placeholder="Address (optional)"
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="text"
+              value={matterForm.port}
+              onChange={(e) => setMatterForm((f) => ({ ...f, port: e.target.value }))}
+              placeholder="Port (optional)"
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={pairMatterMutation.isPending || (matterMode === 'commission' && !commissionConfigured)}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {pairMatterMutation.isPending && <Loader size={12} className="animate-spin" />}
+            {pairMatterMutation.isPending ? 'Adding\u2026' : 'Add Device'}
+          </button>
+        </form>
+      )}
+
+      <p className="text-[11px] text-gray-400 italic">
+        Matter support is in early testing. Some devices or setups may not work as expected.
+      </p>
     </div>
   );
 }

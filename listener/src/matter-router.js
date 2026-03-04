@@ -47,6 +47,8 @@ export function createMatterRouter({
   loadRooms,
   saveRooms,
   matterRuntime = null,
+  getMatterDiscoveryCache = () => [],
+  setMatterDiscoveryCache = () => {},
 }) {
   const router = express.Router();
 
@@ -55,6 +57,59 @@ export function createMatterRouter({
       return res.status(503).json({ error: 'Matter runtime unavailable' });
     }
     return res.json(matterRuntime.getStatus());
+  });
+
+  router.get('/setup/matter/discovered', (_req, res) => {
+    const pairings = loadPairings();
+    const matterPairings = getMatterPairings(pairings);
+    const pairedNodeIds = new Set(matterPairings.map(([, p]) => p.nodeId ?? ''));
+    const cache = getMatterDiscoveryCache();
+    const devices = cache.map((d) => ({
+      ...d,
+      alreadyPaired: pairedNodeIds.has(d.id) || pairedNodeIds.has(d.instanceName),
+    }));
+    res.json({ devices, cachedAt: new Date().toISOString() });
+  });
+
+  router.post('/setup/matter/scan', async (_req, res) => {
+    if (!matterRuntime) {
+      return res.status(503).json({ error: 'Matter runtime unavailable' });
+    }
+    try {
+      console.log('[matter] Manual scan triggered from UI');
+      const raw = await matterRuntime.scan();
+      const pairings = loadPairings();
+      const matterPairings = getMatterPairings(pairings);
+      const pairedNodeIds = new Set(matterPairings.map(([, p]) => p.nodeId ?? ''));
+
+      const devices = raw.map((d) => ({
+        id: d.instanceName ?? `${d.address}:${d.port}`,
+        name: d.deviceName ?? d.instanceName ?? `Matter ${d.discriminator ?? 'Device'}`,
+        instanceName: d.instanceName ?? null,
+        hostname: d.hostname ?? null,
+        discriminator: d.discriminator ?? null,
+        vendorId: d.vendorId ?? null,
+        productId: d.productId ?? null,
+        deviceType: d.deviceType ?? null,
+        address: d.address ?? null,
+        addresses: d.addresses ?? [],
+        port: d.port ?? null,
+        commissionable: d.commissionable ?? true,
+        alreadyPaired: pairedNodeIds.has(d.instanceName),
+      }));
+
+      setMatterDiscoveryCache(devices);
+      console.log(`[matter] Scan complete — found ${devices.length} commissionable device(s)`);
+      res.json({ devices, cachedAt: new Date().toISOString() });
+    } catch (err) {
+      console.error('[matter] Scan error:', err.message ?? err.stack ?? err);
+      const cache = getMatterDiscoveryCache();
+      res.status(200).json({
+        devices: cache,
+        cachedAt: new Date().toISOString(),
+        warning: `Matter scan failed: ${err.message}. Is chip-tool available?`,
+      });
+    }
   });
 
   router.post('/setup/matter/commission', async (req, res) => {
