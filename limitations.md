@@ -108,8 +108,3 @@ Reference:
 - This usually means the device is on a different VLAN from the Docker host.
 - IPv6 link-local addresses (`fe80::`) do not route across VLANs.
 - See the "VLAN / segregated IoT networks" section above for the fix.
-
-5. Re-commissioning required after migration from chip-tool
-- Devices commissioned with chip-tool use a different Matter fabric.
-- After upgrading to the matter.js-based listener, re-pair your Matter devices through the Setup UI.
-- HomeKit devices are unaffected.
