@@ -1,4 +1,6 @@
-const API_TOKEN = (import.meta.env.VITE_API_TOKEN ?? '').trim();
+const API_TOKEN = import.meta.env.DEV
+  ? (import.meta.env.VITE_API_TOKEN ?? '').trim()
+  : '';
 
 export function withApiAuthHeaders(headers = {}) {
   if (!API_TOKEN) return headers;

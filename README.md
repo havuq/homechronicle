@@ -27,7 +27,21 @@ cd homechronicle
 cp .env.example .env
 ```
 
-Open `.env` and set a strong `POSTGRES_PASSWORD`.
+Open `.env` and set a strong `POSTGRES_PASSWORD` and `API_TOKEN`.
+
+Generate a secure API token (example):
+
+```bash
+openssl rand -hex 32
+```
+
+Then set it in `.env`:
+
+```bash
+API_TOKEN=<paste-generated-token>
+```
+
+Do not use a generic/shared token value.
 
 For a complete list of available settings:
 - Environment variables: [docs/environment-variables.md](docs/environment-variables.md)

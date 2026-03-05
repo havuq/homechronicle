@@ -25,6 +25,13 @@ const TABS = [
   { id: 'setup',      label: 'Manage',      icon: Settings },
 ];
 const ALERTS_TAB = { id: 'alerts', label: 'Alerts', icon: Bell };
+const DASHBOARD_WINDOWS = [
+  { label: '7d', days: 7 },
+  { label: '30d', days: 30 },
+  { label: '90d', days: 90 },
+];
+const DASHBOARD_RANGE_STORAGE_KEY = 'hc_dashboard_global_days';
+const DASHBOARD_SYNC_STORAGE_KEY = 'hc_dashboard_sync_ranges';
 
 const STYLES = [
   { id: 'ocean', label: 'Ocean' },
@@ -58,6 +65,24 @@ export default function App() {
   const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [isSkinPickerOpen, setIsSkinPickerOpen] = useState(false);
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
+  const [dashboardDays, setDashboardDays] = useState(() => {
+    if (typeof window === 'undefined') return 30;
+    try {
+      const stored = Number.parseInt(window.localStorage.getItem(DASHBOARD_RANGE_STORAGE_KEY) ?? '', 10);
+      return DASHBOARD_WINDOWS.some((w) => w.days === stored) ? stored : 30;
+    } catch {
+      return 30;
+    }
+  });
+  const [syncDashboardRanges, setSyncDashboardRanges] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const stored = window.localStorage.getItem(DASHBOARD_SYNC_STORAGE_KEY);
+      return stored == null ? true : stored !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const { preference, resolvedTheme, setPreference } = useTheme();
   const { skin, setSkin } = useSkin();
   const isDarkTheme = resolvedTheme === 'dark';
@@ -109,6 +134,24 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(DASHBOARD_RANGE_STORAGE_KEY, String(dashboardDays));
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [dashboardDays]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(DASHBOARD_SYNC_STORAGE_KEY, String(syncDashboardRanges));
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [syncDashboardRanges]);
+
   return (
     <div className={clsx('min-h-screen bg-gray-50 flex flex-col', isStandalonePwa && 'hc-pwa-shell')}>
       {/* Header */}
@@ -147,9 +190,50 @@ export default function App() {
             {/* KPI cards row */}
             <StatsCards />
 
+            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700">Dashboard Range</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {syncDashboardRanges ? 'Synced across charts' : 'Charts can use independent ranges'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1">
+                    {DASHBOARD_WINDOWS.map(({ label, days }) => (
+                      <button
+                        key={days}
+                        onClick={() => setDashboardDays(days)}
+                        className={clsx(
+                          'text-xs px-2 py-0.5 rounded-md transition-colors',
+                          dashboardDays === days
+                            ? 'bg-blue-100 text-blue-700 font-medium'
+                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="inline-flex items-center gap-2 text-xs text-gray-500 select-none">
+                    <input
+                      type="checkbox"
+                      className="accent-blue-600"
+                      checked={syncDashboardRanges}
+                      onChange={(e) => setSyncDashboardRanges(e.target.checked)}
+                    />
+                    Sync charts
+                  </label>
+                </div>
+              </div>
+            </div>
+
             {/* Full-width trend chart */}
             <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
-              <TrendChart />
+              <TrendChart
+                forcedDays={syncDashboardRanges ? dashboardDays : null}
+                onDaysChange={syncDashboardRanges ? setDashboardDays : null}
+              />
             </div>
 
             {/* 2-col: hourly activity + room breakdown */}
@@ -158,17 +242,26 @@ export default function App() {
                 <ActivityChart />
               </div>
               <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
-                <RoomChart />
+                <RoomChart
+                  forcedDays={syncDashboardRanges ? dashboardDays : null}
+                  onDaysChange={syncDashboardRanges ? setDashboardDays : null}
+                />
               </div>
             </div>
 
             {/* 2-col: top devices + heatmaps */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
-                <TopDevices />
+                <TopDevices
+                  forcedDays={syncDashboardRanges ? dashboardDays : null}
+                  onDaysChange={syncDashboardRanges ? setDashboardDays : null}
+                />
               </div>
               <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
-                <WeekdayHeatmap />
+                <WeekdayHeatmap
+                  forcedDays={syncDashboardRanges ? dashboardDays : null}
+                  onDaysChange={syncDashboardRanges ? setDashboardDays : null}
+                />
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <MonthlyHeatmap />
                 </div>

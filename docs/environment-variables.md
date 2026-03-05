@@ -34,7 +34,11 @@ Use `.env.example` for a minimal setup, then add only what you need from this re
 |---|---|---|---|
 | `API_PORT` | `3001` | listener, web proxy | Listener API listen port. |
 | `NODE_ENV` | `production` | listener | Runtime mode. |
-| `API_TOKEN` | empty | listener + web proxy | Write-route auth token. When set, write routes require token. |
+| `API_TOKEN` | empty | listener + web proxy | Write-route auth token. Required when `NODE_ENV=production` (listener exits if empty). |
+| `API_TOKEN_READS_ENABLED` | `false` | listener | When `true`, `GET`/`HEAD` API routes also require `API_TOKEN`. |
+| `API_JSON_LIMIT` | `256kb` | listener | Maximum JSON body size accepted by `express.json()`. |
+| `CORS_ALLOWED_ORIGINS` | empty | listener | Comma-separated browser origin allow-list for CORS. |
+| `CORS_ALLOW_LOCALHOST` | `true` | listener | If allow-list is empty, allow localhost/loopback browser origins. |
 | `PAIRINGS_FILE` | `/app/data/pairings.json` in prod | listener | Pairings JSON storage path. |
 | `ROOMS_FILE` | `/app/data/rooms.json` in prod | listener | Rooms JSON storage path. |
 | `RETENTION_FILE` | `/app/data/retention.json` in prod | listener | Retention settings JSON storage path. |
@@ -66,6 +70,7 @@ Use `.env.example` for a minimal setup, then add only what you need from this re
 |---|---|---|---|
 | `ALERTS_ENABLED` | `false` | listener | Enable alert rule processing. |
 | `ALERTS_WEBHOOK_TIMEOUT_MS` | `5000` | listener | Timeout for alert webhook delivery. |
+| `ALERTS_ALLOW_PRIVATE_TARGETS` | `true` | listener | Allow webhook targets on RFC1918/private ranges. Loopback/link-local targets are always blocked. |
 | `RUN_CYCLE_OFF_DELAY_MS` | `900000` | listener | Delay synthetic OFF for run-cycle switches. |
 | `RECONNECT_BASE_MS` | `5000` | listener | Initial reconnect delay for HomeKit subscribers. |
 | `RECONNECT_MAX_MS` | `60000` | listener | Max reconnect delay for HomeKit subscribers. |
@@ -87,16 +92,33 @@ Use `.env.example` for a minimal setup, then add only what you need from this re
 | Variable | Default | Used by | Description |
 |---|---|---|---|
 | `VITE_API_BASE_URL` | `http://localhost:3001` | web build/dev | Vite dev proxy target / build-time API base. |
-| `VITE_API_TOKEN` | empty | web build/dev | Adds `x-api-token` from frontend fetch layer. |
+| `VITE_API_TOKEN` | empty | web dev | Adds `x-api-token` from frontend fetch/proxy only in local dev mode. |
 
 ## API Authentication (important)
 
-- If `API_TOKEN` is empty: all routes are open.
+- If `NODE_ENV=production` and `API_TOKEN` is empty: listener startup fails.
+- If `API_TOKEN` is empty in non-production: all routes are open.
 - If `API_TOKEN` is set:
-  - `GET/HEAD/OPTIONS` remain open.
   - Write routes (`POST`, `PATCH`, `DELETE`) require one of:
     - Header `X-API-Token: <token>`
     - Header `Authorization: Bearer <token>`
+  - `GET/HEAD` remain open unless `API_TOKEN_READS_ENABLED=true`.
+
+### Setting `API_TOKEN`
+
+Generate a strong random token:
+
+```bash
+openssl rand -hex 32
+```
+
+Set it in `.env`:
+
+```bash
+API_TOKEN=<paste-generated-token>
+```
+
+Do not use a generic token value (for example `changeme` or `token123`).
 
 ## API Essentials
 
