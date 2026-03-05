@@ -66,7 +66,7 @@ If Setup shows `Scan failed: HTTP 502`, verify:
 
 ## Matter
 
-Matter works out of the box — chip-tool is bundled in the listener image. Just pair devices through the Setup UI.
+Matter works out of the box — the listener uses matter.js (a pure TypeScript Matter implementation) for commissioning, polling, and subscriptions. Just pair devices through the Setup UI.
 
 ### Adding a Matter Device
 
@@ -77,6 +77,9 @@ If your Matter accessory is already in Apple Home, you can add it to HomeChronic
 3. In HomeChronicle Setup → Matter Devices, choose **Add From Apple Home**.
 4. Enter a label + the setup code from Apple Home.
 5. HomeChronicle commissions its own Matter controller entry and auto-allocates a `nodeId`.
+
+> **VLAN users:** Matter requires IPv6 link-local connectivity between the Docker host and your devices. If your IoT devices are on a separate VLAN, you need a VLAN sub-interface on the host. See [VLAN / segregated IoT networks](limitations.md#platform-note-vlan--segregated-iot-networks).
+
 ## Update HomeChronicle
 
 ```bash

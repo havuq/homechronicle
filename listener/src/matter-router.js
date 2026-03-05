@@ -107,7 +107,7 @@ export function createMatterRouter({
       res.status(200).json({
         devices: cache,
         cachedAt: new Date().toISOString(),
-        warning: `Matter scan failed: ${err.message}. Is chip-tool available?`,
+        warning: `Matter scan failed: ${err.message}. Is the matter.js controller initialized?`,
       });
     }
   });
