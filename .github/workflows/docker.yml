@@ -167,6 +167,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Scope the layer cache per service so listener and web don't share entries.
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          # Keep cache scope per service, but export minimally to avoid cache bloat.
+          cache-from: type=gha,scope=release-${{ matrix.service }}
+          cache-to: type=gha,mode=min,scope=release-${{ matrix.service }},ignore-error=true
