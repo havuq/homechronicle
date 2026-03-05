@@ -1,15 +1,53 @@
+import { useEffect, useState } from 'react';
 import { useTopDevices } from '../hooks/useEvents.js';
 import { getServiceIcon } from '../lib/icons.js';
 import { getRoomColor } from '../lib/roomColors.js';
+import clsx from 'clsx';
 
-export default function TopDevices() {
-  const { data, isLoading } = useTopDevices();
+const WINDOWS = [
+  { label: '7d', days: 7 },
+  { label: '30d', days: 30 },
+  { label: '90d', days: 90 },
+];
+const STORAGE_KEY = 'hc_dashboard_top_devices_days';
+const VALID_DAYS = new Set(WINDOWS.map((w) => w.days));
+
+export default function TopDevices({ forcedDays = null, onDaysChange = null }) {
+  const [days, setDays] = useState(() => {
+    if (typeof window === 'undefined') return 7;
+    try {
+      const stored = Number.parseInt(window.localStorage.getItem(STORAGE_KEY) ?? '', 10);
+      return VALID_DAYS.has(stored) ? stored : 7;
+    } catch {
+      return 7;
+    }
+  });
+  const { data, isLoading } = useTopDevices(days);
+
+  useEffect(() => {
+    if (!VALID_DAYS.has(forcedDays) || forcedDays === days) return;
+    setDays(forcedDays);
+  }, [forcedDays, days]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, String(days));
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [days]);
+
+  function handleSetDays(next) {
+    setDays(next);
+    onDaysChange?.(next);
+  }
 
   if (isLoading) {
     return <div className="h-24 flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
   }
   if (!data?.length) {
-    return <p className="text-sm text-gray-400">No activity in the last 7 days.</p>;
+    return <p className="text-sm text-gray-400">No activity in the last {days} days.</p>;
   }
 
   const max = parseInt(data[0].event_count, 10);
@@ -18,7 +56,25 @@ export default function TopDevices() {
     <div>
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-700">Most Active Devices</h3>
-        <span className="text-xs text-gray-400">last 7 days</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">last {days} days</span>
+          <div className="flex gap-1">
+            {WINDOWS.map(({ label, days: d }) => (
+              <button
+                key={d}
+                onClick={() => handleSetDays(d)}
+                className={clsx(
+                  'text-xs px-2 py-0.5 rounded-md transition-colors',
+                  days === d
+                    ? 'bg-blue-100 text-blue-700 font-medium'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="space-y-2.5">
         {data.map((device) => {

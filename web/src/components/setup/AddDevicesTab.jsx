@@ -190,7 +190,7 @@ export default function AddDevicesTab({ setup }) {
 
           {discoveredData?.cachedAt && (
             <p className="text-xs text-gray-400">
-              Last scan: {formatDistanceToNow(new Date(discoveredData.cachedAt), { addSuffix: true })}
+              Last Scan: {formatDistanceToNow(new Date(discoveredData.cachedAt), { addSuffix: true })}
             </p>
           )}
 
@@ -478,7 +478,7 @@ function MatterCard({
 
       {matterDiscoveredData?.cachedAt && (
         <p className="text-xs text-gray-400">
-          Last scan: {formatDistanceToNow(new Date(matterDiscoveredData.cachedAt), { addSuffix: true })}
+          Last Manual Scan: {formatDistanceToNow(new Date(matterDiscoveredData.cachedAt), { addSuffix: true })}
         </p>
       )}
 

@@ -1,6 +1,7 @@
 import express from 'express';
 import { parseIntInRange } from './events-router.js';
 import { log } from './logger.js';
+import { validateWebhookTargetUrl } from './security.js';
 
 const VALID_SCOPE_TYPES = new Set(['all', 'room', 'accessory', 'characteristic']);
 const VALID_OPERATORS = new Set(['equals', 'not_equals', 'contains']);
@@ -22,17 +23,9 @@ function parseQuietMinutes(value, fallback = 0) {
   return parsed;
 }
 
-function parseUrl(value) {
-  const url = String(value ?? '').trim();
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
+const ALERTS_ALLOW_PRIVATE_TARGETS = /^(1|true|yes|on)$/i.test(
+  process.env.ALERTS_ALLOW_PRIVATE_TARGETS ?? 'true'
+);
 
 function validateCreate(body = {}) {
   const name = String(body.name ?? '').trim();
@@ -51,8 +44,10 @@ function validateCreate(body = {}) {
   const matchValue = String(body.matchValue ?? '').trim();
   if (!matchValue) return { error: 'matchValue is required' };
 
-  const targetUrl = parseUrl(body.targetUrl);
-  if (!targetUrl) return { error: 'targetUrl must be a valid http/https URL' };
+  const target = validateWebhookTargetUrl(body.targetUrl, {
+    allowPrivateTargets: ALERTS_ALLOW_PRIVATE_TARGETS,
+  });
+  if (!target.ok) return { error: target.error };
 
   const quietMinutes = parseQuietMinutes(body.quietMinutes, 0);
   if (quietMinutes === null) return { error: 'quietMinutes must be an integer between 0 and 10080' };
@@ -67,7 +62,7 @@ function validateCreate(body = {}) {
       characteristic,
       operator,
       matchValue,
-      targetUrl,
+      targetUrl: target.normalizedUrl,
       quietMinutes,
     },
   };
@@ -105,9 +100,11 @@ function validatePatch(body = {}) {
     updates.matchValue = matchValue;
   }
   if ('targetUrl' in body) {
-    const targetUrl = parseUrl(body.targetUrl);
-    if (!targetUrl) return { error: 'targetUrl must be a valid http/https URL' };
-    updates.targetUrl = targetUrl;
+    const target = validateWebhookTargetUrl(body.targetUrl, {
+      allowPrivateTargets: ALERTS_ALLOW_PRIVATE_TARGETS,
+    });
+    if (!target.ok) return { error: target.error };
+    updates.targetUrl = target.normalizedUrl;
   }
   if ('quietMinutes' in body) {
     const quietMinutes = parseQuietMinutes(body.quietMinutes, 0);
@@ -295,4 +292,3 @@ export function createAlertsRouter({ pool }) {
 
   return router;
 }
-

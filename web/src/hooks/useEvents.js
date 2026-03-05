@@ -50,10 +50,10 @@ export function useDailyStats(days = 30) {
   });
 }
 
-export function useTopDevices() {
+export function useTopDevices(days = 7) {
   return useQuery({
-    queryKey: ['stats', 'top-devices'],
-    queryFn: () => fetchJson(`${BASE}/stats/top-devices`),
+    queryKey: ['stats', 'top-devices', days],
+    queryFn: () => fetchJson(`${BASE}/stats/top-devices?days=${days}`),
     staleTime: 60_000,
     refetchInterval: 60_000,
   });

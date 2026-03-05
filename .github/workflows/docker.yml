@@ -1,11 +1,8 @@
 name: Build and Push Containers
 
-# Fires when a GitHub Release is published (e.g. tag v1.2.3).
-# The release tag is used to produce semver image tags:
-#   ghcr.io/havuq/homechronicle/listener:1.2.3
-#   ghcr.io/havuq/homechronicle/listener:1.2
-#   ghcr.io/havuq/homechronicle/listener:1
-#   ghcr.io/havuq/homechronicle/listener:latest  (same for web)
+# Fires when a GitHub Release is published.
+# Prerelease tags (vX.Y.Z-beta.N) publish only version tags.
+# Stable tags (vX.Y.Z) additionally publish major/minor/latest tags.
 on:
   release:
     types: [published]
@@ -13,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Keep GA locked by default; set repository variable GA_RELEASES_ENABLED=true after GA sign-off.
+      GA_RELEASES_ENABLED: ${{ vars.GA_RELEASES_ENABLED }}
 
     permissions:
       contents: read
@@ -43,8 +43,101 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Validate release policy
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const release = context.payload.release;
+            const tag = String(release.tag_name ?? "").trim();
+            const prerelease = Boolean(release.prerelease);
+            const gaEnabled = /^(1|true|yes|on)$/i.test(String(process.env.GA_RELEASES_ENABLED ?? ""));
+
+            const betaPattern = /^v(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$/;
+            const stablePattern = /^v(\d+)\.(\d+)\.(\d+)$/;
+
+            function parseTag(value) {
+              let m = value.match(betaPattern);
+              if (m) return { kind: "beta", parts: m.slice(1).map((n) => Number.parseInt(n, 10)) };
+              m = value.match(stablePattern);
+              if (m) return { kind: "stable", parts: m.slice(1).map((n) => Number.parseInt(n, 10)) };
+              return null;
+            }
+
+            function cmpParts(a, b) {
+              for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+                const av = a[i] ?? 0;
+                const bv = b[i] ?? 0;
+                if (av !== bv) return av - bv;
+              }
+              return 0;
+            }
+
+            const parsedCurrent = parseTag(tag);
+            if (!parsedCurrent) {
+              core.setFailed(`Invalid release tag '${tag}'. Use vX.Y.Z-beta.N for prerelease or vX.Y.Z for GA.`);
+              return;
+            }
+
+            if (prerelease && parsedCurrent.kind !== "beta") {
+              core.setFailed(`Prerelease must use beta tag format: got '${tag}'.`);
+              return;
+            }
+            if (!prerelease && parsedCurrent.kind !== "stable") {
+              core.setFailed(`Stable release must use vX.Y.Z tag format: got '${tag}'.`);
+              return;
+            }
+            if (!prerelease && !gaEnabled) {
+              core.setFailed(
+                "Stable releases are locked. Publish prereleases only until GA is approved, then set GA_RELEASES_ENABLED=true."
+              );
+              return;
+            }
+
+            const allReleases = await github.paginate(github.rest.repos.listReleases, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+            const prior = allReleases.filter((r) => r.id !== release.id);
+
+            if (prerelease) {
+              const priorBetas = prior
+                .filter((r) => Boolean(r.prerelease))
+                .map((r) => parseTag(String(r.tag_name ?? "")))
+                .filter((p) => p?.kind === "beta")
+                .map((p) => p.parts);
+              if (priorBetas.length > 0) {
+                const maxBeta = priorBetas.reduce((best, cur) => (cmpParts(cur, best) > 0 ? cur : best));
+                if (cmpParts(parsedCurrent.parts, maxBeta) <= 0) {
+                  core.setFailed(
+                    `Beta version must increase monotonically. Current ${tag} is not greater than previous max v${maxBeta[0]}.${maxBeta[1]}.${maxBeta[2]}-beta.${maxBeta[3]}.`
+                  );
+                  return;
+                }
+              }
+            } else {
+              const priorStable = prior
+                .filter((r) => !Boolean(r.prerelease))
+                .map((r) => parseTag(String(r.tag_name ?? "")))
+                .filter((p) => p?.kind === "stable")
+                .map((p) => p.parts);
+              if (priorStable.length > 0) {
+                const maxStable = priorStable.reduce((best, cur) => (cmpParts(cur, best) > 0 ? cur : best));
+                if (cmpParts(parsedCurrent.parts, maxStable) <= 0) {
+                  core.setFailed(
+                    `Stable version must increase monotonically. Current ${tag} is not greater than previous max v${maxStable[0]}.${maxStable[1]}.${maxStable[2]}.`
+                  );
+                  return;
+                }
+              }
+            }
+
+            core.info(`Release policy check passed for ${tag} (prerelease=${prerelease}).`);
+
       - name: Check if this is the latest GitHub release
         id: latest_release
+        if: ${{ github.event.release.prerelease == false }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -63,9 +156,9 @@ jobs:
           images: ghcr.io/${{ github.repository }}/${{ matrix.service }}
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ steps.latest_release.outputs.is_latest == 'true' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.event.release.prerelease == false }}
+            type=semver,pattern={{major}},enable=${{ github.event.release.prerelease == false }}
+            type=raw,value=latest,enable=${{ github.event.release.prerelease == false && steps.latest_release.outputs.is_latest == 'true' }}
 
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v6

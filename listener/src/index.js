@@ -20,6 +20,7 @@ import { initController as initMatterController } from './matter-controller.js';
 import { deriveDeviceHealth } from './device-health.js';
 import { detectOutliers } from './anomaly-detection.js';
 import { log, getLevel, setLevel } from './logger.js';
+import { secureTokenEquals } from './security.js';
 import {
   cacheAccessoryMetadata,
   getAccessoryCapabilities,
@@ -39,13 +40,26 @@ const PORT = Number(process.env.API_PORT ?? 3001);
 const RESCAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const STORE_REFRESH_INTERVAL_MS = Number.parseInt(process.env.STORE_REFRESH_INTERVAL_MS ?? '30000', 10);
 const API_TOKEN = (process.env.API_TOKEN ?? '').trim();
+const API_TOKEN_READS_ENABLED = /^(1|true|yes|on)$/i.test(process.env.API_TOKEN_READS_ENABLED ?? 'false');
+const API_JSON_LIMIT = (process.env.API_JSON_LIMIT ?? '256kb').trim() || '256kb';
+const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const CORS_ALLOW_LOCALHOST = /^(1|true|yes|on)$/i.test(process.env.CORS_ALLOW_LOCALHOST ?? 'true');
 const ALERTS_ENABLED = !/^(0|false|no|off)$/i.test(process.env.ALERTS_ENABLED ?? 'false');
 const DISCOVERY_SCAN_ENABLED = !/^(0|false|no|off)$/i.test(process.env.DISCOVERY_SCAN_ENABLED ?? 'true');
+const IS_PRODUCTION = String(process.env.NODE_ENV ?? 'production').trim().toLowerCase() === 'production';
 
 const RETENTION_SWEEP_MS = Number.parseInt(process.env.RETENTION_SWEEP_MS ?? `${24 * 60 * 60 * 1000}`, 10);
 const RETENTION_DAYS_DEFAULT = Number.parseInt(process.env.RETENTION_DAYS ?? '365', 10);
 const RETENTION_ARCHIVE_DEFAULT = /^(1|true|yes|on)$/i.test(process.env.RETENTION_ARCHIVE ?? 'true');
 const STALE_THRESHOLD_HOURS_DEFAULT = Number.parseInt(process.env.STALE_THRESHOLD_HOURS ?? '12', 10);
+
+if (IS_PRODUCTION && !API_TOKEN) {
+  log.error('[api] API_TOKEN is required when NODE_ENV=production');
+  process.exit(1);
+}
 
 const pairingsStore = new JsonObjectStore(PAIRINGS_FILE, {});
 const roomsStore = new JsonObjectStore(ROOMS_FILE, {});
@@ -119,6 +133,26 @@ function normalizeRetentionSettings(input = {}) {
     ? RETENTION_ARCHIVE_DEFAULT
     : Boolean(input.archiveBeforeDelete);
   return { retentionDays, archiveBeforeDelete, staleThresholdHours };
+}
+
+function isLoopbackHostname(hostname) {
+  const normalized = String(hostname ?? '').toLowerCase();
+  return normalized === 'localhost'
+    || normalized === '127.0.0.1'
+    || normalized === '::1'
+    || normalized.endsWith('.localhost');
+}
+
+function isAllowedCorsOrigin(origin) {
+  if (!origin) return true;
+  if (CORS_ALLOWED_ORIGINS.length > 0) return CORS_ALLOWED_ORIGINS.includes(origin);
+  if (!CORS_ALLOW_LOCALHOST) return false;
+  try {
+    const parsed = new URL(origin);
+    return isLoopbackHostname(parsed.hostname);
+  } catch {
+    return false;
+  }
 }
 
 function loadPairings() {
@@ -368,17 +402,35 @@ if (Number.isFinite(RETENTION_SWEEP_MS) && RETENTION_SWEEP_MS >= 60_000) {
 // ---------------------------------------------------------------------------
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, isAllowedCorsOrigin(origin));
+  },
+  methods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Token'],
+  maxAge: 600,
+}));
+app.use(express.json({ limit: API_JSON_LIMIT }));
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
 app.use((req, res, next) => {
   if (!API_TOKEN) return next();
-  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  if (req.method === 'OPTIONS') return next();
+
+  const isReadMethod = req.method === 'GET' || req.method === 'HEAD';
+  if (isReadMethod && !API_TOKEN_READS_ENABLED) return next();
 
   const authHeader = req.get('authorization') ?? '';
   const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
   const providedToken = (req.get('x-api-token') ?? bearerMatch?.[1] ?? '').trim();
 
-  if (providedToken === API_TOKEN) return next();
+  if (secureTokenEquals(API_TOKEN, providedToken)) return next();
+  res.setHeader('WWW-Authenticate', 'Bearer realm="homechronicle-api"');
   return res.status(401).json({ error: 'Unauthorized' });
 });
 
@@ -909,7 +961,8 @@ app.get('/api/stats/daily', async (req, res) => {
   }
 });
 
-app.get('/api/stats/top-devices', async (_req, res) => {
+app.get('/api/stats/top-devices', async (req, res) => {
+  const days = parseIntInRange(req.query.days, 7, 1, 90);
   try {
     const result = await pool.query(`
       SELECT
@@ -921,7 +974,7 @@ app.get('/api/stats/top-devices', async (_req, res) => {
       FROM (
         SELECT accessory_name, COUNT(*)::int AS event_count
         FROM event_logs
-        WHERE timestamp >= NOW() - INTERVAL '7 days'
+        WHERE timestamp >= NOW() - ($1::int * INTERVAL '1 day')
         GROUP BY accessory_name
         ORDER BY event_count DESC
         LIMIT 10
@@ -934,7 +987,7 @@ app.get('/api/stats/top-devices', async (_req, res) => {
         LIMIT 1
       ) latest ON true
       ORDER BY counts.event_count DESC
-    `);
+    `, [days]);
     const rooms = loadRooms();
     const rows = result.rows.map((r) => ({
       ...r,
@@ -1187,6 +1240,16 @@ app.listen(PORT, () => {
   log.info(`[api] Listening on port ${PORT}`);
   if (API_TOKEN) {
     log.info('[api] Write auth enabled for POST/PATCH/DELETE routes');
+    if (API_TOKEN_READS_ENABLED) {
+      log.info('[api] Read auth enabled for GET/HEAD routes');
+    }
+  }
+  if (CORS_ALLOWED_ORIGINS.length > 0) {
+    log.info(`[api] CORS allow-list enabled for ${CORS_ALLOWED_ORIGINS.length} origin(s)`);
+  } else if (CORS_ALLOW_LOCALHOST) {
+    log.info('[api] CORS restricted to localhost origins');
+  } else {
+    log.warn('[api] CORS denies all browser origins (CORS_ALLOW_LOCALHOST=false and no allow-list)');
   }
   if (!ALERTS_ENABLED) {
     log.info('[api] Alerts feature disabled (ALERTS_ENABLED=false)');

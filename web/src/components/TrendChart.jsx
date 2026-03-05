@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
@@ -11,12 +11,41 @@ const WINDOWS = [
   { label: '30d', days: 30 },
   { label: '90d', days: 90 },
 ];
+const STORAGE_KEY = 'hc_dashboard_trend_days';
+const VALID_DAYS = new Set(WINDOWS.map((w) => w.days));
 
 const TOOLTIP_STYLE = { fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' };
 
-export default function TrendChart() {
-  const [days, setDays] = useState(30);
+export default function TrendChart({ forcedDays = null, onDaysChange = null }) {
+  const [days, setDays] = useState(() => {
+    if (typeof window === 'undefined') return 30;
+    try {
+      const stored = Number.parseInt(window.localStorage.getItem(STORAGE_KEY) ?? '', 10);
+      return VALID_DAYS.has(stored) ? stored : 30;
+    } catch {
+      return 30;
+    }
+  });
   const { data, isLoading } = useDailyStats(days);
+
+  useEffect(() => {
+    if (!VALID_DAYS.has(forcedDays) || forcedDays === days) return;
+    setDays(forcedDays);
+  }, [forcedDays, days]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, String(days));
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [days]);
+
+  function handleSetDays(next) {
+    setDays(next);
+    onDaysChange?.(next);
+  }
 
   const chartData = Array.from({ length: days }, (_, i) => {
     const day  = subDays(new Date(), days - 1 - i);
@@ -40,7 +69,7 @@ export default function TrendChart() {
           {WINDOWS.map(({ label, days: d }) => (
             <button
               key={d}
-              onClick={() => setDays(d)}
+              onClick={() => handleSetDays(d)}
               className={clsx(
                 'text-xs px-2 py-0.5 rounded-md transition-colors',
                 days === d

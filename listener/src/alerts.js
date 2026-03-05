@@ -1,8 +1,13 @@
+import { resolveAndValidateWebhookTarget } from './security.js';
+
 const ALERTS_WEBHOOK_TIMEOUT_MS = (() => {
   const parsed = Number.parseInt(process.env.ALERTS_WEBHOOK_TIMEOUT_MS ?? '5000', 10);
   if (!Number.isFinite(parsed) || parsed < 500) return 5000;
   return parsed;
 })();
+const ALERTS_ALLOW_PRIVATE_TARGETS = /^(1|true|yes|on)$/i.test(
+  process.env.ALERTS_ALLOW_PRIVATE_TARGETS ?? 'true'
+);
 
 function normalizeString(value) {
   return String(value ?? '').trim();
@@ -115,13 +120,23 @@ async function isSuppressed(pool, ruleId, quietMinutes) {
 }
 
 async function sendWebhook(rule, event) {
+  const target = await resolveAndValidateWebhookTarget(rule.target_url, {
+    allowPrivateTargets: ALERTS_ALLOW_PRIVATE_TARGETS,
+  });
+  if (!target.ok) {
+    return {
+      status: 'failed',
+      error: `Blocked webhook target: ${target.error}`,
+    };
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), ALERTS_WEBHOOK_TIMEOUT_MS);
 
   try {
     const firedAt = new Date().toISOString();
     const payload = buildPayload(rule, event, firedAt);
-    const response = await fetch(rule.target_url, {
+    const response = await fetch(target.normalizedUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),

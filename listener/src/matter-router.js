@@ -119,10 +119,12 @@ export function createMatterRouter({
     }
     try {
       const setupCode = toOptionalText(req.body?.setupCode);
+      const nodeId = normalizeNodeId(req.body?.nodeId);
       if (!setupCode) {
         return res.status(400).json({ error: 'setupCode is required' });
       }
       const result = await matterRuntime.commission({
+        ...(nodeId ? { nodeId } : {}),
         setupCode,
         address: req.body?.address,
         port: req.body?.port,
@@ -131,7 +133,7 @@ export function createMatterRouter({
       });
       return res.json({
         success: true,
-        nodeId: result?.nodeId ?? null,
+        nodeId: result?.nodeId ?? nodeId ?? null,
         stdout: result.stdout,
         stderr: result.stderr,
       });
@@ -202,6 +204,8 @@ export function createMatterRouter({
     const nowIso = new Date().toISOString();
     const existing = pairings[nodeId] ?? null;
 
+    const manualImport = !setupCode && !!requestedNodeId;
+
     pairings[nodeId] = {
       protocol: 'matter',
       nodeId,
@@ -213,6 +217,7 @@ export function createMatterRouter({
       pairedAt: existing?.pairedAt ?? nowIso,
       commissionedAt: nowIso,
       credentials: req.body?.credentials ?? existing?.credentials ?? null,
+      ...(manualImport ? { manualImport: true } : {}),
     };
 
     await savePairings(pairings);
