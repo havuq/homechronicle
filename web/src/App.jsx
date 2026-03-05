@@ -190,15 +190,15 @@ export default function App() {
             {/* KPI cards row */}
             <StatsCards />
 
-            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700">Dashboard Range</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">
+            <div className="bg-white rounded-xl shadow-sm p-3 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="flex items-baseline gap-2 text-sm font-semibold text-gray-700">
+                  <span>Dashboard Range</span>
+                  <span className="text-xs font-normal text-gray-400">
                     {syncDashboardRanges ? 'Synced across charts' : 'Charts can use independent ranges'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
+                  </span>
+                </h3>
+                <div className="flex items-center gap-2.5">
                   <div className="flex gap-1">
                     {DASHBOARD_WINDOWS.map(({ label, days }) => (
                       <button
