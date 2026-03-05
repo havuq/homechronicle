@@ -98,7 +98,10 @@ export async function initController() {
   storageService.location = STORAGE_PATH;
   console.log(`[matter-controller] Storage: ${STORAGE_PATH}`);
 
-  const uniqueId = `homechronicle-${Date.now()}`;
+  // Use a stable ID so the controller remembers commissioned nodes across restarts.
+  // A timestamp-based ID would create a new fabric namespace on every restart,
+  // making previously commissioned nodes invisible to getCommissionedNodes().
+  const uniqueId = process.env.MATTER_CONTROLLER_ID?.trim() || 'homechronicle';
 
   controller = new CommissioningController({
     environment: {

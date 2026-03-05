@@ -55,16 +55,28 @@ const retentionStore = new JsonObjectStore(RETENTION_FILE, {
 });
 let matterRuntime = null;
 
+function normalizeMatterNodeId(value) {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  try {
+    return BigInt(text).toString();
+  } catch {
+    return text.toUpperCase();
+  }
+}
+
 function normalizePairingRecord(id, pairing = {}) {
   const protocol = String(pairing?.protocol ?? 'homekit').toLowerCase() === 'matter'
     ? 'matter'
     : 'homekit';
   if (protocol === 'matter') {
+    const nodeId = normalizeMatterNodeId(pairing?.nodeId ?? id) ?? String(id);
     return {
       ...pairing,
       protocol: 'matter',
-      nodeId: pairing?.nodeId ?? id,
-      name: pairing?.name ?? pairing?.nodeId ?? id,
+      nodeId,
+      name: pairing?.name ?? nodeId,
     };
   }
   return {
@@ -76,7 +88,9 @@ function normalizePairingRecord(id, pairing = {}) {
 function normalizePairingsMap(input = {}) {
   const output = {};
   for (const [id, pairing] of Object.entries(input ?? {})) {
-    output[id] = normalizePairingRecord(id, pairing);
+    const normalized = normalizePairingRecord(id, pairing);
+    const key = normalized.protocol === 'matter' ? normalized.nodeId : id;
+    output[key] = normalized;
   }
   return output;
 }
