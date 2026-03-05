@@ -448,7 +448,7 @@ function MatterCard({
       <div>
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-gray-900">Matter</h3>
-          <span className="text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5">Beta</span>
+          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">matter.js</span>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">
           Scan for Matter devices in commissioning mode, then enter a setup code to start logging.
@@ -693,7 +693,7 @@ function MatterCard({
       )}
 
       <p className="text-[11px] text-gray-400 italic">
-        Matter support is in beta. Some devices or setups may not work as expected.
+        Matter support covers a fixed set of clusters. Some devices may not produce events — see limitations.
       </p>
     </div>
   );

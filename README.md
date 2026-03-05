@@ -73,11 +73,6 @@ Events will begin showing in the Timeline once pairing succeeds.
 - `docker compose logs -f listener web postgres` to view logs
 - `docker compose restart listener` if you need to reconnect device subscriptions
 
-If Setup shows `Scan failed: HTTP 502`, verify:
-- `LISTENER_HOST` is reachable from the web container (`host.docker.internal` or your Pi/NAS LAN IP in Portainer/Swarm)
-- `API_PORT` matches the listener port (default `3001`)
-- If you use a custom compose file, either include `env_file: .env` or map required variables in each service `environment` block.
-
 ## Matter
 
 Matter works out of the box — the listener uses matter.js (a pure TypeScript Matter implementation) for commissioning, polling, and subscriptions. Just pair devices through the Setup UI.
@@ -112,9 +107,9 @@ Detailed guides have been moved to the GitHub Wiki:
 
 You can also browse all docs here: [HomeChronicle Wiki](https://github.com/havuq/homechronicle/wiki)
 
-## Known Limitations
+## Limitations & Troubleshooting
 
-Current product constraints and Matter caveats are documented in [limitations.md](limitations.md).
+See [limitations.md](limitations.md) for current constraints, supported Matter clusters, and troubleshooting steps.
 
 ## License
 

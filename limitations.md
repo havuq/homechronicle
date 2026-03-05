@@ -76,35 +76,26 @@ matter.js is pure TypeScript and runs natively on macOS — no Docker required f
 
 Docker Desktop on macOS is **not recommended** for Matter: it runs containers in a Linux VM where `network_mode: host` maps to the VM's network, not the Mac's. This prevents mDNS/IPv6 link-local from reaching devices on your LAN. For containerized deployments, use a Linux host (NAS, Raspberry Pi, etc.).
 
-## Setup flow scope is Phase 1 for Matter import/commission
+## Matter commissioning uses IP transport only
 
-The current Setup flow supports:
-- importing/registering Matter pairings,
-- commissioning from setup code,
-- polling for events.
+The Setup flow supports commissioning via IP (on-network) and manual node import. BLE and Thread dataset commissioning are not supported — devices must be reachable over the local network.
 
-It does not yet implement richer commissioning orchestration paths (for example full BLE/thread-dataset-driven flows) in HomeChronicle itself.
+## Troubleshooting
 
-Reference:
-- Router notes: [listener/src/matter-router.js](listener/src/matter-router.js)
+### General
 
-## Troubleshooting these limitations
+| Symptom | Fix |
+|---------|-----|
+| Setup shows `Scan failed: HTTP 502` | Verify `LISTENER_HOST` is reachable from the web container and `API_PORT` matches (default `3001`). |
+| No events after pairing a HomeKit device | Check `docker compose logs -f listener` for subscription errors. Restart: `docker compose restart listener`. |
+| Listener keeps reconnecting | The device may be unreachable. Confirm mDNS/Bonjour works on the host (`dns-sd -B _hap._tcp` on macOS, `avahi-browse -rt _hap._tcp` on Linux). |
 
-1. Matter device is added but polling shows errors
-- Check listener logs: `docker compose logs -f listener`.
-- Confirm host networking in `.env`: `LISTENER_NETWORK_MODE=host`, then restart: `docker compose up -d`.
-- Confirm IPv6/mDNS availability on the host network.
-- Remove duplicate Matter pairings in Setup if the same node appears more than once.
+### Matter
 
-2. Matter device is paired but no events appear
-- Verify the device exposes supported clusters currently polled (`0x0006`, `0x0008`, `0x0045`, `0x0402`, `0x0405`, `0x0406`).
-- If it uses other clusters, pairing can succeed but timeline events may remain empty until support is added.
-
-3. Commissioning fails when using manual address/port
-- Direct commissioning requires IPv6; use an IPv6 literal or a hostname that resolves to IPv6.
-- If address-based commissioning fails, retry with on-network discovery from a fresh setup code.
-
-4. Commissioning discovers device but times out during pairing (PASE timeout)
-- This usually means the device is on a different VLAN from the Docker host.
-- IPv6 link-local addresses (`fe80::`) do not route across VLANs.
-- See the "VLAN / segregated IoT networks" section above for the fix.
+| Symptom | Fix |
+|---------|-----|
+| Polling errors after adding a device | Confirm host networking (`LISTENER_NETWORK_MODE=host`) and IPv6/mDNS on the host. Check `docker compose logs -f listener`. |
+| Paired but no events appear | The device likely uses clusters outside the supported set (see above). Pairing succeeds but no timeline events are produced. |
+| Commissioning fails with manual address/port | Direct commissioning requires IPv6. Use an IPv6 literal or retry with on-network discovery. |
+| Discovery works but commissioning times out (PASE) | Device is on a different VLAN. IPv6 link-local does not route across VLANs — see the VLAN section above. |
+| Duplicate nodes in Setup | Remove the extra pairing in Setup and restart the listener. |
