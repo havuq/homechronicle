@@ -267,7 +267,7 @@ export function createMatterRuntime({
       if (!isMatterPairing(pairing)) continue;
       const nodeId = normalizeNodeId(pairing?.nodeId ?? id);
       if (!nodeId) continue;
-      if (commissionedNodes.size > 0 && !commissionedNodes.has(nodeId)) {
+      if (commissionedNodes.size > 0 && !commissionedNodes.has(nodeId) && !pairing.manualImport) {
         continue;
       }
       nextMatter.set(nodeId, { ...pairing, nodeId });

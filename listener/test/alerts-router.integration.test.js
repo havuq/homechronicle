@@ -150,6 +150,18 @@ test('/api/alerts/rules validates bad payloads', async () => {
   });
   assert.equal(invalid.statusCode, 400);
   assert.match(invalid.jsonBody.error, /operator/i);
+
+  const blockedTarget = await invoke(post, {
+    body: {
+      name: 'Loopback target',
+      scopeType: 'all',
+      operator: 'equals',
+      matchValue: 'true',
+      targetUrl: 'http://127.0.0.1:9999/hook',
+    },
+  });
+  assert.equal(blockedTarget.statusCode, 400);
+  assert.match(blockedTarget.jsonBody.error, /loopback/i);
 });
 
 test('/api/alerts/deliveries returns paginated response', async () => {
@@ -162,4 +174,3 @@ test('/api/alerts/deliveries returns paginated response', async () => {
   assert.equal(response.jsonBody.deliveries.length, 1);
   assert.equal(response.jsonBody.deliveries[0].status, 'sent');
 });
-

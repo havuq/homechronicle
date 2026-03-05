@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, stat, writeFile } from 'fs/promises';
+import { chmod, mkdir, readFile, rename, stat, writeFile } from 'fs/promises';
 import { dirname } from 'path';
 
 function clone(value) {
@@ -55,8 +55,13 @@ export class JsonObjectStore {
     const tempPath = `${this.filePath}.tmp-${process.pid}-${Date.now()}`;
     const serialized = JSON.stringify(normalized, null, 2);
 
-    await writeFile(tempPath, serialized, 'utf8');
+    await writeFile(tempPath, serialized, { encoding: 'utf8', mode: 0o600 });
     await rename(tempPath, this.filePath);
+    try {
+      await chmod(this.filePath, 0o600);
+    } catch {
+      // Ignore filesystems that do not support POSIX permissions.
+    }
 
     try {
       const meta = await stat(this.filePath);

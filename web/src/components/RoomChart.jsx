@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { useRoomStats } from '../hooks/useEvents.js';
 import { getRoomColor } from '../lib/roomColors.js';
@@ -6,16 +6,46 @@ import { getRoomColor } from '../lib/roomColors.js';
 const WINDOWS = [
   { label: '7d',  days: 7  },
   { label: '30d', days: 30 },
+  { label: '90d', days: 90 },
 ];
+const STORAGE_KEY = 'hc_dashboard_room_days';
+const VALID_DAYS = new Set(WINDOWS.map((w) => w.days));
 
 function toCount(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
 
-export default function RoomChart() {
-  const [days, setDays] = useState(7);
+export default function RoomChart({ forcedDays = null, onDaysChange = null }) {
+  const [days, setDays] = useState(() => {
+    if (typeof window === 'undefined') return 7;
+    try {
+      const stored = Number.parseInt(window.localStorage.getItem(STORAGE_KEY) ?? '', 10);
+      return VALID_DAYS.has(stored) ? stored : 7;
+    } catch {
+      return 7;
+    }
+  });
   const { data, isLoading } = useRoomStats(days);
+
+  useEffect(() => {
+    if (!VALID_DAYS.has(forcedDays) || forcedDays === days) return;
+    setDays(forcedDays);
+  }, [forcedDays, days]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, String(days));
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [days]);
+
+  function handleSetDays(next) {
+    setDays(next);
+    onDaysChange?.(next);
+  }
 
   if (isLoading) {
     return <div className="h-32 flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
@@ -34,7 +64,7 @@ export default function RoomChart() {
           {WINDOWS.map(({ label, days: d }) => (
             <button
               key={d}
-              onClick={() => setDays(d)}
+              onClick={() => handleSetDays(d)}
               className={clsx(
                 'text-xs px-2 py-0.5 rounded-md transition-colors',
                 days === d

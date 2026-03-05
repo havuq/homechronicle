@@ -57,6 +57,7 @@ test('/api/setup/matter/pair stores Matter pairing metadata', async () => {
   assert.equal(pairings['0X1234ABCD'].protocol, 'matter');
   assert.equal(pairings['0X1234ABCD'].name, 'Porch Sensor');
   assert.equal(pairings['0X1234ABCD'].transport, 'thread');
+  assert.equal(pairings['0X1234ABCD'].manualImport, true);
 });
 
 test('/api/setup/matter/pair generates nodeId when missing', async () => {
@@ -252,4 +253,5 @@ test('/api/setup/matter/pair commissions when setupCode is provided', async () =
   assert.equal(response.jsonBody.success, true);
   assert.equal(calls.length, 1);
   assert.equal(pairings['0X2A'].protocol, 'matter');
+  assert.equal(pairings['0X2A'].manualImport, undefined);
 });

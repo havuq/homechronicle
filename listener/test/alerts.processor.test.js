@@ -12,7 +12,7 @@ function makeRule(overrides = {}) {
     characteristic: null,
     operator: 'equals',
     match_value: 'true',
-    target_url: 'https://example.test/hook',
+    target_url: 'https://203.0.113.10/hook',
     quiet_minutes: 0,
     ...overrides,
   };
@@ -122,3 +122,35 @@ test('processAlertsForEvent records failed delivery for non-2xx response', async
   }
 });
 
+test('processAlertsForEvent blocks localhost webhook targets', async () => {
+  const deliveries = [];
+  const pool = {
+    async query(sql, params = []) {
+      if (sql.includes('FROM alert_rules')) {
+        return { rows: [makeRule({ target_url: 'http://127.0.0.1:8080/hook' })] };
+      }
+      if (sql.includes('status = \'sent\'')) return { rows: [] };
+      if (sql.startsWith('INSERT INTO alert_deliveries')) {
+        deliveries.push({ status: params[2], error: params[5] });
+        return { rowCount: 1 };
+      }
+      throw new Error(`Unexpected SQL: ${sql}`);
+    },
+  };
+
+  const originalFetch = global.fetch;
+  let fetchCalls = 0;
+  global.fetch = async () => {
+    fetchCalls += 1;
+    return { ok: true, status: 200 };
+  };
+  try {
+    await processAlertsForEvent(pool, makeEvent());
+    assert.equal(fetchCalls, 0);
+    assert.equal(deliveries.length, 1);
+    assert.equal(deliveries[0].status, 'failed');
+    assert.match(deliveries[0].error, /blocked webhook target/i);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
