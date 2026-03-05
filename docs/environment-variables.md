@@ -40,7 +40,7 @@ Use `.env.example` for a minimal setup, then add only what you need from this re
 | `RETENTION_FILE` | `/app/data/retention.json` in prod | listener | Retention settings JSON storage path. |
 | `STORE_REFRESH_INTERVAL_MS` | `30000` | listener | Refresh interval for JSON stores. |
 | `DISCOVERY_SCAN_ENABLED` | `true` | listener | Enable periodic HomeKit discovery scans. |
-| `DISCOVER_IFACE` | auto | listener | Interface for mDNS discovery (example: `en0`). |
+| `DISCOVER_IFACE` | auto | listener | Interface for mDNS discovery (example: `en0`). If Matter devices are on a separate VLAN, set this to the VLAN sub-interface (e.g. `bond0.20`). See [limitations.md](../limitations.md#platform-note-vlan--segregated-iot-networks). |
 
 ## Listener Performance/Memory
 
@@ -75,17 +75,12 @@ Use `.env.example` for a minimal setup, then add only what you need from this re
 | Variable | Default | Used by | Description |
 |---|---|---|---|
 | `MATTER_POLL_INTERVAL_MS` | `5000` | listener | Poll interval for Matter runtime. |
-| `MATTER_COMMAND_TIMEOUT_MS` | `20000` | listener | Timeout for Matter poll commands. |
-| `MATTER_COMMISSION_TIMEOUT_MS` | `180000` | listener | Timeout for Matter commission command. |
-| `MATTER_SUBSCRIBE_ENABLED` | `false` | listener | Enable long-lived Matter subscriptions. |
-| `MATTER_SUBSCRIBE_RESTART_DELAY_MS` | `2000` | listener | Delay before restarting Matter subscribe worker. |
-| `MATTER_SUBSCRIBE_HEALTHY_AFTER_MS` | `5000` | listener | Time before clearing stale subscription errors. |
-| `MATTER_SUBSCRIBE_MIN_INTERVAL_SEC` | `0` | chip-tool subscribe | Requested min report interval. |
-| `MATTER_SUBSCRIBE_MAX_INTERVAL_SEC` | `30` | chip-tool subscribe | Requested max report interval. |
-| `MATTER_SUBSCRIBE_ENDPOINT_IDS` | `0xFFFF,1,0` | chip-tool subscribe | Endpoint IDs to subscribe. |
-| `MATTER_CHIP_TOOL_STATE_DIR` | `/app/data/chip-tool-state` | chip-tool scripts | State directory for chip-tool. |
-| `MATTER_CHIP_TOOL_TIMEOUT_SEC` | poll:`20`, commission:`90` | chip-tool scripts | Generic chip-tool timeout in seconds. |
-| `MATTER_CHIP_TOOL_SUBSCRIBE_TIMEOUT_SEC` | fallback to `MATTER_CHIP_TOOL_TIMEOUT_SEC` | chip-tool subscribe | Subscribe command timeout. |
+| `MATTER_SUBSCRIBE_ENABLED` | `false` | listener | Enable long-lived Matter subscriptions (via matter.js in-process). |
+| `MATTER_SUBSCRIBE_RESTART_DELAY_MS` | `2000` | listener | Delay before restarting a failed Matter subscription. |
+| `MATTER_SUBSCRIBE_MIN_INTERVAL_SEC` | `1` | listener | Requested min subscription report interval. |
+| `MATTER_SUBSCRIBE_MAX_INTERVAL_SEC` | `30` | listener | Requested max subscription report interval. |
+| `MATTER_STORAGE_PATH` | `/app/data/matter-storage` (prod) | listener | Persistent storage directory for matter.js controller state. |
+| `MATTER_SCAN_TIMEOUT_MS` | `15000` | listener | Timeout for Matter device discovery scan. |
 
 ## Web Build/Dev (usually not needed in Docker runtime)
 
