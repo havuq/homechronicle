@@ -117,13 +117,11 @@ export function createMatterRouter({
       return res.status(503).json({ error: 'Matter runtime unavailable' });
     }
     try {
-      const nodeId = normalizeNodeId(req.body?.nodeId);
       const setupCode = toOptionalText(req.body?.setupCode);
-      if (!nodeId || !setupCode) {
-        return res.status(400).json({ error: 'nodeId and setupCode are required' });
+      if (!setupCode) {
+        return res.status(400).json({ error: 'setupCode is required' });
       }
       const result = await matterRuntime.commission({
-        nodeId,
         setupCode,
         address: req.body?.address,
         port: req.body?.port,
@@ -132,7 +130,7 @@ export function createMatterRouter({
       });
       return res.json({
         success: true,
-        nodeId,
+        nodeId: result?.nodeId ?? null,
         stdout: result.stdout,
         stderr: result.stderr,
       });
@@ -171,10 +169,10 @@ export function createMatterRouter({
     }
 
     const pairings = loadPairings();
-    const nodeId = requestedNodeId ?? generateNodeId(pairings);
+    let nodeId = requestedNodeId ?? generateNodeId(pairings);
     if (setupCode && matterRuntime) {
       try {
-        await matterRuntime.commission({
+        const result = await matterRuntime.commission({
           nodeId,
           setupCode,
           address: req.body?.address,
@@ -182,6 +180,15 @@ export function createMatterRouter({
           transport: req.body?.transport,
           commissioningMethod: req.body?.commissioningMethod,
         });
+        // Use the actual node ID assigned by the Matter controller, which may
+        // differ from the client-generated one.
+        if (result?.nodeId) {
+          const actualNodeId = normalizeNodeId(result.nodeId);
+          if (actualNodeId && actualNodeId !== nodeId) {
+            console.log(`[matter] Commissioned node ID ${actualNodeId} differs from requested ${nodeId}, using actual`);
+            nodeId = actualNodeId;
+          }
+        }
       } catch (err) {
         return res.status(400).json({ error: err.message ?? String(err) });
       }

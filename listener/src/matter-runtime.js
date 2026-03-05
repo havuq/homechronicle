@@ -25,6 +25,16 @@ function toOptionalInt(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeNodeId(value) {
+  const text = toOptionalText(value);
+  if (!text) return null;
+  try {
+    return BigInt(text).toString();
+  } catch {
+    return text.toUpperCase();
+  }
+}
+
 function normalizePolledEvents(raw) {
   if (Array.isArray(raw)) return raw;
   if (raw && Array.isArray(raw.events)) return raw.events;
@@ -75,10 +85,17 @@ export function createMatterRuntime({
     });
   }
 
+  const MAX_CONSECUTIVE_ERRORS = 10;
+
   function setSessionError(session, nodeId, err, mode = 'poll') {
     session.lastError = err?.message ?? String(err);
     session.lastErrorAt = nowIso();
+    session.consecutiveErrors = (session.consecutiveErrors ?? 0) + 1;
     console.warn(`[matter] ${mode} failed for ${nodeId}: ${session.lastError}`);
+    if (session.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS && !session.stopped) {
+      console.warn(`[matter] Stopping polling for ${nodeId} after ${session.consecutiveErrors} consecutive errors`);
+      session.pollingEnabled = false;
+    }
   }
 
   async function ingestRows(session, rows) {
@@ -184,6 +201,7 @@ export function createMatterRuntime({
     const { nodeId } = session;
     try {
       const events = await matterController.poll(nodeId);
+      session.consecutiveErrors = 0;
       await ingestRows(session, events);
     } catch (err) {
       setSessionError(session, nodeId, err, 'poll');
@@ -237,9 +255,20 @@ export function createMatterRuntime({
 
   function syncPairings(pairings) {
     const nextMatter = new Map();
+    const controllerStatus = matterController.getStatus();
+    const commissionedNodes = new Set(
+      (controllerStatus.commissionedNodes ?? [])
+        .map((id) => normalizeNodeId(id))
+        .filter(Boolean)
+    );
+
     for (const [id, pairing] of Object.entries(pairings ?? {})) {
       if (!isMatterPairing(pairing)) continue;
-      const nodeId = toOptionalText(pairing?.nodeId) ?? id;
+      const nodeId = normalizeNodeId(pairing?.nodeId ?? id);
+      if (!nodeId) continue;
+      if (commissionedNodes.size > 0 && !commissionedNodes.has(nodeId)) {
+        continue;
+      }
       nextMatter.set(nodeId, { ...pairing, nodeId });
     }
 
