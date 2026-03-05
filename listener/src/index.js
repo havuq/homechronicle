@@ -16,6 +16,7 @@ import { createEventsRouter, parentBridgeId, parseIntInRange } from './events-ro
 import { createAlertsRouter } from './alerts-router.js';
 import { createMatterRouter } from './matter-router.js';
 import { createMatterRuntime } from './matter-runtime.js';
+import { initController as initMatterController } from './matter-controller.js';
 import { deriveDeviceHealth } from './device-health.js';
 import { detectOutliers } from './anomaly-detection.js';
 import {
@@ -155,6 +156,7 @@ await migrateDb();
 await pairingsStore.init();
 await roomsStore.init();
 await retentionStore.init();
+await initMatterController();
 matterRuntime = createMatterRuntime({
   insertEvent,
   loadRooms,
