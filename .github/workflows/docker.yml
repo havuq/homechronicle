@@ -5,7 +5,7 @@ name: Build and Push Containers
 # Stable tags (vX.Y.Z) additionally publish major/minor/latest tags.
 on:
   release:
-    types: [published, prereleased]
+    types: [published, prereleased, released]
 
 jobs:
   build:
