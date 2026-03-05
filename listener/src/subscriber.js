@@ -14,6 +14,7 @@ import {
   cacheAccessoryMetadata,
   clearAccessoryMetadata,
 } from './accessory-metadata.js';
+import { log } from './logger.js';
 
 const ALERTS_ENABLED = !/^(0|false|no|off)$/i.test(process.env.ALERTS_ENABLED ?? 'false');
 
@@ -46,7 +47,7 @@ async function processAlertsSafe(eventPayload, insertedRow) {
       timestamp: insertedRow?.timestamp ?? new Date().toISOString(),
     });
   } catch (err) {
-    console.error('[alerts] Processing failed:', err.message ?? err.stack ?? err);
+    log.error('[alerts] Processing failed:', err.message ?? err.stack ?? err);
   }
 }
 
@@ -138,7 +139,7 @@ function connectAccessory(session, pairing) {
   session.pairingName = accessoryName;
   stats.connectAttempts += 1;
 
-  console.log(`[subscriber] Connecting to ${accessoryName} (${address}:${port})`);
+  log.info(`[subscriber] Connecting to ${accessoryName} (${address}:${port})`);
 
   const client = new HttpClient(deviceId, address, port, longTermData);
   session.client = client;
@@ -155,7 +156,7 @@ function connectAccessory(session, pairing) {
     const watchedKeys = [...iidMeta.keys()];
 
     if (watchedKeys.length === 0) {
-      console.log(`[subscriber] ${accessoryName}: no watched characteristics found`);
+      log.info(`[subscriber] ${accessoryName}: no watched characteristics found`);
       return;
     }
 
@@ -170,7 +171,7 @@ function connectAccessory(session, pairing) {
         const key  = `${change.aid}.${change.iid}`;
         const meta = iidMeta.get(key);
         if (!meta) {
-          console.log(`[event-skip] ${accessoryName} aid=${change.aid} iid=${change.iid} value=${change.value} (not in watched list)`);
+          log.debug(`[event-skip] ${accessoryName} aid=${change.aid} iid=${change.iid} value=${change.value} (not in watched list)`);
           continue;
         }
 
@@ -189,7 +190,7 @@ function connectAccessory(session, pairing) {
         // Skip inserting if the value hasn't actually changed
         // (some accessories re-broadcast the same value on reconnect)
         if (oldValue !== null && oldValue === newValue) {
-          console.log(`[event-skip] ${effectiveName} → ${meta.characteristicName}: unchanged (${newValue})`);
+          log.debug(`[event-skip] ${effectiveName} → ${meta.characteristicName}: unchanged (${newValue})`);
           continue;
         }
 
@@ -235,17 +236,17 @@ function connectAccessory(session, pairing) {
             try {
               const inserted = await insertEvent(eventPayload);
               await processAlertsSafe(eventPayload, inserted);
-              console.log(
+              log.debug(
                 `[event-delayed] ${effectiveName} → ${meta.characteristicName}: ${change.value} ` +
                 `(delayed ${Math.round(RUN_CYCLE_OFF_DELAY_MS / 1000)}s)`
               );
             } catch (err) {
-              console.error(`[subscriber] Delayed DB insert failed:`, err.message ?? err.stack ?? err);
+              log.error(`[subscriber] Delayed DB insert failed:`, err.message ?? err.stack ?? err);
             }
           }, RUN_CYCLE_OFF_DELAY_MS);
 
           delayedOffTimers.set(timerKey, timeoutId);
-          console.log(
+          log.debug(
             `[event-delay] ${effectiveName} → ${meta.characteristicName}: ${change.value} ` +
             `queued for ${Math.round(RUN_CYCLE_OFF_DELAY_MS / 1000)}s`
           );
@@ -255,9 +256,9 @@ function connectAccessory(session, pairing) {
         try {
           const inserted = await insertEvent(eventPayload);
           await processAlertsSafe(eventPayload, inserted);
-          console.log(`[event] ${effectiveName} → ${meta.characteristicName}: ${change.value}`);
+          log.info(`[event] ${effectiveName} → ${meta.characteristicName}: ${change.value}`);
         } catch (err) {
-          console.error(`[subscriber] DB insert failed:`, err.message ?? err.stack ?? err);
+          log.error(`[subscriber] DB insert failed:`, err.message ?? err.stack ?? err);
         }
       }
     };
@@ -271,17 +272,17 @@ function connectAccessory(session, pairing) {
     const disconnectHandler = async (formerSubscribes) => {
       if (session.stopped) return;
       stats.disconnects += 1;
-      console.warn(`[subscriber] ${accessoryName}: disconnected, resubscribing…`);
+      log.warn(`[subscriber] ${accessoryName}: disconnected, resubscribing…`);
       try {
         await client.subscribeCharacteristics(formerSubscribes);
         stats.resubscribeSuccesses += 1;
         stats.lastSubscribedAt = new Date().toISOString();
-        console.log(`[subscriber] ${accessoryName}: resubscribed to ${formerSubscribes.length} characteristic(s)`);
+        log.info(`[subscriber] ${accessoryName}: resubscribed to ${formerSubscribes.length} characteristic(s)`);
       } catch (err) {
         stats.resubscribeFailures += 1;
         stats.lastError = err.message ?? String(err);
         stats.lastErrorAt = new Date().toISOString();
-        console.error(`[subscriber] ${accessoryName}: resubscribe failed:`, err.message ?? err.stack ?? err);
+        log.error(`[subscriber] ${accessoryName}: resubscribe failed:`, err.message ?? err.stack ?? err);
         scheduleReconnect(session, pairing);
       }
     };
@@ -292,12 +293,12 @@ function connectAccessory(session, pairing) {
       await client.subscribeCharacteristics(watchedKeys);
       session.retryDelayMs = reconnectBaseMs;
       stats.lastSubscribedAt = new Date().toISOString();
-      console.log(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
+      log.info(`[subscriber] ${accessoryName}: subscribed to ${watchedKeys.length} characteristic(s)`);
     } catch (err) {
       stats.subscribeFailures += 1;
       stats.lastError = err.message ?? String(err);
       stats.lastErrorAt = new Date().toISOString();
-      console.error(`[subscriber] ${accessoryName}: subscribe failed:`, err.message ?? err.stack ?? err);
+      log.error(`[subscriber] ${accessoryName}: subscribe failed:`, err.message ?? err.stack ?? err);
       scheduleReconnect(session, pairing);
     }
 
@@ -305,7 +306,7 @@ function connectAccessory(session, pairing) {
     stats.accessoriesQueryFailures += 1;
     stats.lastError = err.message ?? String(err);
     stats.lastErrorAt = new Date().toISOString();
-    console.error(`[subscriber] ${accessoryName}: getAccessories failed:`, err.message ?? err.stack ?? err);
+    log.error(`[subscriber] ${accessoryName}: getAccessories failed:`, err.message ?? err.stack ?? err);
     scheduleReconnect(session, pairing);
   });
 }
@@ -316,7 +317,7 @@ function scheduleReconnect(session, pairing) {
   if (session.stats) session.stats.reconnectSchedules += 1;
   const nextDelay = Math.min(session.retryDelayMs * 2, reconnectMaxMs);
   session.retryDelayMs = nextDelay;
-  console.log(`[subscriber] ${pairing.name}: retrying in ${nextDelay / 1000}s`);
+  log.debug(`[subscriber] ${pairing.name}: retrying in ${nextDelay / 1000}s`);
   session.reconnectTimeout = setTimeout(() => {
     if (session.stopped) return;
     session.reconnectTimeout = null;
@@ -324,7 +325,7 @@ function scheduleReconnect(session, pairing) {
     // that occurred (e.g. from a discovery scan) while we were backing off.
     const latestPairing = (getPairing && getPairing(deviceId)) ?? pairing;
     if (latestPairing.address !== pairing.address || latestPairing.port !== pairing.port) {
-      console.log(
+      log.debug(
         `[subscriber] ${pairing.name}: using refreshed address ` +
         `${latestPairing.address}:${latestPairing.port}`
       );

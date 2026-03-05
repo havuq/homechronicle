@@ -19,6 +19,7 @@ import {
 import { ManualPairingCodeCodec, QrPairingCodeCodec } from '@matter/main/types';
 import { CommissioningController } from '@project-chip/matter.js';
 import { NodeStates } from '@project-chip/matter.js/device';
+import { log } from './logger.js';
 
 const STORAGE_PATH = process.env.MATTER_STORAGE_PATH?.trim()
   || (process.env.NODE_ENV === 'production' ? '/app/data/matter-storage' : './data/matter-storage');
@@ -90,13 +91,13 @@ export async function initController() {
   const iface = process.env.DISCOVER_IFACE?.trim() || null;
   if (iface) {
     environment.vars.set('mdns.networkInterface', iface);
-    console.log(`[matter-controller] mDNS bound to interface: ${iface}`);
+    log.info(`[matter-controller] mDNS bound to interface: ${iface}`);
   }
 
   // Configure storage path.
   const storageService = environment.get(StorageService);
   storageService.location = STORAGE_PATH;
-  console.log(`[matter-controller] Storage: ${STORAGE_PATH}`);
+  log.info(`[matter-controller] Storage: ${STORAGE_PATH}`);
 
   // Use a stable ID so the controller remembers commissioned nodes across restarts.
   // A timestamp-based ID would create a new fabric namespace on every restart,
@@ -116,7 +117,7 @@ export async function initController() {
 
   await controller.start();
   controllerReady = true;
-  console.log('[matter-controller] Controller started');
+  log.info('[matter-controller] Controller started');
 }
 
 /**
@@ -167,7 +168,7 @@ export async function commission(setupCode, opts = {}) {
   }
 
   const nodeId = await controller.commissionNode(commissioningOptions);
-  console.log(`[matter-controller] Commissioned node: ${nodeId}`);
+  log.info(`[matter-controller] Commissioned node: ${nodeId}`);
   return { nodeId: String(nodeId) };
 }
 
@@ -273,11 +274,11 @@ export async function subscribe(nodeId, callback) {
   // Also listen for connection state changes to assist with error tracking.
   const stateHandler = (state) => {
     if (state === NodeStates.Disconnected) {
-      console.warn(`[matter-controller] Node ${nodeId} disconnected`);
+      log.warn(`[matter-controller] Node ${nodeId} disconnected`);
     } else if (state === NodeStates.Reconnecting) {
-      console.log(`[matter-controller] Node ${nodeId} reconnecting...`);
+      log.debug(`[matter-controller] Node ${nodeId} reconnecting...`);
     } else if (state === NodeStates.Connected) {
-      console.log(`[matter-controller] Node ${nodeId} connected`);
+      log.info(`[matter-controller] Node ${nodeId} connected`);
     }
   };
   node.events.stateChanged.on(stateHandler);
@@ -350,7 +351,7 @@ export async function stopNode(nodeId) {
       await node.disconnect();
     }
   } catch (err) {
-    console.warn(`[matter-controller] Error disconnecting node ${nodeId}: ${err.message}`);
+    log.warn(`[matter-controller] Error disconnecting node ${nodeId}: ${err.message}`);
   }
 }
 

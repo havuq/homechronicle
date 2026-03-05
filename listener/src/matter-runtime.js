@@ -1,4 +1,5 @@
 import * as matterController from './matter-controller.js';
+import { log } from './logger.js';
 
 const POLL_INTERVAL_MS = Number.parseInt(process.env.MATTER_POLL_INTERVAL_MS ?? '5000', 10);
 const SUBSCRIBE_ENABLED = !/^(0|false|no|off)$/i.test(process.env.MATTER_SUBSCRIBE_ENABLED ?? 'false');
@@ -91,9 +92,9 @@ export function createMatterRuntime({
     session.lastError = err?.message ?? String(err);
     session.lastErrorAt = nowIso();
     session.consecutiveErrors = (session.consecutiveErrors ?? 0) + 1;
-    console.warn(`[matter] ${mode} failed for ${nodeId}: ${session.lastError}`);
+    log.warn(`[matter] ${mode} failed for ${nodeId}: ${session.lastError}`);
     if (session.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS && !session.stopped) {
-      console.warn(`[matter] Stopping polling for ${nodeId} after ${session.consecutiveErrors} consecutive errors`);
+      log.warn(`[matter] Stopping polling for ${nodeId} after ${session.consecutiveErrors} consecutive errors`);
       session.pollingEnabled = false;
     }
   }
