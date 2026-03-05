@@ -2,16 +2,19 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, ChevronDown, Loader } from 'lucide-react';
 import clsx from 'clsx';
 
+const LOG_LEVELS = [
+  { value: 'error', label: 'Error', desc: 'Only errors' },
+  { value: 'warn', label: 'Warn', desc: 'Errors + warnings' },
+  { value: 'info', label: 'Info', desc: 'Operational logs (default)' },
+  { value: 'debug', label: 'Debug', desc: 'Everything, including skipped events' },
+];
+
 export default function SettingsTab({ setup }) {
   const {
     retentionConfig,
     saveRetentionMutation,
-    matterRuntime,
-    matterRuntimeError,
-    matterRuntimeErrorValue,
-    matterPairings,
-    pollingConfigured,
-    missingMatterConfig,
+    logLevelConfig,
+    saveLogLevelMutation,
     dbAccessories,
     deleteAccessoryMutation,
   } = setup;
@@ -142,44 +145,42 @@ export default function SettingsTab({ setup }) {
         </div>
       </div>
 
+      {/* Log level */}
+      <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Log level</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Controls how much the listener logs to Docker output. Changes apply instantly — no restart needed.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={logLevelConfig?.level ?? 'info'}
+              onChange={(e) => saveLogLevelMutation.mutate(e.target.value)}
+              disabled={saveLogLevelMutation.isPending}
+              className="text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              {LOG_LEVELS.map(({ value, label, desc }) => (
+                <option key={value} value={value}>
+                  {label} — {desc}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {saveLogLevelMutation.isError && (
+          <p className="text-xs text-red-600 mt-2">
+            Could not update log level: {saveLogLevelMutation.error?.message}
+          </p>
+        )}
+      </div>
+
       {saveRetentionMutation.isError && (
         <p className="text-xs text-red-600">
           Could not save settings: {saveRetentionMutation.error?.message}
         </p>
       )}
-
-      {/* Matter runtime status */}
-      <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 space-y-3">
-        <p className="text-sm font-medium text-gray-800">Matter Runtime</p>
-        <p className="text-xs text-gray-500">
-          Matter is built in — pair devices through the Setup tab using a setup code from Apple Home.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-          <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-            <p className="text-gray-600 font-medium">Commissioning</p>
-            <p className={clsx('mt-0.5', matterRuntime?.commissionConfigured ? 'text-green-600' : 'text-gray-400')}>
-              {matterRuntime?.commissionConfigured ? 'Ready' : 'Not available'}
-            </p>
-          </div>
-          <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-            <p className="text-gray-600 font-medium">Polling</p>
-            <p className={clsx('mt-0.5', pollingConfigured ? 'text-green-600' : 'text-gray-400')}>
-              {pollingConfigured ? 'Ready' : 'Not available'}
-            </p>
-          </div>
-          <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-            <p className="text-gray-600 font-medium">Tracked Nodes</p>
-            <p className="text-gray-700 mt-0.5">
-              {Array.isArray(matterRuntime?.nodes) ? matterRuntime.nodes.length : 0}
-            </p>
-          </div>
-        </div>
-        {matterRuntimeError && (
-          <p className="text-xs text-red-600">
-            {matterRuntimeErrorValue?.message ?? 'Matter runtime unavailable.'}
-          </p>
-        )}
-      </div>
 
       {/* Danger Zone */}
       <section className="border border-red-200 rounded-xl overflow-hidden">

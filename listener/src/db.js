@@ -3,6 +3,7 @@
  */
 
 import pg from 'pg';
+import { log } from './logger.js';
 
 const { Pool } = pg;
 
@@ -11,7 +12,7 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('[db] Unexpected pool error:', err.message ?? err.stack ?? err);
+  log.error('[db] Unexpected pool error:', err.message ?? err.stack ?? err);
 });
 
 /**
@@ -199,7 +200,7 @@ export async function migrateDb() {
     CREATE INDEX IF NOT EXISTS idx_alert_deliveries_event
       ON alert_deliveries (event_id);
   `);
-  console.log('[db] Schema ready.');
+  log.info('[db] Schema ready.');
 }
 
 export async function runRetentionSweep({

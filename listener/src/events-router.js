@@ -1,4 +1,5 @@
 import express from 'express';
+import { log } from './logger.js';
 
 function parseIntInRange(value, fallback, min, max) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -55,7 +56,7 @@ export function createEventsRouter({ pool, getRooms }) {
 
       res.json({ total, page, limit, pages: Math.ceil(total / limit), events });
     } catch (err) {
-      console.error('[api] /api/events error:', err.message ?? err.stack ?? err);
+      log.error('[api] /api/events error:', err.message ?? err.stack ?? err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -108,7 +109,7 @@ export function createEventsRouter({ pool, getRooms }) {
       const page = Math.floor(newer / pageSize) + 1;
       res.json({ page, eventId: String(eventId) });
     } catch (err) {
-      console.error('[api] /api/events/jump error:', err.message ?? err.stack ?? err);
+      log.error('[api] /api/events/jump error:', err.message ?? err.stack ?? err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

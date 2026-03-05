@@ -19,6 +19,7 @@ import { createMatterRuntime } from './matter-runtime.js';
 import { initController as initMatterController } from './matter-controller.js';
 import { deriveDeviceHealth } from './device-health.js';
 import { detectOutliers } from './anomaly-detection.js';
+import { log, getLevel, setLevel } from './logger.js';
 import {
   cacheAccessoryMetadata,
   getAccessoryCapabilities,
@@ -154,7 +155,7 @@ const DISCOVER_IFACE = (() => {
   if (!requested) return null;
   const available = Object.keys(networkInterfaces());
   if (available.includes(requested)) return requested;
-  console.warn(
+  log.warn(
     `[discovery] Interface '${requested}' not found on this machine.\n` +
     `            Available: ${available.join(', ')}\n` +
     `            Set DISCOVER_IFACE to one of the above, or unset it to auto-select.`
@@ -181,22 +182,22 @@ let retentionSettings = loadRetentionSettings();
 if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5_000) {
   setInterval(() => {
     void pairingsStore.refresh().catch((err) => {
-      console.warn('[store] pairings refresh failed:', err.message ?? err.stack ?? err);
+      log.warn('[store] pairings refresh failed:', err.message ?? err.stack ?? err);
     });
     if (matterRuntime) {
       try {
         matterRuntime.syncPairings(loadPairings());
       } catch (err) {
-        console.warn('[matter] pairing sync failed:', err.message ?? err.stack ?? err);
+        log.warn('[matter] pairing sync failed:', err.message ?? err.stack ?? err);
       }
     }
     void roomsStore.refresh().catch((err) => {
-      console.warn('[store] rooms refresh failed:', err.message ?? err.stack ?? err);
+      log.warn('[store] rooms refresh failed:', err.message ?? err.stack ?? err);
     });
     void retentionStore.refresh()
       .then(() => { retentionSettings = loadRetentionSettings(); })
       .catch((err) => {
-        console.warn('[store] retention refresh failed:', err.message ?? err.stack ?? err);
+        log.warn('[store] retention refresh failed:', err.message ?? err.stack ?? err);
       });
   }, STORE_REFRESH_INTERVAL_MS);
 }
@@ -211,14 +212,14 @@ const pairedCount = Object.keys(homeKitPairings).length;
 matterRuntime.syncPairings(pairings);
 
 if (pairedCount > 0) {
-  console.log(`[init] Loaded ${pairedCount} pairing(s) from ${PAIRINGS_FILE}`);
+  log.info(`[init] Loaded ${pairedCount} pairing(s) from ${PAIRINGS_FILE}`);
   startSubscribers(homeKitPairings, loadRooms(), (id) => {
     const pairing = pairingsStore.getByKey(id);
     if (!pairing || !isHomeKitPairing(pairing)) return null;
     return normalizePairingRecord(id, pairing);
   });
 } else {
-  console.warn('[init] No pairings found — use the Setup tab in the web UI to discover and pair accessories.');
+  log.warn('[init] No pairings found — use the Setup tab in the web UI to discover and pair accessories.');
 }
 
 // ---------------------------------------------------------------------------
@@ -287,14 +288,14 @@ function runDiscoveryScan() {
             paired: s.sf === 0 || !!currentPairings[s.id],
             alreadyPaired: !!currentPairings[s.id],
           }));
-          console.log(`[discovery] Scan complete — found ${discoveryCache.length} accessory/accessories`);
+          log.info(`[discovery] Scan complete — found ${discoveryCache.length} accessory/accessories`);
 
           let pairingsUpdated = false;
           for (const [id, pairing] of Object.entries(currentPairings)) {
             const seen = found.get(id);
             if (!seen) continue;
             if (seen.address !== pairing.address || seen.port !== pairing.port) {
-              console.log(
+              log.debug(
                 `[discovery] ${pairing.name}: address updated ` +
                 `${pairing.address}:${pairing.port} -> ${seen.address}:${seen.port} — pairing refreshed`
               );
@@ -320,7 +321,7 @@ function runDiscoveryScan() {
 
 function safeDiscoveryScan() {
   return runDiscoveryScan().catch((err) => {
-    console.warn(`[discovery] Scan skipped: ${err.message}`);
+    log.warn(`[discovery] Scan skipped: ${err.message}`);
     return [];
   });
 }
@@ -329,7 +330,7 @@ if (DISCOVERY_SCAN_ENABLED) {
   safeDiscoveryScan();
   setInterval(safeDiscoveryScan, RESCAN_INTERVAL_MS);
 } else {
-  console.log('[discovery] Disabled via DISCOVERY_SCAN_ENABLED=false');
+  log.info('[discovery] Disabled via DISCOVERY_SCAN_ENABLED=false');
 }
 
 // ---------------------------------------------------------------------------
@@ -346,12 +347,12 @@ async function runRetentionSweepSafe() {
       archiveBeforeDelete: retentionSettings.archiveBeforeDelete,
     });
     if (result.deleted > 0 || result.archived > 0) {
-      console.log(
+      log.info(
         `[retention] cutoff=${result.cutoffDays}d archived=${result.archived} deleted=${result.deleted}`
       );
     }
   } catch (err) {
-    console.error('[retention] sweep failed:', err.message ?? err.stack ?? err);
+    log.error('[retention] sweep failed:', err.message ?? err.stack ?? err);
   }
 }
 
@@ -394,11 +395,11 @@ app.get('/api/setup/discovered', (_req, res) => {
 
 app.post('/api/setup/scan', async (_req, res) => {
   try {
-    console.log('[setup] Manual scan triggered from UI');
+    log.info('[setup] Manual scan triggered from UI');
     const results = await runDiscoveryScan();
     res.json({ accessories: results, cachedAt: new Date().toISOString() });
   } catch (err) {
-    console.error('[setup] Scan error:', err.message ?? err.stack ?? err);
+    log.error('[setup] Scan error:', err.message ?? err.stack ?? err);
     res.status(200).json({
       accessories: discoveryCache,
       cachedAt: new Date().toISOString(),
@@ -423,7 +424,7 @@ app.post('/api/setup/pair', async (req, res) => {
     });
   }
 
-  console.log(`[setup] Pairing ${cached.name} (${deviceId})`);
+  log.info(`[setup] Pairing ${cached.name} (${deviceId})`);
 
   try {
     const client = new HttpClient(deviceId, cached.address, cached.port);
@@ -447,10 +448,10 @@ app.post('/api/setup/pair', async (req, res) => {
 
     startSubscribers({ [deviceId]: updatedPairings[deviceId] }, loadRooms(), (id) => pairingsStore.getByKey(id));
 
-    console.log(`[setup] Paired successfully: ${cached.name}`);
+    log.info(`[setup] Paired successfully: ${cached.name}`);
     res.json({ success: true, name: cached.name });
   } catch (err) {
-    console.error(`[setup] Pairing failed for ${deviceId}:`, err.message ?? err.stack ?? err);
+    log.error(`[setup] Pairing failed for ${deviceId}:`, err.message ?? err.stack ?? err);
     const msg = err.message ?? '';
     let friendly = 'Pairing failed: ' + err.message;
     if (msg.includes('0x02') || /authentication/i.test(msg))
@@ -489,10 +490,10 @@ app.get('/api/setup/bridge-children/:deviceId', async (req, res) => {
       const name = nameProp?.value ?? `Device ${acc.aid}`;
       children.push({ childId: `${deviceId}:${acc.aid}`, name, aid: acc.aid });
     }
-    console.log(`[setup] bridge-children: ${pairing.name} -> ${children.length} child(ren)`);
+    log.debug(`[setup] bridge-children: ${pairing.name} -> ${children.length} child(ren)`);
     res.json(children);
   } catch (err) {
-    console.error(`[setup] bridge-children error for ${deviceId}:`, err.message ?? err.stack ?? err);
+    log.error(`[setup] bridge-children error for ${deviceId}:`, err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Could not query bridge: ' + err.message });
   }
 });
@@ -524,7 +525,7 @@ app.get('/api/accessories/:accessoryId/capabilities', async (req, res) => {
     if (!refreshed) return res.status(404).json({ error: 'Accessory metadata unavailable' });
     return res.json(refreshed);
   } catch (err) {
-    console.error('[api] /api/accessories/:accessoryId/capabilities error:', err.message ?? err.stack ?? err);
+    log.error('[api] /api/accessories/:accessoryId/capabilities error:', err.message ?? err.stack ?? err);
     return res.status(500).json({ error: 'Could not query accessory capabilities' });
   }
 });
@@ -562,7 +563,7 @@ app.delete('/api/setup/pairing/:deviceId', async (req, res) => {
   const cached = discoveryCache.find((s) => s.id === deviceId);
   if (cached) { cached.paired = false; cached.alreadyPaired = false; }
 
-  console.log(`[setup] Removed pairing for ${name} (${deviceId})`);
+  log.info(`[setup] Removed pairing for ${name} (${deviceId})`);
   res.json({ success: true, name });
 });
 
@@ -577,7 +578,7 @@ app.patch('/api/setup/room', async (req, res) => {
     delete rooms[accessoryId];
   }
   await saveRooms(rooms);
-  console.log(`[setup] Room for ${accessoryId} set to ${roomName?.trim() || '(cleared)'}`);
+  log.info(`[setup] Room for ${accessoryId} set to ${roomName?.trim() || '(cleared)'}`);
   res.json({ success: true });
 });
 
@@ -621,7 +622,7 @@ app.patch('/api/setup/retention', async (req, res) => {
   const nextSettings = { ...retentionSettings, ...updates };
   await saveRetentionSettings(nextSettings);
   retentionSettings = loadRetentionSettings();
-  console.log(
+  log.info(
     `[setup] Settings updated: retention=${retentionSettings.retentionDays}d stale=${retentionSettings.staleThresholdHours}h`
   );
 
@@ -631,6 +632,22 @@ app.patch('/api/setup/retention', async (req, res) => {
     staleThresholdHours: retentionSettings.staleThresholdHours,
     sweepMs: RETENTION_SWEEP_MS,
   });
+});
+
+// Log level (runtime, no restart needed)
+app.get('/api/setup/log-level', (_req, res) => {
+  res.json({ level: getLevel() });
+});
+
+app.patch('/api/setup/log-level', (req, res) => {
+  const { level } = req.body ?? {};
+  try {
+    setLevel(level);
+    log.info(`[setup] Log level set to: ${getLevel()}`);
+    res.json({ level: getLevel() });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // Data management
@@ -644,10 +661,10 @@ app.delete('/api/data/accessory', async (req, res) => {
     const rooms = loadRooms();
     delete rooms[accessoryId];
     await saveRooms(rooms);
-    console.log(`[data] Deleted ${result.rowCount} event(s) for accessory ${accessoryId}`);
+    log.info(`[data] Deleted ${result.rowCount} event(s) for accessory ${accessoryId}`);
     res.json({ success: true, deleted: result.rowCount });
   } catch (err) {
-    console.error('[data] /api/data/accessory error:', err.message ?? err.stack ?? err);
+    log.error('[data] /api/data/accessory error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -656,10 +673,10 @@ app.delete('/api/data/all', async (_req, res) => {
   try {
     const result = await pool.query('DELETE FROM event_logs');
     await saveRooms({});
-    console.log(`[data] Wiped all data — ${result.rowCount} event(s) deleted`);
+    log.info(`[data] Wiped all data — ${result.rowCount} event(s) deleted`);
     res.json({ success: true, deleted: result.rowCount });
   } catch (err) {
-    console.error('[data] /api/data/all error:', err.message ?? err.stack ?? err);
+    log.error('[data] /api/data/all error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -859,7 +876,7 @@ app.get('/api/accessories', async (_req, res) => {
 
     res.json([...dbRows, ...neverSeen]);
   } catch (err) {
-    console.error('[api] /api/accessories error:', err.message ?? err.stack ?? err);
+    log.error('[api] /api/accessories error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -887,7 +904,7 @@ app.get('/api/stats/daily', async (req, res) => {
     `, [days]);
     res.json(result.rows);
   } catch (err) {
-    console.error('[api] /api/stats/daily error:', err.message ?? err.stack ?? err);
+    log.error('[api] /api/stats/daily error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -925,7 +942,7 @@ app.get('/api/stats/top-devices', async (_req, res) => {
     }));
     res.json(rows);
   } catch (err) {
-    console.error('[api] /api/stats/top-devices error:', err.message ?? err.stack ?? err);
+    log.error('[api] /api/stats/top-devices error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -953,7 +970,7 @@ app.get('/api/stats/rooms', async (req, res) => {
       .sort((a, b) => b.count - a.count);
     res.json(sorted);
   } catch (err) {
-    console.error('[api] /api/stats/rooms error:', err.message ?? err.stack ?? err);
+    log.error('[api] /api/stats/rooms error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -973,7 +990,7 @@ app.get('/api/stats/weekday', async (req, res) => {
     `, [days]);
     res.json(result.rows);
   } catch (err) {
-    console.error('[api] /api/stats/weekday error:', err.message ?? err.stack ?? err);
+    log.error('[api] /api/stats/weekday error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -991,7 +1008,7 @@ app.get('/api/stats/heatmap', async (_req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
-    console.error('[api] /api/stats/heatmap error:', err.message ?? err.stack ?? err);
+    log.error('[api] /api/stats/heatmap error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1009,7 +1026,7 @@ app.get('/api/stats/device-patterns', async (_req, res) => {
     `);
     res.json(result.rows);
   } catch (err) {
-    console.error('[api] /api/stats/device-patterns error:', err.message ?? err.stack ?? err);
+    log.error('[api] /api/stats/device-patterns error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1147,7 +1164,7 @@ app.get('/api/stats/anomalies', async (_req, res) => {
       rooms: roomOutliers,
     });
   } catch (err) {
-    console.error('[api] /api/stats/anomalies error:', err.message ?? err.stack ?? err);
+    log.error('[api] /api/stats/anomalies error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1167,11 +1184,11 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`[api] Listening on port ${PORT}`);
+  log.info(`[api] Listening on port ${PORT}`);
   if (API_TOKEN) {
-    console.log('[api] Write auth enabled for POST/PATCH/DELETE routes');
+    log.info('[api] Write auth enabled for POST/PATCH/DELETE routes');
   }
   if (!ALERTS_ENABLED) {
-    console.log('[api] Alerts feature disabled (ALERTS_ENABLED=false)');
+    log.info('[api] Alerts feature disabled (ALERTS_ENABLED=false)');
   }
 });

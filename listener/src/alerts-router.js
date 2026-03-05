@@ -1,5 +1,6 @@
 import express from 'express';
 import { parseIntInRange } from './events-router.js';
+import { log } from './logger.js';
 
 const VALID_SCOPE_TYPES = new Set(['all', 'room', 'accessory', 'characteristic']);
 const VALID_OPERATORS = new Set(['equals', 'not_equals', 'contains']);
@@ -157,7 +158,7 @@ export function createAlertsRouter({ pool }) {
       );
       res.json(result.rows.map(toApiRule));
     } catch (err) {
-      console.error('[api] /api/alerts/rules error:', err.message ?? err.stack ?? err);
+      log.error('[api] /api/alerts/rules error:', err.message ?? err.stack ?? err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -187,7 +188,7 @@ export function createAlertsRouter({ pool }) {
       );
       res.status(201).json(toApiRule(result.rows[0]));
     } catch (err) {
-      console.error('[api] /api/alerts/rules create error:', err.message ?? err.stack ?? err);
+      log.error('[api] /api/alerts/rules create error:', err.message ?? err.stack ?? err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -232,7 +233,7 @@ export function createAlertsRouter({ pool }) {
       if (!result.rows.length) return res.status(404).json({ error: 'Rule not found' });
       res.json(toApiRule(result.rows[0]));
     } catch (err) {
-      console.error('[api] /api/alerts/rules patch error:', err.message ?? err.stack ?? err);
+      log.error('[api] /api/alerts/rules patch error:', err.message ?? err.stack ?? err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -247,7 +248,7 @@ export function createAlertsRouter({ pool }) {
       if (!result.rowCount) return res.status(404).json({ error: 'Rule not found' });
       res.json({ success: true });
     } catch (err) {
-      console.error('[api] /api/alerts/rules delete error:', err.message ?? err.stack ?? err);
+      log.error('[api] /api/alerts/rules delete error:', err.message ?? err.stack ?? err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -287,7 +288,7 @@ export function createAlertsRouter({ pool }) {
         })),
       });
     } catch (err) {
-      console.error('[api] /api/alerts/deliveries error:', err.message ?? err.stack ?? err);
+      log.error('[api] /api/alerts/deliveries error:', err.message ?? err.stack ?? err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

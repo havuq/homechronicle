@@ -1,5 +1,6 @@
 import express from 'express';
 import { randomBytes } from 'crypto';
+import { log } from './logger.js';
 
 function toOptionalText(value) {
   if (value === undefined || value === null) return null;
@@ -76,7 +77,7 @@ export function createMatterRouter({
       return res.status(503).json({ error: 'Matter runtime unavailable' });
     }
     try {
-      console.log('[matter] Manual scan triggered from UI');
+      log.info('[matter] Manual scan triggered from UI');
       const raw = await matterRuntime.scan();
       const pairings = loadPairings();
       const matterPairings = getMatterPairings(pairings);
@@ -99,10 +100,10 @@ export function createMatterRouter({
       }));
 
       setMatterDiscoveryCache(devices);
-      console.log(`[matter] Scan complete — found ${devices.length} commissionable device(s)`);
+      log.info(`[matter] Scan complete — found ${devices.length} commissionable device(s)`);
       res.json({ devices, cachedAt: new Date().toISOString() });
     } catch (err) {
-      console.error('[matter] Scan error:', err.message ?? err.stack ?? err);
+      log.error('[matter] Scan error:', err.message ?? err.stack ?? err);
       const cache = getMatterDiscoveryCache();
       res.status(200).json({
         devices: cache,
@@ -185,7 +186,7 @@ export function createMatterRouter({
         if (result?.nodeId) {
           const actualNodeId = normalizeNodeId(result.nodeId);
           if (actualNodeId && actualNodeId !== nodeId) {
-            console.log(`[matter] Commissioned node ID ${actualNodeId} differs from requested ${nodeId}, using actual`);
+            log.debug(`[matter] Commissioned node ID ${actualNodeId} differs from requested ${nodeId}, using actual`);
             nodeId = actualNodeId;
           }
         }
