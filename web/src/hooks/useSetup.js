@@ -29,6 +29,12 @@ export function useSetup() {
     staleTime: Infinity,
   });
 
+  const { data: homekitPairings = [] } = useQuery({
+    queryKey: ['setup', 'pairings'],
+    queryFn: () => fetchJson('/api/setup/pairings'),
+    refetchInterval: 15_000,
+  });
+
   const { data: savedRooms = {} } = useQuery({
     queryKey: ['setup', 'rooms'],
     queryFn: () => fetchJson('/api/setup/rooms'),
@@ -80,7 +86,7 @@ export function useSetup() {
   // ── Derived state ────────────────────────────────────────────────────────
 
   const accessories = discoveredData?.accessories ?? [];
-  const paired = accessories.filter((a) => a.alreadyPaired);
+  const paired = homekitPairings;
   const commissionConfigured = Boolean(matterRuntime?.commissionConfigured);
   const pollingConfigured = Boolean(matterRuntime?.pollingConfigured);
   const missingMatterConfig = Array.isArray(matterRuntime?.missingConfig)
@@ -100,6 +106,7 @@ export function useSetup() {
     mutationFn: (deviceId) =>
       fetchJson(`/api/setup/pairing/${encodeURIComponent(deviceId)}`, { method: 'DELETE' }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'pairings'] });
       queryClient.invalidateQueries({ queryKey: ['setup', 'discovered'] });
       queryClient.invalidateQueries({ queryKey: ['accessories'] });
       scanMutation.mutate();
@@ -229,6 +236,9 @@ export function useSetup() {
         body: JSON.stringify({ deviceId, pin }),
       });
       savePin(deviceId, pin);
+      queryClient.invalidateQueries({ queryKey: ['setup', 'pairings'] });
+      queryClient.invalidateQueries({ queryKey: ['setup', 'discovered'] });
+      queryClient.invalidateQueries({ queryKey: ['accessories'] });
       setPairingStatus((s) => ({
         ...s, [deviceId]: { state: 'success', message: `Paired \u2014 now logging ${result.name}` },
       }));
