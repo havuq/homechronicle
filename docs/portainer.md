@@ -24,6 +24,7 @@ This file does not use `env_file`, so it works with Portainer Stack environment 
    - `POSTGRES_USER=homekit`
    - `POSTGRES_DB=homekit_events`
    - `TZ=UTC`
+   - Full variable reference: [Environment Variables](./environment-variables.md)
 6. Deploy the stack.
 
 If you get `could not find ref "main"`:
