@@ -150,7 +150,7 @@ jobs:
       # (org.opencontainers.image.* — visible on the GHCR package page).
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         # Only the repository's actual latest release is allowed to move `latest`.
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.service }}
