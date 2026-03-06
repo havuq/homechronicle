@@ -46,7 +46,7 @@ Do not use a generic/shared token value.
 For a complete list of available settings:
 - Environment variables: [docs/environment-variables.md](docs/environment-variables.md)
 - Minimal compose example: [docs/docker-compose.example.yml](docs/docker-compose.example.yml)
-- Portainer stack example: [docs/portainer.md](docs/portainer.md)
+- Portainer stack example (`docker-compose.portainer.yml`): [docs/portainer.md](docs/portainer.md)
 
 ### 3. Start HomeChronicle
 

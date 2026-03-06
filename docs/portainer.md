@@ -1,22 +1,40 @@
 # Portainer Stack Example
 
-HomeChronicle on Portainer is mostly the same as Docker Compose.
-Use the same `docker-compose.yml` from this repo and set environment variables in Portainer.
+Use the Portainer-specific compose file in this repo:
+
+- `docker-compose.portainer.yml`
+
+This file does not use `env_file`, so it works with Portainer Stack environment variables directly.
 
 ## Recommended Deployment (Portainer Stack from Git)
 
 1. In Portainer, go to **Stacks** -> **Add stack**.
 2. Choose **Repository**.
 3. Set:
-   - Repository URL: `https://github.com/havuq/homechronicle.git`
-   - Reference: `main` (or your release tag like `v1.2.3`)
-   - Compose path: `docker-compose.yml`
-4. In the stack environment variables section, set at least:
+   - Repository URL: `https://github.com/havuq/homechronicle.git` (repo root only; no `/tree/...` or `/blob/...`)
+   - Reference:
+     - Newer Portainer (dropdown): select `main`
+     - Some versions (text field): use `refs/heads/main`
+     - Release tag example: `refs/tags/v1.2.3`
+   - Compose path: `docker-compose.portainer.yml`
+4. In the stack **Environment variables** section, add at least:
    - `POSTGRES_PASSWORD` (required)
-   - `API_TOKEN` (required in production; generate with `openssl rand -hex 32`)
-5. Deploy the stack.
+   - `API_TOKEN` (required; generate with `openssl rand -hex 32`)
+5. Optional but recommended:
+   - `POSTGRES_USER=homekit`
+   - `POSTGRES_DB=homekit_events`
+   - `TZ=UTC`
+6. Deploy the stack.
 
-## Network Preset (Most Users)
+If you get `could not find ref "main"`:
+
+1. Confirm URL is exactly `https://github.com/havuq/homechronicle.git`.
+2. Switch reference to `refs/heads/main`.
+3. If your Portainer auto-populates refs from the repo, pick `main` from that list instead of typing manually.
+
+If you get `.env not found`, confirm the compose path is `docker-compose.portainer.yml`.
+
+## Network Preset (Most Users on Linux/NAS)
 
 Use:
 
@@ -42,7 +60,7 @@ Note: host networking is still the recommended mode for HomeKit/Matter discovery
 
 ## Quick Health Checks
 
-From the Portainer container console (or host shell):
+From the host shell:
 
 ```bash
 docker compose ps
