@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { log } from './logger.js';
 
 function parseIntInRange(value, fallback, min, max) {
@@ -12,10 +13,46 @@ function parentBridgeId(id) {
   return parts.length > 6 ? parts.slice(0, 6).join(':') : String(id ?? '');
 }
 
+function parsePositiveInt(value, fallback, min, max) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function rateLimitKeyGenerator(req) {
+  const forwardedFor = req?.headers?.['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+  return req?.ip ?? req?.socket?.remoteAddress ?? 'unknown';
+}
+
+const EVENTS_RATE_LIMIT_WINDOW_MS = parsePositiveInt(
+  process.env.EVENTS_RATE_LIMIT_WINDOW_MS,
+  60_000,
+  1_000,
+  24 * 60 * 60 * 1000
+);
+const EVENTS_RATE_LIMIT_MAX = parsePositiveInt(
+  process.env.EVENTS_RATE_LIMIT_MAX,
+  300,
+  1,
+  100_000
+);
+
 export function createEventsRouter({ pool, getRooms }) {
   const router = express.Router();
+  const eventsReadLimiter = rateLimit({
+    windowMs: EVENTS_RATE_LIMIT_WINDOW_MS,
+    max: EVENTS_RATE_LIMIT_MAX,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    keyGenerator: rateLimitKeyGenerator,
+    message: { error: 'Too many requests' },
+  });
 
-  router.get('/events', async (req, res) => {
+  router.get('/events', eventsReadLimiter, async (req, res) => {
     try {
       const page = parseIntInRange(req.query.page, 1, 1, Number.MAX_SAFE_INTEGER);
       const limit = parseIntInRange(req.query.limit, 50, 1, 200);
@@ -61,7 +98,7 @@ export function createEventsRouter({ pool, getRooms }) {
     }
   });
 
-  router.get('/events/jump', async (req, res) => {
+  router.get('/events/jump', eventsReadLimiter, async (req, res) => {
     const { accessory, hour, limit = '50', room, from, to } = req.query;
     if (!accessory || hour === undefined) {
       return res.status(400).json({ error: 'accessory and hour are required' });
