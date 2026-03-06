@@ -9,7 +9,7 @@ Use the same `docker-compose.yml` from this repo and set environment variables i
 2. Choose **Repository**.
 3. Set:
    - Repository URL: `https://github.com/havuq/homechronicle.git`
-   - Reference: `refs/heads/main` (or your release branch/tag)
+   - Reference: `main` (or your release tag like `v1.2.3`)
    - Compose path: `docker-compose.yml`
 4. In the stack environment variables section, set at least:
    - `POSTGRES_PASSWORD` (required)
