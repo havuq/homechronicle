@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, ChevronDown, Loader } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader } from 'lucide-react';
 import clsx from 'clsx';
 
 const LOG_LEVELS = [
@@ -21,14 +21,19 @@ export default function SettingsTab({ setup }) {
 
   const [retentionDaysInput, setRetentionDaysInput] = useState('');
   const [staleThresholdHoursInput, setStaleThresholdHoursInput] = useState('');
+  const [autoScanHomeKitInput, setAutoScanHomeKitInput] = useState(true);
+  const [logLevelInput, setLogLevelInput] = useState('info');
   const [dangerOpen, setDangerOpen] = useState(false);
   const [dangerPairFilter, setDangerPairFilter] = useState('all');
   const [confirmDeleteAccessory, setConfirmDeleteAccessory] = useState(null);
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [wipePending, setWipePending] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState(null);
 
   const retentionDaysCurrent = retentionConfig?.retentionDays ?? null;
   const staleThresholdHoursCurrent = retentionConfig?.staleThresholdHours ?? null;
+  const autoScanHomeKit = Boolean(retentionConfig?.autoScanHomeKit ?? true);
+  const logLevelCurrent = logLevelConfig?.level ?? 'info';
   const dangerPairedCount = dbAccessories.filter((a) => Boolean(a.paired_at)).length;
   const dangerUnpairedCount = dbAccessories.length - dangerPairedCount;
   const visibleDangerAccessories = dbAccessories.filter((a) => {
@@ -47,20 +52,48 @@ export default function SettingsTab({ setup }) {
     setStaleThresholdHoursInput((prev) => (prev.trim() ? prev : String(staleThresholdHoursCurrent)));
   }, [staleThresholdHoursCurrent]);
 
-  function handleSaveRetention() {
-    const parsed = Number.parseInt(retentionDaysInput, 10);
-    if (!Number.isFinite(parsed)) return;
-    saveRetentionMutation.mutate({ retentionDays: parsed }, {
-      onSuccess: (next) => setRetentionDaysInput(String(next.retentionDays)),
-    });
-  }
+  useEffect(() => {
+    setAutoScanHomeKitInput(autoScanHomeKit);
+  }, [autoScanHomeKit]);
 
-  function handleSaveStaleThreshold() {
-    const parsed = Number.parseInt(staleThresholdHoursInput, 10);
-    if (!Number.isFinite(parsed)) return;
-    saveRetentionMutation.mutate({ staleThresholdHours: parsed }, {
-      onSuccess: (next) => setStaleThresholdHoursInput(String(next.staleThresholdHours)),
-    });
+  useEffect(() => {
+    setLogLevelInput(logLevelCurrent);
+  }, [logLevelCurrent]);
+
+  const parsedRetentionDays = Number.parseInt(retentionDaysInput, 10);
+  const parsedStaleThresholdHours = Number.parseInt(staleThresholdHoursInput, 10);
+  const retentionDaysValid = Number.isFinite(parsedRetentionDays) && parsedRetentionDays >= 1 && parsedRetentionDays <= 3650;
+  const staleThresholdValid = Number.isFinite(parsedStaleThresholdHours) && parsedStaleThresholdHours >= 1 && parsedStaleThresholdHours <= 720;
+  const inputsReady = retentionDaysInput.trim() && staleThresholdHoursInput.trim();
+  const savePending = saveRetentionMutation.isPending || saveLogLevelMutation.isPending;
+  const isDirty = retentionDaysValid
+    && staleThresholdValid
+    && (
+      parsedRetentionDays !== retentionDaysCurrent
+      || parsedStaleThresholdHours !== staleThresholdHoursCurrent
+      || autoScanHomeKitInput !== autoScanHomeKit
+      || logLevelInput !== logLevelCurrent
+    );
+
+  async function handleSaveSettings() {
+    if (!isDirty || !retentionDaysValid || !staleThresholdValid) return;
+    setSaveFeedback(null);
+    try {
+      const [nextRetention] = await Promise.all([
+        saveRetentionMutation.mutateAsync({
+          retentionDays: parsedRetentionDays,
+          staleThresholdHours: parsedStaleThresholdHours,
+          autoScanHomeKit: autoScanHomeKitInput,
+        }),
+        saveLogLevelMutation.mutateAsync(logLevelInput),
+      ]);
+      setRetentionDaysInput(String(nextRetention.retentionDays));
+      setStaleThresholdHoursInput(String(nextRetention.staleThresholdHours));
+      setAutoScanHomeKitInput(Boolean(nextRetention.autoScanHomeKit ?? true));
+      setSaveFeedback('saved');
+    } catch {
+      setSaveFeedback('error');
+    }
   }
 
   async function handleWipeAll() {
@@ -96,17 +129,10 @@ export default function SettingsTab({ setup }) {
               max="3650"
               step="1"
               value={retentionDaysInput}
-              onChange={(e) => setRetentionDaysInput(e.target.value)}
+              onChange={(e) => { setRetentionDaysInput(e.target.value); setSaveFeedback(null); }}
               className="w-24 text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <span className="text-xs text-gray-500">days</span>
-            <button
-              onClick={handleSaveRetention}
-              disabled={saveRetentionMutation.isPending || !retentionDaysInput.trim()}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {saveRetentionMutation.isPending ? 'Saving\u2026' : 'Save'}
-            </button>
           </div>
         </div>
         <p className="text-[11px] text-gray-400 mt-2">
@@ -130,19 +156,37 @@ export default function SettingsTab({ setup }) {
               max="720"
               step="1"
               value={staleThresholdHoursInput}
-              onChange={(e) => setStaleThresholdHoursInput(e.target.value)}
+              onChange={(e) => { setStaleThresholdHoursInput(e.target.value); setSaveFeedback(null); }}
               className="w-24 text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <span className="text-xs text-gray-500">hours</span>
-            <button
-              onClick={handleSaveStaleThreshold}
-              disabled={saveRetentionMutation.isPending || !staleThresholdHoursInput.trim()}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {saveRetentionMutation.isPending ? 'Saving\u2026' : 'Save'}
-            </button>
           </div>
         </div>
+      </div>
+
+      {/* HomeKit auto-scan */}
+      <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-medium text-gray-800">HomeKit auto-scan</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Automatically scan for HomeKit devices every hour in the background.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              className="accent-blue-600"
+              checked={autoScanHomeKitInput}
+              onChange={(e) => { setAutoScanHomeKitInput(e.target.checked); setSaveFeedback(null); }}
+              disabled={savePending}
+            />
+            <span>{autoScanHomeKitInput ? 'On' : 'Off'}</span>
+          </label>
+        </div>
+        <p className="text-[11px] text-gray-400 mt-2">
+          Manual scans from Add Devices still work when this is off.
+        </p>
       </div>
 
       {/* Log level */}
@@ -156,9 +200,9 @@ export default function SettingsTab({ setup }) {
           </div>
           <div className="flex items-center gap-2">
             <select
-              value={logLevelConfig?.level ?? 'info'}
-              onChange={(e) => saveLogLevelMutation.mutate(e.target.value)}
-              disabled={saveLogLevelMutation.isPending}
+              value={logLevelInput}
+              onChange={(e) => { setLogLevelInput(e.target.value); setSaveFeedback(null); }}
+              disabled={savePending}
               className="text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
               {LOG_LEVELS.map(({ value, label, desc }) => (
@@ -174,6 +218,29 @@ export default function SettingsTab({ setup }) {
             Could not update log level: {saveLogLevelMutation.error?.message}
           </p>
         )}
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs text-gray-500">
+            Save all changes to retention, stale threshold, auto-scan, and log level.
+          </p>
+          <div className="flex items-center gap-3">
+            {saveFeedback === 'saved' && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700">
+                <CheckCircle2 size={14} />
+                Settings saved
+              </span>
+            )}
+            <button
+              onClick={handleSaveSettings}
+              disabled={savePending || !inputsReady || !isDirty}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {savePending ? 'Saving\u2026' : 'Save settings'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {saveRetentionMutation.isError && (
