@@ -269,7 +269,7 @@ export default function AddDevicesTab({ setup }) {
                   const isChecked = selected.has(acc.id);
                   const hasSavedPin = !!savedPins[acc.id] && !pinOverrides[acc.id];
                   return (
-                    <div key={acc.id} className={clsx('px-3 py-2', isChecked && 'bg-blue-50/50')}>
+                    <div key={acc.id} className={clsx('px-3 py-2 add-device-row', isChecked && 'add-device-row-selected')}>
                       <div className="flex items-center gap-2">
                         <input
                           type="checkbox"

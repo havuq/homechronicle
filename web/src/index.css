@@ -285,6 +285,15 @@ html.hc-standalone .hc-fab {
     --tw-ring-color: rgba(var(--hc-accent-rgb), 0.2) !important;
   }
 
+  .add-device-row-selected {
+    background-color: rgba(var(--hc-accent-rgb), 0.1) !important;
+    box-shadow: inset 2px 0 0 rgba(var(--hc-accent-rgb), 0.65);
+  }
+
+  .add-device-row-selected .text-gray-400 {
+    color: #64748b !important;
+  }
+
   html.theme-dark .bg-white {
     background-color: var(--hc-panel) !important;
   }
@@ -350,6 +359,15 @@ html.hc-standalone .hc-fab {
 
   html.theme-dark .bg-blue-50 {
     background-color: rgba(var(--hc-accent-rgb), 0.22) !important;
+  }
+
+  html.theme-dark .add-device-row-selected {
+    background-color: rgba(var(--hc-accent-rgb), 0.16) !important;
+    box-shadow: inset 2px 0 0 rgba(var(--hc-accent-rgb), 0.85);
+  }
+
+  html.theme-dark .add-device-row-selected .text-gray-400 {
+    color: #cbd5e1 !important;
   }
 
   html.theme-dark .text-blue-500,
