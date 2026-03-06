@@ -22,35 +22,66 @@ const CATEGORY_TIPS = {
 };
 
 // Step shown first for Bridge (category 2) devices
-const HOMEBRIDGE_STEP = {
-  id: 'homebridge',
+const BRIDGE_STEP = {
+  id: 'bridge',
   icon: Server,
-  title: 'Fastest way to add devices: use a Homebridge bridge',
+  title: 'Fastest way to add devices: pair a HAP bridge',
   color: 'green',
   content: () => (
     <div className="space-y-3">
       <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 text-sm text-green-800">
-        Use the <span className="font-medium">Homebridge Primary Pairing code.</span> Pairing once gives HomeChronicle
+        Use the <span className="font-medium">bridge pairing code.</span> Pairing once gives HomeChronicle
         access to <em>all</em> the accessories connected through it — no individual device PINs needed.
       </div>
-      <p className="text-sm text-gray-700 font-medium">How to find the Homebridge PIN:</p>
-      <ul className="text-sm text-gray-600 space-y-1.5 list-none">
-        {[
-          'Open the Homebridge web UI (usually http://homebridge.local or http://<NAS-IP>:8581)',
-          'Look for the QR code icon in the top navigation bar — the 8-digit PIN is printed below the QR code',
-          'Or go to Settings → HomeKit → Setup Code',
-          'The format is always XXX-XX-XXX (e.g. 031-45-154)',
-        ].map((step) => (
-          <li key={step} className="flex items-start gap-2">
-            <span className="mt-0.5 text-green-500 text-xs">▸</span>
-            {step}
-          </li>
-        ))}
-      </ul>
-      <p className="text-xs text-gray-400">
-        Other bridge software (like Home Assistant or HOOBS) shows the PIN similarly — look for
-        the HomeKit integration settings or a QR code in the dashboard.
-      </p>
+      <p className="text-sm text-gray-700 font-medium">Where to find the PIN by platform:</p>
+      <div className="space-y-2.5">
+        <div className="bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm">
+          <p className="font-medium text-gray-800">Homebridge</p>
+          <ul className="text-gray-600 mt-1 space-y-1 list-none">
+            {[
+              'Open the Homebridge web UI (usually http://homebridge.local or http://<NAS-IP>:8581)',
+              'Click the QR code icon in the top nav — the PIN is printed below it',
+              'Or go to Settings → HomeKit → Setup Code',
+            ].map((s) => (
+              <li key={s} className="flex items-start gap-2">
+                <span className="mt-0.5 text-green-500 text-xs">▸</span>{s}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm">
+          <p className="font-medium text-gray-800">Home Assistant</p>
+          <ul className="text-gray-600 mt-1 space-y-1 list-none">
+            {[
+              'Go to Settings → Devices & Services → HomeKit Bridge',
+              'The PIN is shown during initial setup and on the integration card',
+              'Or check Notifications for the pairing QR code after enabling the integration',
+            ].map((s) => (
+              <li key={s} className="flex items-start gap-2">
+                <span className="mt-0.5 text-green-500 text-xs">▸</span>{s}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm">
+          <p className="font-medium text-gray-800">HOOBS / Other HAP bridges</p>
+          <ul className="text-gray-600 mt-1 space-y-1 list-none">
+            {[
+              'Look for the HomeKit setup code or QR code on the dashboard',
+              'Any software that exposes a HomeKit bridge will have a PIN in the same XXX-XX-XXX format',
+            ].map((s) => (
+              <li key={s} className="flex items-start gap-2">
+                <span className="mt-0.5 text-green-500 text-xs">▸</span>{s}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="bg-gray-50 border border-gray-200 rounded px-3 py-2 text-sm">
+        <span className="font-medium text-gray-700">Format:</span>{' '}
+        <code className="bg-white border border-gray-200 px-1.5 py-0.5 rounded text-xs font-mono text-gray-900">XXX-XX-XXX</code>
+        <span className="text-gray-500 ml-2">— always 8 digits, two dashes (e.g. 031-45-154)</span>
+      </div>
     </div>
   ),
 };
@@ -238,7 +269,7 @@ const COLOR_MAP = {
 };
 
 export default function PinHelpModal({ deviceName, category, onClose }) {
-  const [open, setOpen] = useState(new Set(['homebridge']));
+  const [open, setOpen] = useState(new Set(['bridge']));
 
   function toggle(id) {
     setOpen((prev) => {
@@ -273,7 +304,7 @@ export default function PinHelpModal({ deviceName, category, onClose }) {
 
         {/* Scrollable steps */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-2">
-          {[HOMEBRIDGE_STEP, ...STEPS].map(({ id, icon: Icon, title, color, content }) => {
+          {[BRIDGE_STEP, ...STEPS].map(({ id, icon: Icon, title, color, content }) => {
             const isOpen = open.has(id);
             return (
               <div key={id} className="border border-gray-200 rounded-xl overflow-hidden">

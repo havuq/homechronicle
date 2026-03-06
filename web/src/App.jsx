@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LayoutList, BarChart2, Home, Settings, Monitor, Sun, Moon, Paintbrush2, Bell } from 'lucide-react';
+import { LayoutList, BarChart2, Home, Settings, Monitor, Sun, Moon, Paintbrush2, Bell, Link2, Unlink2 } from 'lucide-react';
 import clsx from 'clsx';
 import Timeline from './components/Timeline.jsx';
 import StatsCards from './components/StatsCards.jsx';
@@ -190,42 +190,36 @@ export default function App() {
             {/* KPI cards row */}
             <StatsCards />
 
-            <div className="bg-white rounded-xl shadow-sm p-3 sm:p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="flex items-baseline gap-2 text-sm font-semibold text-gray-700">
-                  <span>Dashboard Range</span>
-                  <span className="text-xs font-normal text-gray-400">
-                    {syncDashboardRanges ? 'Synced across charts' : 'Charts can use independent ranges'}
-                  </span>
-                </h3>
-                <div className="flex items-center gap-2.5">
-                  <div className="flex gap-1">
-                    {DASHBOARD_WINDOWS.map(({ label, days }) => (
-                      <button
-                        key={days}
-                        onClick={() => setDashboardDays(days)}
-                        className={clsx(
-                          'text-xs px-2 py-0.5 rounded-md transition-colors',
-                          dashboardDays === days
-                            ? 'bg-blue-100 text-blue-700 font-medium'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                        )}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <label className="inline-flex items-center gap-2 text-xs text-gray-500 select-none">
-                    <input
-                      type="checkbox"
-                      className="accent-blue-600"
-                      checked={syncDashboardRanges}
-                      onChange={(e) => setSyncDashboardRanges(e.target.checked)}
-                    />
-                    Sync charts
-                  </label>
-                </div>
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+                {DASHBOARD_WINDOWS.map(({ label, days }) => (
+                  <button
+                    key={days}
+                    onClick={() => setDashboardDays(days)}
+                    className={clsx(
+                      'text-xs px-2.5 py-1 rounded-md transition-colors',
+                      dashboardDays === days
+                        ? 'bg-blue-100 text-blue-700 font-medium'
+                        : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
+              <button
+                onClick={() => setSyncDashboardRanges((v) => !v)}
+                title={syncDashboardRanges ? 'Charts synced — click to unsync' : 'Charts independent — click to sync'}
+                className={clsx(
+                  'flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors',
+                  syncDashboardRanges
+                    ? 'bg-blue-50 border-blue-200 text-blue-600'
+                    : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'
+                )}
+              >
+                {syncDashboardRanges ? <Link2 size={12} /> : <Unlink2 size={12} />}
+                <span className="hidden sm:inline">{syncDashboardRanges ? 'Synced' : 'Sync'}</span>
+              </button>
             </div>
 
             {/* Full-width trend chart */}

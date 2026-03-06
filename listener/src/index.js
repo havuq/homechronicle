@@ -67,6 +67,7 @@ const retentionStore = new JsonObjectStore(RETENTION_FILE, {
   retentionDays: RETENTION_DAYS_DEFAULT,
   archiveBeforeDelete: RETENTION_ARCHIVE_DEFAULT,
   staleThresholdHours: STALE_THRESHOLD_HOURS_DEFAULT,
+  autoScanHomeKit: DISCOVERY_SCAN_ENABLED,
 });
 let matterRuntime = null;
 
@@ -132,7 +133,10 @@ function normalizeRetentionSettings(input = {}) {
   const archiveBeforeDelete = input.archiveBeforeDelete === undefined
     ? RETENTION_ARCHIVE_DEFAULT
     : Boolean(input.archiveBeforeDelete);
-  return { retentionDays, archiveBeforeDelete, staleThresholdHours };
+  const autoScanHomeKit = input.autoScanHomeKit === undefined
+    ? DISCOVERY_SCAN_ENABLED
+    : Boolean(input.autoScanHomeKit);
+  return { retentionDays, archiveBeforeDelete, staleThresholdHours, autoScanHomeKit };
 }
 
 function isLoopbackHostname(hostname) {
@@ -360,9 +364,20 @@ function safeDiscoveryScan() {
   });
 }
 
+function isAutoDiscoveryEnabled() {
+  return DISCOVERY_SCAN_ENABLED && retentionSettings.autoScanHomeKit;
+}
+
+function runScheduledDiscoveryScan() {
+  if (!isAutoDiscoveryEnabled()) return Promise.resolve(discoveryCache);
+  return safeDiscoveryScan();
+}
+
 if (DISCOVERY_SCAN_ENABLED) {
-  safeDiscoveryScan();
-  setInterval(safeDiscoveryScan, RESCAN_INTERVAL_MS);
+  void runScheduledDiscoveryScan();
+  setInterval(() => {
+    void runScheduledDiscoveryScan();
+  }, RESCAN_INTERVAL_MS);
 } else {
   log.info('[discovery] Disabled via DISCOVERY_SCAN_ENABLED=false');
 }
@@ -643,6 +658,7 @@ app.get('/api/setup/retention', (_req, res) => {
     retentionDays: retentionSettings.retentionDays,
     archiveBeforeDelete: retentionSettings.archiveBeforeDelete,
     staleThresholdHours: retentionSettings.staleThresholdHours,
+    autoScanHomeKit: retentionSettings.autoScanHomeKit,
     sweepMs: RETENTION_SWEEP_MS,
   });
 });
@@ -667,6 +683,13 @@ app.patch('/api/setup/retention', async (req, res) => {
     updates.staleThresholdHours = nextHours;
   }
 
+  if (body.autoScanHomeKit !== undefined) {
+    if (typeof body.autoScanHomeKit !== 'boolean') {
+      return res.status(400).json({ error: 'autoScanHomeKit must be a boolean.' });
+    }
+    updates.autoScanHomeKit = body.autoScanHomeKit;
+  }
+
   if (!Object.keys(updates).length) {
     return res.status(400).json({ error: 'No supported settings provided.' });
   }
@@ -675,13 +698,14 @@ app.patch('/api/setup/retention', async (req, res) => {
   await saveRetentionSettings(nextSettings);
   retentionSettings = loadRetentionSettings();
   log.info(
-    `[setup] Settings updated: retention=${retentionSettings.retentionDays}d stale=${retentionSettings.staleThresholdHours}h`
+    `[setup] Settings updated: retention=${retentionSettings.retentionDays}d stale=${retentionSettings.staleThresholdHours}h autoScanHomeKit=${retentionSettings.autoScanHomeKit}`
   );
 
   res.json({
     retentionDays: retentionSettings.retentionDays,
     archiveBeforeDelete: retentionSettings.archiveBeforeDelete,
     staleThresholdHours: retentionSettings.staleThresholdHours,
+    autoScanHomeKit: retentionSettings.autoScanHomeKit,
     sweepMs: RETENTION_SWEEP_MS,
   });
 });

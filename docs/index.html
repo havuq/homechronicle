@@ -558,6 +558,35 @@
       margin: 0;
       white-space: pre;
     }
+    .code-block-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .copy-btn {
+      border: 1px solid #475569;
+      background: #1e293b;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      border-radius: 6px;
+      padding: 7px 10px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    .copy-btn:hover {
+      background: #334155;
+      border-color: #64748b;
+      color: #f1f5f9;
+    }
+    .copy-btn.copied {
+      background: #065f46;
+      border-color: #10b981;
+      color: #ecfdf5;
+    }
 
     .steps {
       display: grid;
@@ -993,8 +1022,14 @@
 
         <div class="code-tab-panel" role="tabpanel" id="tab-compose" aria-labelledby="tab-btn-compose" hidden>
           <div class="code-block">
-            <span class="code-caption">docker-compose.yml example (copy and adjust password/token values)</span>
-<pre>services:
+            <div class="code-block-head">
+              <span class="code-caption">docker-compose.yml example</span>
+              <button type="button" class="copy-btn" data-copy-target="compose-yaml">Copy YAML</button>
+            </div>
+<pre id="compose-yaml"># Update placeholder secrets before running:
+# - POSTGRES_PASSWORD
+# - API_TOKEN
+services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -1047,10 +1082,10 @@
       TZ: UTC
 
 volumes:
-  postgres-data:</pre>
-            <span class="code-caption">
-              For full compose options: <a href="https://github.com/havuq/homechronicle/blob/main/docker-compose.yml">github.com/havuq/homechronicle/blob/main/docker-compose.yml</a>
-            </span>
+  postgres-data:
+
+# Full compose options:
+# https://github.com/havuq/homechronicle/blob/main/docker-compose.yml</pre>
           </div>
         </div>
       </div>
@@ -1128,6 +1163,29 @@ volumes:
             event.preventDefault();
             setActiveTab(tabs[tabs.length - 1]);
             tabs[tabs.length - 1].focus();
+          }
+        });
+      });
+
+      const copyButtons = Array.from(document.querySelectorAll('[data-copy-target]'));
+      copyButtons.forEach((button) => {
+        button.addEventListener('click', async () => {
+          const targetId = button.getAttribute('data-copy-target');
+          if (!targetId) return;
+          const target = document.getElementById(targetId);
+          if (!target) return;
+          const code = target.textContent || '';
+          try {
+            await navigator.clipboard.writeText(code);
+            const original = button.textContent;
+            button.textContent = 'Copied';
+            button.classList.add('copied');
+            window.setTimeout(() => {
+              button.textContent = original;
+              button.classList.remove('copied');
+            }, 1400);
+          } catch (error) {
+            console.error('Copy failed', error);
           }
         });
       });
