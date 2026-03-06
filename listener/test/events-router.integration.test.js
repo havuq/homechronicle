@@ -7,7 +7,7 @@ function getRouteHandler(router, method, path) {
     if (!layer.route) continue;
     if (layer.route.path !== path) continue;
     if (!layer.route.methods[method.toLowerCase()]) continue;
-    return layer.route.stack[0].handle;
+    return layer.route.stack.at(-1).handle;
   }
   throw new Error(`Route not found: ${method} ${path}`);
 }

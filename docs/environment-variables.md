@@ -37,6 +37,16 @@ Use `.env.example` for a minimal setup, then add only what you need from this re
 | `API_TOKEN` | empty | listener + web proxy | Write-route auth token. Required when `NODE_ENV=production` (listener exits if empty). |
 | `API_TOKEN_READS_ENABLED` | `false` | listener | When `true`, `GET`/`HEAD` API routes also require `API_TOKEN`. |
 | `API_JSON_LIMIT` | `256kb` | listener | Maximum JSON body size accepted by `express.json()`. |
+| `API_WRITE_RATE_LIMIT_WINDOW_MS` | `60000` | listener | Window size for write-route rate limiting (milliseconds). |
+| `API_WRITE_RATE_LIMIT_MAX` | `60` | listener | Max write requests per window per client key. |
+| `API_STATS_RATE_LIMIT_WINDOW_MS` | `60000` | listener | Window size for stats/accessories read-route rate limiting (milliseconds). |
+| `API_STATS_RATE_LIMIT_MAX` | `120` | listener | Max stats/accessories requests per window per client key. |
+| `EVENTS_RATE_LIMIT_WINDOW_MS` | `60000` | listener | Window size for `/api/events*` read-route rate limiting (milliseconds). |
+| `EVENTS_RATE_LIMIT_MAX` | `300` | listener | Max `/api/events*` requests per window per client key. |
+| `ALERTS_READ_RATE_LIMIT_WINDOW_MS` | `60000` | listener | Window size for `/api/alerts` GET rate limiting (milliseconds). |
+| `ALERTS_READ_RATE_LIMIT_MAX` | `180` | listener | Max `/api/alerts` GET requests per window per client key. |
+| `ALERTS_WRITE_RATE_LIMIT_WINDOW_MS` | `60000` | listener | Window size for `/api/alerts` write-route rate limiting (milliseconds). |
+| `ALERTS_WRITE_RATE_LIMIT_MAX` | `60` | listener | Max `/api/alerts` write requests per window per client key. |
 | `CORS_ALLOWED_ORIGINS` | empty | listener | Comma-separated browser origin allow-list for CORS. |
 | `CORS_ALLOW_LOCALHOST` | `true` | listener | If allow-list is empty, allow localhost/loopback browser origins. |
 | `PAIRINGS_FILE` | `/app/data/pairings.json` in prod | listener | Pairings JSON storage path. |
