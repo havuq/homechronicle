@@ -8,7 +8,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-homekit_events}
       TZ: ${TZ:-UTC}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - ${POSTGRES_DATA_SOURCE:-postgres-data}:/var/lib/postgresql/data
       # Keep schema bootstrap for first-time DB creation.
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
@@ -35,7 +35,7 @@ services:
       TZ: ${TZ:-UTC}
       ALERTS_ENABLED: ${ALERTS_ENABLED:-false}
     volumes:
-      - listener-data:/app/data
+      - ${LISTENER_DATA_SOURCE:-listener-data}:/app/data
       # Let libdns_sd in the container talk to host avahi-daemon over D-Bus.
       - ${HOST_DBUS_SOCKET:-/run/dbus/system_bus_socket}:/run/dbus/system_bus_socket:ro
     depends_on:

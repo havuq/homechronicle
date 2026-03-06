@@ -10,7 +10,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       TZ: ${TZ:-UTC}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - ${POSTGRES_DATA_SOURCE:-postgres-data}:/var/lib/postgresql/data
       # DO NOT EDIT: required for database initialization.
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
@@ -37,7 +37,7 @@ services:
       TZ: ${TZ:-UTC}
       ALERTS_ENABLED: ${ALERTS_ENABLED:-false}
     volumes:
-      - ./listener/data:/app/data
+      - ${LISTENER_DATA_SOURCE:-./listener/data}:/app/data
       # Let libdns_sd in the container talk to host avahi-daemon over D-Bus.
       # This avoids running a second mDNS responder in the container and
       # improves reboot reliability for HomeKit/Matter discovery on Linux.
@@ -76,3 +76,4 @@ services:
 
 volumes:
   postgres-data:
+  listener-data:

@@ -14,6 +14,8 @@ Use `.env.example` for a minimal setup, then add only what you need from this re
 | `WEB_IMAGE` | `ghcr.io/havuq/homechronicle/web:latest` | compose | Override web image tag. |
 | `WEB_PORT` | `3000` | compose | Host port mapped to web container port 80. |
 | `POSTGRES_PORT` | `5432` | compose | Host port mapped to Postgres port 5432. |
+| `POSTGRES_DATA_SOURCE` | `postgres-data` | compose postgres volume | Source for `/var/lib/postgresql/data` mount. Can be a named volume or absolute host path. |
+| `LISTENER_DATA_SOURCE` | `./listener/data` (compose) / `listener-data` (Portainer compose) | compose listener volume | Source for listener `/app/data` mount. Can be a named volume or absolute host path. |
 | `LISTENER_NETWORK_MODE` | `host` | compose | Listener network mode (`host` recommended for mDNS/HomeKit). |
 | `HOST_DBUS_SOCKET` | `/run/dbus/system_bus_socket` | compose listener volume | Host D-Bus socket mounted into listener so libdns_sd can use host `avahi-daemon`. |
 | `LISTENER_HOST` | `host.docker.internal` | web proxy | Host/IP web uses to proxy `/api` to listener. |

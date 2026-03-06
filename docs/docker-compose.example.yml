@@ -10,7 +10,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       TZ: ${TZ:-UTC}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - ${POSTGRES_DATA_SOURCE:-postgres-data}:/var/lib/postgresql/data
       - ../db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
@@ -34,7 +34,7 @@ services:
       API_TOKEN: ${API_TOKEN:-}
       TZ: ${TZ:-UTC}
     volumes:
-      - ../listener/data:/app/data
+      - ${LISTENER_DATA_SOURCE:-../listener/data}:/app/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,3 +68,4 @@ services:
 
 volumes:
   postgres-data:
+  listener-data:
