@@ -11,6 +11,7 @@ services:
       TZ: ${TZ:-UTC}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # DO NOT EDIT: required for database initialization.
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
@@ -40,6 +41,7 @@ services:
       # Let libdns_sd in the container talk to host avahi-daemon over D-Bus.
       # This avoids running a second mDNS responder in the container and
       # improves reboot reliability for HomeKit/Matter discovery on Linux.
+      # DO NOT EDIT: required for host mDNS discovery integration.
       - ${HOST_DBUS_SOCKET:-/run/dbus/system_bus_socket}:/run/dbus/system_bus_socket:ro
     depends_on:
       postgres:
