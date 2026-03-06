@@ -161,7 +161,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.event.release.prerelease == false && steps.latest_release.outputs.is_latest == 'true' }}
 
       - name: Build and push ${{ matrix.service }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           push: true
