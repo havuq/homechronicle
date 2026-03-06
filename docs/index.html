@@ -974,11 +974,16 @@
 
         <div class="code-tab-panel" role="tabpanel" id="tab-quickstart" aria-labelledby="tab-btn-quickstart">
           <div class="code-block">
+            <span class="comment"># Requirements: Docker Engine + Docker Compose plugin</span><br>
+            <span class="cmd">docker --version</span><br>
+            <span class="cmd">docker compose version</span><br><br>
             <span class="comment"># Clone the repository</span><br>
             <span class="cmd">git clone</span> https://github.com/havuq/homechronicle.git<br>
             <span class="cmd">cd</span> homechronicle<br><br>
-            <span class="comment"># Copy and configure environment</span><br>
-            <span class="cmd">cp</span> .env.example .env<br><br>
+            <span class="comment"># Create persistent listener data directory</span><br>
+            <span class="cmd">mkdir -p</span> listener/data<br><br>
+            <span class="comment"># Generate API token and paste it into docker-compose.yml</span><br>
+            <span class="cmd">openssl rand -hex 32</span><br><br>
             <span class="comment"># Start all services</span><br>
             <span class="cmd">docker compose up -d</span><br><br>
             <span class="comment"># Open the dashboard</span><br>
@@ -988,27 +993,64 @@
 
         <div class="code-tab-panel" role="tabpanel" id="tab-compose" aria-labelledby="tab-btn-compose" hidden>
           <div class="code-block">
-            <span class="code-caption">docker-compose.yml example (trimmed, see repo root for full file)</span>
+            <span class="code-caption">docker-compose.yml example (copy and adjust password/token values)</span>
 <pre>services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: homekit
+      POSTGRES_PASSWORD: change-this-strong-password
+      POSTGRES_DB: homekit_events
+      TZ: UTC
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homekit -d homekit_events"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   listener:
     image: ghcr.io/havuq/homechronicle/listener:latest
+    restart: unless-stopped
     network_mode: host
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql://homekit:change-this-strong-password@127.0.0.1:5432/homekit_events
+      API_PORT: "3001"
+      NODE_ENV: production
+      API_TOKEN: replace-with-openssl-rand-hex-32
+      TZ: UTC
+      ALERTS_ENABLED: "false"
+    volumes:
+      - ./listener/data:/app/data
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   web:
     image: ghcr.io/havuq/homechronicle/web:latest
+    restart: unless-stopped
     ports:
-      - "3000:80"</pre>
+      - "3000:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      LISTENER_HOST: host.docker.internal
+      LISTENER_PORT: "3001"
+      API_TOKEN: replace-with-openssl-rand-hex-32
+      TZ: UTC
+
+volumes:
+  postgres-data:</pre>
+            <span class="code-caption">
+              For full compose options: <a href="https://github.com/havuq/homechronicle/blob/main/docker-compose.yml">github.com/havuq/homechronicle/blob/main/docker-compose.yml</a>
+            </span>
           </div>
         </div>
       </div>
