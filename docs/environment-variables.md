@@ -17,8 +17,18 @@ Use `.env.example` for a minimal setup, then add only what you need from this re
 | `LISTENER_NETWORK_MODE` | `host` | compose | Listener network mode (`host` recommended for mDNS/HomeKit). |
 | `HOST_DBUS_SOCKET` | `/run/dbus/system_bus_socket` | compose listener volume | Host D-Bus socket mounted into listener so libdns_sd can use host `avahi-daemon`. |
 | `LISTENER_HOST` | `host.docker.internal` | web proxy | Host/IP web uses to proxy `/api` to listener. |
-| `LISTENER_PORT` | `3001` | web proxy | Listener API port used by web proxy. |
+| `LISTENER_PORT` | `API_PORT` (fallback `3001`) | web proxy | Listener API port used by web proxy. If unset, compose reuses `API_PORT`. |
 | `DATABASE_URL` | auto-built from PG vars | listener | Explicit PostgreSQL connection string. |
+
+### Web/listener routing presets
+
+- Host-network listener (default):
+  - `LISTENER_NETWORK_MODE=host`
+  - `LISTENER_HOST=host.docker.internal` (or your Docker host LAN IP if needed)
+- Bridge-network listener:
+  - `LISTENER_NETWORK_MODE=bridge`
+  - `LISTENER_HOST=listener`
+- Keep `API_PORT` and web `LISTENER_PORT` aligned (default `3001`) or `/api` requests can fail with `502`.
 
 ## PostgreSQL
 
