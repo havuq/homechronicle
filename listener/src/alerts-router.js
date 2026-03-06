@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { parseIntInRange } from './events-router.js';
 import { log } from './logger.js';
 import { validateWebhookTargetUrl } from './security.js';
@@ -25,6 +26,45 @@ function parseQuietMinutes(value, fallback = 0) {
 
 const ALERTS_ALLOW_PRIVATE_TARGETS = /^(1|true|yes|on)$/i.test(
   process.env.ALERTS_ALLOW_PRIVATE_TARGETS ?? 'true'
+);
+
+function parsePositiveInt(value, fallback, min, max) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function rateLimitKeyGenerator(req) {
+  const forwardedFor = req?.headers?.['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+  return req?.ip ?? req?.socket?.remoteAddress ?? 'unknown';
+}
+
+const ALERTS_READ_RATE_LIMIT_WINDOW_MS = parsePositiveInt(
+  process.env.ALERTS_READ_RATE_LIMIT_WINDOW_MS,
+  60_000,
+  1_000,
+  24 * 60 * 60 * 1000
+);
+const ALERTS_READ_RATE_LIMIT_MAX = parsePositiveInt(
+  process.env.ALERTS_READ_RATE_LIMIT_MAX,
+  180,
+  1,
+  100_000
+);
+const ALERTS_WRITE_RATE_LIMIT_WINDOW_MS = parsePositiveInt(
+  process.env.ALERTS_WRITE_RATE_LIMIT_WINDOW_MS,
+  60_000,
+  1_000,
+  24 * 60 * 60 * 1000
+);
+const ALERTS_WRITE_RATE_LIMIT_MAX = parsePositiveInt(
+  process.env.ALERTS_WRITE_RATE_LIMIT_MAX,
+  60,
+  1,
+  100_000
 );
 
 function validateCreate(body = {}) {
@@ -144,8 +184,26 @@ function toApiRule(row) {
 
 export function createAlertsRouter({ pool }) {
   const router = express.Router();
+  const alertsReadLimiter = rateLimit({
+    windowMs: ALERTS_READ_RATE_LIMIT_WINDOW_MS,
+    max: ALERTS_READ_RATE_LIMIT_MAX,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    keyGenerator: rateLimitKeyGenerator,
+    message: { error: 'Too many requests' },
+  });
+  const alertsWriteLimiter = rateLimit({
+    windowMs: ALERTS_WRITE_RATE_LIMIT_WINDOW_MS,
+    max: ALERTS_WRITE_RATE_LIMIT_MAX,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    keyGenerator: rateLimitKeyGenerator,
+    message: { error: 'Too many requests' },
+  });
 
-  router.get('/rules', async (_req, res) => {
+  router.get('/rules', alertsReadLimiter, async (_req, res) => {
     try {
       const result = await pool.query(
         `SELECT id, name, enabled, scope_type, scope_value, characteristic,
@@ -160,7 +218,7 @@ export function createAlertsRouter({ pool }) {
     }
   });
 
-  router.post('/rules', async (req, res) => {
+  router.post('/rules', alertsWriteLimiter, async (req, res) => {
     const parsed = validateCreate(req.body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
 
@@ -190,7 +248,7 @@ export function createAlertsRouter({ pool }) {
     }
   });
 
-  router.patch('/rules/:id', async (req, res) => {
+  router.patch('/rules/:id', alertsWriteLimiter, async (req, res) => {
     const ruleId = Number.parseInt(String(req.params.id ?? ''), 10);
     if (!Number.isFinite(ruleId) || ruleId < 1) {
       return res.status(400).json({ error: 'Invalid rule id' });
@@ -235,7 +293,7 @@ export function createAlertsRouter({ pool }) {
     }
   });
 
-  router.delete('/rules/:id', async (req, res) => {
+  router.delete('/rules/:id', alertsWriteLimiter, async (req, res) => {
     const ruleId = Number.parseInt(String(req.params.id ?? ''), 10);
     if (!Number.isFinite(ruleId) || ruleId < 1) {
       return res.status(400).json({ error: 'Invalid rule id' });
@@ -250,7 +308,7 @@ export function createAlertsRouter({ pool }) {
     }
   });
 
-  router.get('/deliveries', async (req, res) => {
+  router.get('/deliveries', alertsReadLimiter, async (req, res) => {
     const page = parseIntInRange(req.query.page, 1, 1, Number.MAX_SAFE_INTEGER);
     const limit = parseIntInRange(req.query.limit, 50, 1, 200);
     const offset = (page - 1) * limit;

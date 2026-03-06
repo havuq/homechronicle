@@ -8,6 +8,7 @@
 import { networkInterfaces } from 'os';
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { IPDiscovery, HttpClient } from 'hap-controller';
 import { insertEvent, pool, migrateDb, runRetentionSweep } from './db.js';
 import { startSubscribers, stopSubscriber, getSubscriberStats } from './subscriber.js';
@@ -55,6 +56,10 @@ const RETENTION_SWEEP_MS = Number.parseInt(process.env.RETENTION_SWEEP_MS ?? `${
 const RETENTION_DAYS_DEFAULT = Number.parseInt(process.env.RETENTION_DAYS ?? '365', 10);
 const RETENTION_ARCHIVE_DEFAULT = /^(1|true|yes|on)$/i.test(process.env.RETENTION_ARCHIVE ?? 'true');
 const STALE_THRESHOLD_HOURS_DEFAULT = Number.parseInt(process.env.STALE_THRESHOLD_HOURS ?? '12', 10);
+const API_WRITE_RATE_LIMIT_WINDOW_MS = Number.parseInt(process.env.API_WRITE_RATE_LIMIT_WINDOW_MS ?? '60000', 10);
+const API_WRITE_RATE_LIMIT_MAX = Number.parseInt(process.env.API_WRITE_RATE_LIMIT_MAX ?? '60', 10);
+const API_STATS_RATE_LIMIT_WINDOW_MS = Number.parseInt(process.env.API_STATS_RATE_LIMIT_WINDOW_MS ?? '60000', 10);
+const API_STATS_RATE_LIMIT_MAX = Number.parseInt(process.env.API_STATS_RATE_LIMIT_MAX ?? '120', 10);
 
 if (IS_PRODUCTION && !API_TOKEN) {
   log.error('[api] API_TOKEN is required when NODE_ENV=production');
@@ -157,6 +162,29 @@ function isAllowedCorsOrigin(origin) {
   } catch {
     return false;
   }
+}
+
+function normalizeRateLimitValue(value, fallback, min, max) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
+function extractBearerToken(headerValue) {
+  const auth = String(headerValue ?? '').trim();
+  if (!auth) return '';
+  const spaceIndex = auth.indexOf(' ');
+  if (spaceIndex <= 0) return '';
+  const scheme = auth.slice(0, spaceIndex).toLowerCase();
+  if (scheme !== 'bearer') return '';
+  return auth.slice(spaceIndex + 1).trim();
+}
+
+function rateLimitKeyGenerator(req) {
+  const forwardedFor = req?.headers?.['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+  return req?.ip ?? req?.socket?.remoteAddress ?? 'unknown';
 }
 
 function loadPairings() {
@@ -418,6 +446,24 @@ if (Number.isFinite(RETENTION_SWEEP_MS) && RETENTION_SWEEP_MS >= 60_000) {
 
 const app = express();
 app.disable('x-powered-by');
+const apiWriteLimiter = rateLimit({
+  windowMs: normalizeRateLimitValue(API_WRITE_RATE_LIMIT_WINDOW_MS, 60_000, 1_000, 24 * 60 * 60 * 1000),
+  max: normalizeRateLimitValue(API_WRITE_RATE_LIMIT_MAX, 60, 1, 100_000),
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  keyGenerator: rateLimitKeyGenerator,
+  message: { error: 'Too many requests' },
+});
+const apiStatsReadLimiter = rateLimit({
+  windowMs: normalizeRateLimitValue(API_STATS_RATE_LIMIT_WINDOW_MS, 60_000, 1_000, 24 * 60 * 60 * 1000),
+  max: normalizeRateLimitValue(API_STATS_RATE_LIMIT_MAX, 120, 1, 100_000),
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  keyGenerator: rateLimitKeyGenerator,
+  message: { error: 'Too many requests' },
+});
 app.use(cors({
   origin(origin, callback) {
     callback(null, isAllowedCorsOrigin(origin));
@@ -440,9 +486,9 @@ app.use((req, res, next) => {
   const isReadMethod = req.method === 'GET' || req.method === 'HEAD';
   if (isReadMethod && !API_TOKEN_READS_ENABLED) return next();
 
-  const authHeader = req.get('authorization') ?? '';
-  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-  const providedToken = (req.get('x-api-token') ?? bearerMatch?.[1] ?? '').trim();
+  const providedToken = String(
+    req.get('x-api-token') ?? extractBearerToken(req.get('authorization'))
+  ).trim();
 
   if (secureTokenEquals(API_TOKEN, providedToken)) return next();
   res.setHeader('WWW-Authenticate', 'Bearer realm="homechronicle-api"');
@@ -727,7 +773,7 @@ app.patch('/api/setup/log-level', (req, res) => {
 });
 
 // Data management
-app.delete('/api/data/accessory', async (req, res) => {
+app.delete('/api/data/accessory', apiWriteLimiter, async (req, res) => {
   const { accessoryId } = req.body ?? {};
   if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
   try {
@@ -745,7 +791,7 @@ app.delete('/api/data/accessory', async (req, res) => {
   }
 });
 
-app.delete('/api/data/all', async (_req, res) => {
+app.delete('/api/data/all', apiWriteLimiter, async (_req, res) => {
   try {
     const result = await pool.query('DELETE FROM event_logs');
     await saveRooms({});
@@ -778,7 +824,7 @@ app.use('/api', createMatterRouter({
 }));
 
 // Stats routes
-app.get('/api/accessories', async (_req, res) => {
+app.get('/api/accessories', apiStatsReadLimiter, async (_req, res) => {
   try {
     const result = await pool.query(`
       WITH latest AS (
@@ -957,7 +1003,7 @@ app.get('/api/accessories', async (_req, res) => {
   }
 });
 
-app.get('/api/stats/hourly', async (_req, res) => {
+app.get('/api/stats/hourly', apiStatsReadLimiter, async (_req, res) => {
   try {
     const result = await pool.query(`
       SELECT EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC') AS hour, COUNT(*) AS count
@@ -970,7 +1016,7 @@ app.get('/api/stats/hourly', async (_req, res) => {
   }
 });
 
-app.get('/api/stats/daily', async (req, res) => {
+app.get('/api/stats/daily', apiStatsReadLimiter, async (req, res) => {
   const days = parseIntInRange(req.query.days, 30, 7, 365);
   try {
     const result = await pool.query(`
@@ -985,7 +1031,7 @@ app.get('/api/stats/daily', async (req, res) => {
   }
 });
 
-app.get('/api/stats/top-devices', async (req, res) => {
+app.get('/api/stats/top-devices', apiStatsReadLimiter, async (req, res) => {
   const days = parseIntInRange(req.query.days, 7, 1, 90);
   try {
     const result = await pool.query(`
@@ -1024,7 +1070,7 @@ app.get('/api/stats/top-devices', async (req, res) => {
   }
 });
 
-app.get('/api/stats/rooms', async (req, res) => {
+app.get('/api/stats/rooms', apiStatsReadLimiter, async (req, res) => {
   const days = parseIntInRange(req.query.days, 7, 1, 90);
   try {
     const result = await pool.query(`
@@ -1052,7 +1098,7 @@ app.get('/api/stats/rooms', async (req, res) => {
   }
 });
 
-app.get('/api/stats/weekday', async (req, res) => {
+app.get('/api/stats/weekday', apiStatsReadLimiter, async (req, res) => {
   const days = parseIntInRange(req.query.days, 90, 7, 365);
   try {
     const result = await pool.query(`
@@ -1072,7 +1118,7 @@ app.get('/api/stats/weekday', async (req, res) => {
   }
 });
 
-app.get('/api/stats/heatmap', async (_req, res) => {
+app.get('/api/stats/heatmap', apiStatsReadLimiter, async (_req, res) => {
   try {
     const result = await pool.query(`
       SELECT accessory_name,
@@ -1090,7 +1136,7 @@ app.get('/api/stats/heatmap', async (_req, res) => {
   }
 });
 
-app.get('/api/stats/device-patterns', async (_req, res) => {
+app.get('/api/stats/device-patterns', apiStatsReadLimiter, async (_req, res) => {
   try {
     const result = await pool.query(`
       SELECT accessory_name,
@@ -1108,7 +1154,7 @@ app.get('/api/stats/device-patterns', async (_req, res) => {
   }
 });
 
-app.get('/api/stats/anomalies', async (_req, res) => {
+app.get('/api/stats/anomalies', apiStatsReadLimiter, async (_req, res) => {
   try {
     const [deviceRows, roomRows] = await Promise.all([
       pool.query(`
