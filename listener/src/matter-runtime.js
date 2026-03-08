@@ -99,7 +99,8 @@ export function createMatterRuntime({
     }
   }
 
-  async function ingestRows(session, rows) {
+  async function ingestRows(session, rows, options = {}) {
+    const { suppressInsert = false } = options;
     const { nodeId, pairing } = session;
     const polledEvents = normalizePolledEvents(rows);
     if (!polledEvents.length) return;
@@ -126,6 +127,7 @@ export function createMatterRuntime({
       const nextValue = String(newValue);
       valueCache.set(cacheKey, nextValue);
       if (oldValue !== null && oldValue === nextValue) continue;
+      if (suppressInsert) continue;
 
       const eventPayload = {
         accessoryId,
@@ -200,10 +202,12 @@ export function createMatterRuntime({
     if (session.stopped || !session.pollingEnabled) return;
 
     const { nodeId } = session;
+    const suppressInsert = Boolean(session.initialPollPending);
     try {
       const events = await matterController.poll(nodeId);
       session.consecutiveErrors = 0;
-      await ingestRows(session, events);
+      await ingestRows(session, events, { suppressInsert });
+      session.initialPollPending = false;
     } catch (err) {
       setSessionError(session, nodeId, err, 'poll');
     } finally {
@@ -242,6 +246,7 @@ export function createMatterRuntime({
       lastError: null,
       lastErrorAt: null,
       lastEventAt: null,
+      initialPollPending: !SUBSCRIBE_ENABLED,
     };
     sessions.set(nodeId, session);
 
