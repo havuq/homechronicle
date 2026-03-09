@@ -152,6 +152,10 @@ Do not use a generic token value (for example `changeme` or `token123`).
   - `GET /api/setup/discovered`
   - `POST /api/setup/scan`
   - `POST /api/setup/pair`
+- Retention settings endpoint:
+  - `GET /api/setup/retention` returns `retentionDays`, `staleThresholdHours`, `autoScanHomeKit`, and `archiveBeforeDelete`.
+  - `PATCH /api/setup/retention` accepts the same fields; all are optional.
+  - `archiveBeforeDelete` controls whether old events are copied into `events_archive` before they are removed by retention sweep (`true`), or deleted directly without archival (`false`).
 - If `API_TOKEN` is configured, include one of these headers on write calls:
   - `X-API-Token: <token>`
   - `Authorization: Bearer <token>`
