@@ -12,6 +12,7 @@ import MonthlyHeatmap from './components/MonthlyHeatmap.jsx';
 import AnomalyPanel from './components/AnomalyPanel.jsx';
 import StaleDevicesPanel from './components/StaleDevicesPanel.jsx';
 import AccessoryList from './components/AccessoryList.jsx';
+import AccessoryDetail from './components/AccessoryDetail.jsx';
 import Setup from './components/Setup.jsx';
 import Alerts from './components/Alerts.jsx';
 import BrandLogo from './components/BrandLogo.jsx';
@@ -62,6 +63,7 @@ const SKIN_SWATCH_DARK = {
 
 export default function App() {
   const [tab, setTab]               = useState('dashboard');
+  const [selectedAccessoryId, setSelectedAccessoryId] = useState(null);
   const [alertsEnabled, setAlertsEnabled] = useState(false);
   const [isSkinPickerOpen, setIsSkinPickerOpen] = useState(false);
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
@@ -275,7 +277,11 @@ export default function App() {
           </div>
         )}
 
-        {tab === 'accessories' && <AccessoryList />}
+        {tab === 'accessories' && (
+          selectedAccessoryId
+            ? <AccessoryDetail accessoryId={selectedAccessoryId} onBack={() => setSelectedAccessoryId(null)} />
+            : <AccessoryList onSelectAccessory={setSelectedAccessoryId} />
+        )}
         {tab === 'alerts' && <Alerts />}
         {tab === 'setup' && <Setup />}
       </main>

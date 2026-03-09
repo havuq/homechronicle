@@ -187,6 +187,24 @@ function rateLimitKeyGenerator(req) {
   return req?.ip ?? req?.socket?.remoteAddress ?? 'unknown';
 }
 
+function mapReliabilityStats(reliability) {
+  if (!reliability) return null;
+  return {
+    connect_attempts: reliability.connectAttempts,
+    reconnect_attempts: reliability.reconnectAttempts,
+    reconnect_schedules: reliability.reconnectSchedules,
+    disconnects: reliability.disconnects,
+    resubscribe_successes: reliability.resubscribeSuccesses,
+    resubscribe_failures: reliability.resubscribeFailures,
+    subscribe_failures: reliability.subscribeFailures,
+    accessories_query_failures: reliability.accessoriesQueryFailures,
+    last_connected_at: reliability.lastConnectedAt,
+    last_subscribed_at: reliability.lastSubscribedAt,
+    last_error: reliability.lastError,
+    last_error_at: reliability.lastErrorAt,
+  };
+}
+
 function loadPairings() {
   return normalizePairingsMap(pairingsStore.getSnapshot());
 }
@@ -736,6 +754,13 @@ app.patch('/api/setup/retention', async (req, res) => {
     updates.autoScanHomeKit = body.autoScanHomeKit;
   }
 
+  if (body.archiveBeforeDelete !== undefined) {
+    if (typeof body.archiveBeforeDelete !== 'boolean') {
+      return res.status(400).json({ error: 'archiveBeforeDelete must be a boolean.' });
+    }
+    updates.archiveBeforeDelete = body.archiveBeforeDelete;
+  }
+
   if (!Object.keys(updates).length) {
     return res.status(400).json({ error: 'No supported settings provided.' });
   }
@@ -931,20 +956,7 @@ app.get('/api/accessories', apiStatsReadLimiter, async (_req, res) => {
         firmware_revision: identity?.firmware_revision ?? null,
         hardware_revision: identity?.hardware_revision ?? null,
         metadata_updated_at: identity?.metadata_updated_at ?? null,
-        reliability: reliability ? {
-          connect_attempts: reliability.connectAttempts,
-          reconnect_attempts: reliability.reconnectAttempts,
-          reconnect_schedules: reliability.reconnectSchedules,
-          disconnects: reliability.disconnects,
-          resubscribe_successes: reliability.resubscribeSuccesses,
-          resubscribe_failures: reliability.resubscribeFailures,
-          subscribe_failures: reliability.subscribeFailures,
-          accessories_query_failures: reliability.accessoriesQueryFailures,
-          last_connected_at: reliability.lastConnectedAt,
-          last_subscribed_at: reliability.lastSubscribedAt,
-          last_error: reliability.lastError,
-          last_error_at: reliability.lastErrorAt,
-        } : null,
+        reliability: mapReliabilityStats(reliability),
         health,
       };
     });
@@ -973,20 +985,7 @@ app.get('/api/accessories', apiStatsReadLimiter, async (_req, res) => {
           firmware_revision: identity?.firmware_revision ?? null,
           hardware_revision: identity?.hardware_revision ?? null,
           metadata_updated_at: identity?.metadata_updated_at ?? null,
-          reliability: reliability ? {
-            connect_attempts: reliability.connectAttempts,
-            reconnect_attempts: reliability.reconnectAttempts,
-            reconnect_schedules: reliability.reconnectSchedules,
-            disconnects: reliability.disconnects,
-            resubscribe_successes: reliability.resubscribeSuccesses,
-            resubscribe_failures: reliability.resubscribeFailures,
-            subscribe_failures: reliability.subscribeFailures,
-            accessories_query_failures: reliability.accessoriesQueryFailures,
-            last_connected_at: reliability.lastConnectedAt,
-            last_subscribed_at: reliability.lastSubscribedAt,
-            last_error: reliability.lastError,
-            last_error_at: reliability.lastErrorAt,
-          } : null,
+          reliability: mapReliabilityStats(reliability),
           health: deriveDeviceHealth({
             lastSeen: null,
             pairedAt: p.pairedAt ?? null,
@@ -1003,6 +1002,184 @@ app.get('/api/accessories', apiStatsReadLimiter, async (_req, res) => {
   }
 });
 
+app.get('/api/accessories/:accessoryId/detail', apiStatsReadLimiter, async (req, res) => {
+  const accessoryId = String(req.params.accessoryId ?? '').trim();
+  if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
+
+  const days = parseIntInRange(req.query.days, 30, 7, 365);
+  const page = parseIntInRange(req.query.page, 1, 1, Number.MAX_SAFE_INTEGER);
+  const limit = parseIntInRange(req.query.limit, 100, 1, 500);
+  const offset = (page - 1) * limit;
+
+  try {
+    const rooms = loadRooms();
+    const currentPairings = loadPairings();
+    const now = Date.now();
+
+    const summaryResult = await pool.query(
+      `SELECT
+         COUNT(*)::int AS event_count,
+         MIN(timestamp) AS first_seen,
+         MAX(timestamp) AS last_seen
+       FROM event_logs
+       WHERE accessory_id = $1`,
+      [accessoryId]
+    );
+    const summary = summaryResult.rows[0] ?? {};
+    const eventCount = Number.parseInt(summary.event_count ?? '0', 10);
+
+    const latestResult = await pool.query(
+      `SELECT accessory_name, room_name, service_type, protocol
+       FROM event_logs
+       WHERE accessory_id = $1
+       ORDER BY timestamp DESC, id DESC
+       LIMIT 1`,
+      [accessoryId]
+    );
+    const latest = latestResult.rows[0] ?? {};
+
+    const pairingProtocol = String(currentPairings[accessoryId]?.protocol ?? '').toLowerCase();
+    const protocol = String((latest.protocol ?? pairingProtocol) || 'homekit').toLowerCase();
+    const bridgeId = protocol === 'homekit' ? parentBridgeId(accessoryId) : accessoryId;
+    const matterNodeId = protocol === 'matter'
+      ? String(accessoryId).split(':')[0]
+      : null;
+    const bridgePairing = currentPairings[bridgeId]
+      ?? currentPairings[accessoryId]
+      ?? (matterNodeId ? currentPairings[matterNodeId] : null);
+    const identity = getAccessoryIdentity(accessoryId) ?? getAccessoryIdentity(bridgeId);
+    const reliability = getSubscriberStats(bridgeId);
+
+    const heartbeatResult = await pool.query(
+      `WITH recent AS (
+         SELECT timestamp
+         FROM event_logs
+         WHERE accessory_id = $1
+         ORDER BY timestamp DESC, id DESC
+         LIMIT 200
+       ),
+       deltas AS (
+         SELECT EXTRACT(EPOCH FROM (
+           timestamp - LAG(timestamp) OVER (ORDER BY timestamp ASC)
+         ))::float AS gap_seconds
+         FROM recent
+       )
+       SELECT
+         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY gap_seconds) AS heartbeat_seconds,
+         COUNT(*) FILTER (WHERE gap_seconds IS NOT NULL)::int AS heartbeat_samples
+       FROM deltas
+       WHERE gap_seconds IS NOT NULL AND gap_seconds > 0`,
+      [accessoryId]
+    );
+    const heartbeat = heartbeatResult.rows[0] ?? {};
+
+    const health = deriveDeviceHealth({
+      lastSeen: summary.last_seen ?? null,
+      pairedAt: bridgePairing?.pairedAt ?? null,
+      heartbeatSeconds: heartbeat.heartbeat_seconds ?? null,
+      heartbeatSamples: heartbeat.heartbeat_samples ?? 0,
+      staleThresholdSeconds: retentionSettings.staleThresholdHours * 60 * 60,
+      now,
+    });
+
+    const stateResult = await pool.query(
+      `SELECT DISTINCT ON (characteristic)
+         characteristic,
+         new_value,
+         old_value,
+         service_type,
+         timestamp
+       FROM event_logs
+       WHERE accessory_id = $1
+       ORDER BY characteristic, timestamp DESC, id DESC`,
+      [accessoryId]
+    );
+
+    const historyResult = await pool.query(
+      `SELECT
+         id, timestamp, accessory_id, accessory_name, room_name, service_type,
+         characteristic, old_value, new_value, protocol, transport,
+         endpoint_id, cluster_id, attribute_id, raw_iid
+       FROM event_logs
+       WHERE accessory_id = $1
+       ORDER BY timestamp DESC, id DESC
+       LIMIT $2 OFFSET $3`,
+      [accessoryId, limit, offset]
+    );
+
+    const activityResult = await pool.query(
+      `SELECT DATE(timestamp AT TIME ZONE 'UTC') AS day, COUNT(*)::int AS count
+       FROM event_logs
+       WHERE accessory_id = $1
+         AND timestamp >= NOW() - ($2::int * INTERVAL '1 day')
+       GROUP BY day
+       ORDER BY day`,
+      [accessoryId, days]
+    );
+
+    const distinctActiveDaysResult = await pool.query(
+      `SELECT COUNT(DISTINCT DATE(timestamp AT TIME ZONE 'UTC'))::int AS active_days
+       FROM event_logs
+       WHERE accessory_id = $1`,
+      [accessoryId]
+    );
+    const activeDays = Number.parseInt(distinctActiveDaysResult.rows[0]?.active_days ?? '0', 10);
+    const firstSeenTs = summary.first_seen ? new Date(summary.first_seen).getTime() : null;
+    const observedDays = firstSeenTs
+      ? Math.max(1, Math.ceil((now - firstSeenTs) / (24 * 60 * 60 * 1000)))
+      : 0;
+
+    const accessory = {
+      accessory_id: accessoryId,
+      accessory_name: latest.accessory_name ?? bridgePairing?.name ?? accessoryId,
+      room_name: rooms[accessoryId] ?? latest.room_name ?? null,
+      service_type: latest.service_type ?? null,
+      protocol,
+      first_seen: summary.first_seen ?? null,
+      last_seen: summary.last_seen ?? null,
+      event_count: eventCount,
+      address: bridgePairing?.address ?? null,
+      paired_at: bridgePairing?.pairedAt ?? null,
+      manufacturer: identity?.manufacturer ?? null,
+      model: identity?.model ?? null,
+      serial_number: identity?.serial_number ?? null,
+      firmware_revision: identity?.firmware_revision ?? null,
+      hardware_revision: identity?.hardware_revision ?? null,
+      metadata_updated_at: identity?.metadata_updated_at ?? null,
+      reliability: mapReliabilityStats(reliability),
+      health,
+    };
+
+    res.json({
+      accessory,
+      uptime: {
+        active_days: activeDays,
+        observed_days: observedDays,
+        active_day_ratio: observedDays > 0 ? activeDays / observedDays : null,
+        events_per_active_day: activeDays > 0 ? eventCount / activeDays : null,
+      },
+      current_state: stateResult.rows,
+      activity: {
+        days,
+        daily: activityResult.rows,
+      },
+      history: {
+        total: eventCount,
+        page,
+        limit,
+        pages: Math.ceil(eventCount / limit),
+        events: historyResult.rows.map((row) => ({
+          ...row,
+          room_name: rooms[row.accessory_id] ?? row.room_name,
+        })),
+      },
+    });
+  } catch (err) {
+    log.error('[api] /api/accessories/:accessoryId/detail error:', err.message ?? err.stack ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/stats/hourly', apiStatsReadLimiter, async (_req, res) => {
   try {
     const result = await pool.query(`
@@ -1011,7 +1188,8 @@ app.get('/api/stats/hourly', apiStatsReadLimiter, async (_req, res) => {
       GROUP BY hour ORDER BY hour
     `);
     res.json(result.rows);
-  } catch {
+  } catch (err) {
+    log.error('[api] /api/stats/hourly error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

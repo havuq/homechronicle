@@ -2,7 +2,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAccessories } from '../hooks/useEvents.js';
 import { getServiceIcon } from '../lib/icons.js';
 import { getRoomColor } from '../lib/roomColors.js';
-import { AlertTriangle, ChevronDown, Network } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Network } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,7 +59,7 @@ function reliabilitySummary(accessory) {
 }
 
 // ---------------------------------------------------------------------------
-export default function AccessoryList() {
+export default function AccessoryList({ onSelectAccessory }) {
   const { data: accessories, isLoading } = useAccessories();
 
   if (isLoading) {
@@ -193,7 +193,12 @@ export default function AccessoryList() {
               const reliability = reliabilitySummary(accessory);
 
               return (
-                <div key={accessory.accessory_id} className="flex items-center gap-3 px-4 py-3">
+                <button
+                  key={accessory.accessory_id}
+                  type="button"
+                  onClick={() => onSelectAccessory?.(accessory.accessory_id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                >
                   {/* Activity dot */}
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
 
@@ -291,7 +296,8 @@ export default function AccessoryList() {
                       )}
                     </div>
                   )}
-                </div>
+                  <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
+                </button>
               );
             })}
           </div>

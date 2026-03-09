@@ -32,6 +32,18 @@ export function useAccessories() {
   });
 }
 
+export function useAccessoryDetail(accessoryId, { days = 30, page = 1, limit = 100 } = {}) {
+  return useQuery({
+    queryKey: ['accessory-detail', accessoryId, days, page, limit],
+    queryFn: () => fetchJson(
+      `${BASE}/accessories/${encodeURIComponent(accessoryId)}/detail?days=${days}&page=${page}&limit=${limit}`
+    ),
+    enabled: Boolean(accessoryId),
+    refetchInterval: page === 1 ? 15_000 : false,
+    refetchIntervalInBackground: false,
+  });
+}
+
 export function useHourlyStats() {
   return useQuery({
     queryKey: ['stats', 'hourly'],
