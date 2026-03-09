@@ -19,6 +19,7 @@ export default function FilterBar({ filters, onChange, open, onToggle }) {
       <button
         onClick={onToggle}
         aria-expanded={open}
+        aria-controls="filter-bar-panel"
         className="w-full py-2.5 text-left hover:bg-blue-50/60 transition-colors"
       >
         <div className="max-w-2xl mx-auto px-4 flex items-center gap-2">
@@ -38,7 +39,7 @@ export default function FilterBar({ filters, onChange, open, onToggle }) {
       </button>
 
       {open && (
-        <div className="max-w-2xl mx-auto px-4 pb-3">
+        <div id="filter-bar-panel" className="max-w-2xl mx-auto px-4 pb-3">
           <div className="flex flex-wrap gap-2 sm:gap-3">
             {/* Search by name */}
             <div className="relative w-full sm:w-56">
@@ -71,6 +72,15 @@ export default function FilterBar({ filters, onChange, open, onToggle }) {
                 ))}
               </select>
             </div>
+
+            {/* Characteristic filter */}
+            <input
+              type="search"
+              placeholder="Characteristic…"
+              value={filters.characteristic ?? ''}
+              onChange={(e) => update('characteristic', e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-36"
+            />
 
             {/* Date from */}
             <input

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutList, BarChart2, Home, Settings, Monitor, Sun, Moon, Paintbrush2, Bell, Link2, Unlink2 } from 'lucide-react';
 import clsx from 'clsx';
 import Timeline from './components/Timeline.jsx';
@@ -96,6 +96,21 @@ export default function App() {
     () => (alertsEnabled ? [...TABS.slice(0, 3), ALERTS_TAB, ...TABS.slice(3)] : TABS),
     [alertsEnabled]
   );
+  const handleSelectAccessory = useCallback((accessoryId) => {
+    if (!accessoryId) return;
+    if (typeof window !== 'undefined') {
+      const url = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.history.pushState({ hcView: 'accessory-detail', accessoryId }, '', url);
+    }
+    setSelectedAccessoryId(accessoryId);
+  }, []);
+  const handleAccessoryBack = useCallback(() => {
+    if (typeof window !== 'undefined' && window.history.state?.hcView === 'accessory-detail') {
+      window.history.back();
+      return;
+    }
+    setSelectedAccessoryId(null);
+  }, []);
 
   useEffect(() => {
     if (typeof fetch !== 'function') return;
@@ -117,6 +132,22 @@ export default function App() {
   useEffect(() => {
     if (!alertsEnabled && tab === 'alerts') setTab('timeline');
   }, [alertsEnabled, tab]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onPopState = (event) => {
+      const { state } = event;
+      if (state?.hcView === 'accessory-detail' && typeof state.accessoryId === 'string' && state.accessoryId.length > 0) {
+        setTab('accessories');
+        setSelectedAccessoryId(state.accessoryId);
+        return;
+      }
+      setSelectedAccessoryId(null);
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -279,8 +310,8 @@ export default function App() {
 
         {tab === 'accessories' && (
           selectedAccessoryId
-            ? <AccessoryDetail accessoryId={selectedAccessoryId} onBack={() => setSelectedAccessoryId(null)} />
-            : <AccessoryList onSelectAccessory={setSelectedAccessoryId} />
+            ? <AccessoryDetail accessoryId={selectedAccessoryId} onBack={handleAccessoryBack} />
+            : <AccessoryList onSelectAccessory={handleSelectAccessory} />
         )}
         {tab === 'alerts' && <Alerts />}
         {tab === 'setup' && <Setup />}

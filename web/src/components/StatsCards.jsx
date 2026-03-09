@@ -29,9 +29,13 @@ function Card({ icon: Icon, label, value, sub, bgClass, iconClass }) {
 }
 
 export default function StatsCards() {
-  const { data: daily }      = useDailyStats(7);
-  const { data: topDevices } = useTopDevices();
-  const { data: rooms }      = useRoomStats(7);
+  const { data: daily, isError: dailyError }           = useDailyStats(7);
+  const { data: topDevices, isError: topDevicesError }  = useTopDevices();
+  const { data: rooms, isError: roomsError }            = useRoomStats(7);
+
+  if (dailyError && topDevicesError && roomsError) {
+    return <p className="text-sm text-red-500">Failed to load stats.</p>;
+  }
 
   const todayKey   = format(new Date(), 'yyyy-MM-dd');
   const todayRow   = daily?.find((d) => d.day?.startsWith(todayKey));

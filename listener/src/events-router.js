@@ -13,12 +13,6 @@ function parentBridgeId(id) {
   return parts.length > 6 ? parts.slice(0, 6).join(':') : String(id ?? '');
 }
 
-function parsePositiveInt(value, fallback, min, max) {
-  const parsed = Number.parseInt(String(value ?? ''), 10);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.min(max, Math.max(min, parsed));
-}
-
 function rateLimitKeyGenerator(req) {
   const forwardedFor = req?.headers?.['x-forwarded-for'];
   if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
@@ -27,13 +21,13 @@ function rateLimitKeyGenerator(req) {
   return req?.ip ?? req?.socket?.remoteAddress ?? 'unknown';
 }
 
-const EVENTS_RATE_LIMIT_WINDOW_MS = parsePositiveInt(
+const EVENTS_RATE_LIMIT_WINDOW_MS = parseIntInRange(
   process.env.EVENTS_RATE_LIMIT_WINDOW_MS,
   60_000,
   1_000,
   24 * 60 * 60 * 1000
 );
-const EVENTS_RATE_LIMIT_MAX = parsePositiveInt(
+const EVENTS_RATE_LIMIT_MAX = parseIntInRange(
   process.env.EVENTS_RATE_LIMIT_MAX,
   300,
   1,

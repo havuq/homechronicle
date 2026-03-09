@@ -47,7 +47,7 @@ export default function WeekdayHeatmap({ forcedDays = null, onDaysChange = null 
       return 30;
     }
   });
-  const { data = [], isLoading } = useWeekdayStats(days);
+  const { data = [], isLoading, isError } = useWeekdayStats(days);
   const [hoveredCell, setHoveredCell] = useState(null);
 
   useEffect(() => {
@@ -72,6 +72,9 @@ export default function WeekdayHeatmap({ forcedDays = null, onDaysChange = null 
   if (isLoading) {
     return <div className="h-32 flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
   }
+  if (isError) {
+    return <div className="h-32 flex items-center justify-center text-red-500 text-sm">Failed to load weekday stats.</div>;
+  }
   if (!data.length) {
     return <p className="text-sm text-gray-400">No data yet.</p>;
   }
@@ -79,9 +82,9 @@ export default function WeekdayHeatmap({ forcedDays = null, onDaysChange = null 
   // Build grid[dow 0-6][localHour 0-23]
   const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
   for (const row of data) {
-    const dow = parseInt(row.day_of_week, 10);
-    const hour = parseInt(row.hour, 10);
-    const count = parseInt(row.count, 10);
+    const dow = Number.parseInt(row.day_of_week, 10);
+    const hour = Number.parseInt(row.hour, 10);
+    const count = Number.parseInt(row.count, 10);
     const local = utcSlotToLocalSlot(dow, hour);
     grid[local.day][local.hour] += count;
   }

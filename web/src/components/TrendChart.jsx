@@ -26,7 +26,7 @@ export default function TrendChart({ forcedDays = null, onDaysChange = null }) {
       return 30;
     }
   });
-  const { data, isLoading } = useDailyStats(days);
+  const { data, isLoading, isError } = useDailyStats(days);
 
   useEffect(() => {
     if (!VALID_DAYS.has(forcedDays) || forcedDays === days) return;
@@ -53,12 +53,15 @@ export default function TrendChart({ forcedDays = null, onDaysChange = null }) {
     const found = data?.find((d) => d.day?.startsWith(key));
     return {
       day:   days <= 14 ? format(day, 'MMM d') : i % 7 === 0 ? format(day, 'MMM d') : format(day, 'd'),
-      count: found ? parseInt(found.count, 10) : 0,
+      count: found ? Number.parseInt(found.count, 10) : 0,
     };
   });
 
   if (isLoading) {
     return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
+  }
+  if (isError) {
+    return <div className="h-48 flex items-center justify-center text-red-500 text-sm">Failed to load daily stats.</div>;
   }
 
   return (

@@ -2,10 +2,9 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { format, startOfDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, VolumeX, X, Loader2 } from 'lucide-react';
 
-const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
 import { useEvents, useAnomalies } from '../hooks/useEvents.js';
 import { useMutedDevices } from '../hooks/useMutedDevices.js';
-import { withApiAuthHeaders } from '../lib/api.js';
+import { API_BASE, withApiAuthHeaders } from '../lib/api.js';
 import { formatGap } from '../lib/icons.js';
 import SceneGroup from './SceneGroup.jsx';
 import FilterBar from './FilterBar.jsx';
@@ -270,6 +269,7 @@ export default function Timeline() {
       const res   = await fetch(`${API_BASE}/events/jump?${qs}`, {
         headers: withApiAuthHeaders(),
       });
+      if (!res.ok) return;
       const { page: targetPage, eventId } = await res.json();
 
       if (!eventId) return; // no match in DB
@@ -355,6 +355,7 @@ export default function Timeline() {
                 onClick={() => unmute(name)}
                 className="hover:text-gray-800 ml-0.5"
                 title={`Unmute ${name}`}
+                aria-label={`Unmute ${name}`}
               >
                 <X size={10} />
               </button>

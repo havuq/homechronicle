@@ -77,6 +77,7 @@ export default function EventRow({ event, hoveredCell = null, meta = {}, onMute 
                 onClick={(e) => { e.stopPropagation(); onMute(event.accessory_name); }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-gray-500 focus:opacity-100"
                 title={`Mute ${event.accessory_name}`}
+                aria-label={`Mute ${event.accessory_name}`}
               >
                 <VolumeX size={12} />
               </button>

@@ -6,10 +6,13 @@ function labelFor(scopeType) {
 }
 
 export default function AnomalyPanel() {
-  const { data, isLoading } = useAnomalies();
+  const { data, isLoading, isError } = useAnomalies();
 
   if (isLoading) {
     return <div className="text-sm text-gray-400">Analyzing baselines…</div>;
+  }
+  if (isError) {
+    return <div className="text-sm text-red-500">Failed to load anomaly data.</div>;
   }
 
   const rows = [

@@ -22,7 +22,7 @@ export default function TopDevices({ forcedDays = null, onDaysChange = null }) {
       return 7;
     }
   });
-  const { data, isLoading } = useTopDevices(days);
+  const { data, isLoading, isError } = useTopDevices(days);
 
   useEffect(() => {
     if (!VALID_DAYS.has(forcedDays) || forcedDays === days) return;
@@ -46,11 +46,14 @@ export default function TopDevices({ forcedDays = null, onDaysChange = null }) {
   if (isLoading) {
     return <div className="h-24 flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
   }
+  if (isError) {
+    return <div className="h-24 flex items-center justify-center text-red-500 text-sm">Failed to load device stats.</div>;
+  }
   if (!data?.length) {
     return <p className="text-sm text-gray-400">No activity in the last {days} days.</p>;
   }
 
-  const max = parseInt(data[0].event_count, 10);
+  const max = Number.parseInt(data[0].event_count, 10);
 
   return (
     <div>
@@ -78,7 +81,7 @@ export default function TopDevices({ forcedDays = null, onDaysChange = null }) {
       </div>
       <div className="space-y-2.5">
         {data.map((device) => {
-          const count     = parseInt(device.event_count, 10);
+          const count     = Number.parseInt(device.event_count, 10);
           const pct       = Math.round((count / max) * 100);
           const Icon      = getServiceIcon(device.service_type);
           const roomColor = getRoomColor(device.room_name);

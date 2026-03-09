@@ -8,8 +8,8 @@ import { useHourlyStats } from '../hooks/useEvents.js';
 function utcHoursToLocal(apiRows = []) {
   const offsetHours = -new Date().getTimezoneOffset() / 60; // e.g. +10 for AEST, -5 for EST
   const utc = Array.from({ length: 24 }, (_, h) => {
-    const found = apiRows.find((d) => parseInt(d.hour, 10) === h);
-    return found ? parseInt(found.count, 10) : 0;
+    const found = apiRows.find((d) => Number.parseInt(d.hour, 10) === h);
+    return found ? Number.parseInt(found.count, 10) : 0;
   });
   return Array.from({ length: 24 }, (_, localH) => {
     const utcH = ((localH - offsetHours) % 24 + 24) % 24;
@@ -25,13 +25,16 @@ function utcHoursToLocal(apiRows = []) {
 const TOOLTIP_STYLE = { fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' };
 
 export default function ActivityChart() {
-  const { data, isLoading } = useHourlyStats();
+  const { data, isLoading, isError } = useHourlyStats();
 
   const chartData = utcHoursToLocal(data ?? []);
   const maxCount  = Math.max(...chartData.map((d) => d.count), 1);
 
   if (isLoading) {
     return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
+  }
+  if (isError) {
+    return <div className="h-48 flex items-center justify-center text-red-500 text-sm">Failed to load hourly stats.</div>;
   }
 
   return (
