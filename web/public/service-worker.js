@@ -1,7 +1,5 @@
-const CACHE_NAME = 'homechronicle-v7';
+const CACHE_NAME = 'homechronicle-v8';
 const APP_SHELL_ASSETS = [
-  './',
-  './index.html',
   './manifest.webmanifest',
   './icon.png',
   './icon-192.png',
@@ -44,7 +42,18 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('./index.html'))
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          const cachedShell = await caches.match('./index.html');
+          return cachedShell ?? caches.match('./');
+        })
     );
     return;
   }
@@ -56,18 +65,14 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      const networkFetch = fetch(request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-          }
-          return networkResponse;
-        })
-        .catch(() => cachedResponse);
-
-      return cachedResponse || networkFetch;
-    })
+    fetch(request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+        }
+        return networkResponse;
+      })
+      .catch(() => caches.match(request))
   );
 });

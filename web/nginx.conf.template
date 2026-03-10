@@ -12,7 +12,20 @@ server {
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'" always;
 
-    # React SPA — serve index.html for any non-file route
+    location = / {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        try_files /index.html =404;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    }
+
+    location = /service-worker.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    }
+
+    # React SPA - serve index.html for any non-file route
     location / {
         try_files $uri $uri/ /index.html;
     }
