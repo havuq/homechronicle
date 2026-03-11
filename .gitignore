@@ -1,6 +1,7 @@
 # Environment
 .env
 .claude/
+.zed
 
 # HomeKit local runtime data — never commit these
 listener/data/
