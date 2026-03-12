@@ -1029,7 +1029,7 @@ app.get('/api/accessories/:accessoryId/detail', apiStatsReadLimiter, async (req,
     const eventCount = Number.parseInt(summary.event_count ?? '0', 10);
 
     const latestResult = await pool.query(
-      `SELECT accessory_name, room_name, service_type, protocol
+      `SELECT accessory_name, room_name, service_type, protocol, transport
        FROM event_logs
        WHERE accessory_id = $1
        ORDER BY timestamp DESC, id DESC
@@ -1088,7 +1088,12 @@ app.get('/api/accessories/:accessoryId/detail', apiStatsReadLimiter, async (req,
          new_value,
          old_value,
          service_type,
-         timestamp
+         timestamp,
+         protocol,
+         endpoint_id,
+         cluster_id,
+         attribute_id,
+         raw_iid
        FROM event_logs
        WHERE accessory_id = $1
        ORDER BY characteristic, timestamp DESC, id DESC`,
@@ -1135,6 +1140,7 @@ app.get('/api/accessories/:accessoryId/detail', apiStatsReadLimiter, async (req,
       room_name: rooms[accessoryId] ?? latest.room_name ?? null,
       service_type: latest.service_type ?? null,
       protocol,
+      transport: latest.transport ?? null,
       first_seen: summary.first_seen ?? null,
       last_seen: summary.last_seen ?? null,
       event_count: eventCount,
@@ -1176,6 +1182,99 @@ app.get('/api/accessories/:accessoryId/detail', apiStatsReadLimiter, async (req,
     });
   } catch (err) {
     log.error('[api] /api/accessories/:accessoryId/detail error:', err.message ?? err.stack ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/accessories/:accessoryId/anomalies', apiStatsReadLimiter, async (req, res) => {
+  const accessoryId = String(req.params.accessoryId ?? '').trim();
+  if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
+
+  try {
+    const nameResult = await pool.query(
+      `SELECT accessory_name FROM event_logs
+       WHERE accessory_id = $1
+       ORDER BY timestamp DESC, id DESC LIMIT 1`,
+      [accessoryId]
+    );
+    const accessoryName = nameResult.rows[0]?.accessory_name;
+    if (!accessoryName) return res.json({ outliers: [] });
+
+    const result = await pool.query(`
+      WITH hours AS (SELECT generate_series(0, 23)::int AS hour),
+      history AS (
+        SELECT
+          EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS hour,
+          DATE(timestamp AT TIME ZONE 'UTC') AS day_key,
+          COUNT(*)::int AS count
+        FROM event_logs
+        WHERE timestamp >= NOW() - INTERVAL '31 days'
+          AND timestamp < NOW() - INTERVAL '1 day'
+          AND accessory_name = $1
+        GROUP BY 1, 2
+      ),
+      baseline AS (
+        SELECT
+          $1::text AS scope_name,
+          hours.hour,
+          COALESCE(AVG(history.count), 0)::float8 AS baseline_avg,
+          COALESCE(STDDEV_SAMP(history.count), 0)::float8 AS baseline_std,
+          COUNT(history.day_key)::int AS baseline_days
+        FROM hours
+        LEFT JOIN history ON history.hour = hours.hour
+        GROUP BY hours.hour
+      ),
+      current_window AS (
+        SELECT
+          EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC')::int AS hour,
+          COUNT(*)::int AS event_count
+        FROM event_logs
+        WHERE timestamp >= NOW() - INTERVAL '1 day'
+          AND accessory_name = $1
+        GROUP BY 1
+      )
+      SELECT
+        baseline.scope_name,
+        baseline.hour,
+        baseline.baseline_avg,
+        baseline.baseline_std,
+        baseline.baseline_days,
+        COALESCE(current_window.event_count, 0)::int AS event_count
+      FROM baseline
+      LEFT JOIN current_window ON current_window.hour = baseline.hour
+      WHERE baseline.baseline_days > 0
+    `, [accessoryName]);
+
+    const outliers = detectOutliers(result.rows, 'device');
+    res.json({ outliers });
+  } catch (err) {
+    log.error('[api] /api/accessories/:accessoryId/anomalies error:', err.message ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/accessories/:accessoryId/characteristics/:characteristic/trend', apiStatsReadLimiter, async (req, res) => {
+  const accessoryId = String(req.params.accessoryId ?? '').trim();
+  const characteristic = String(req.params.characteristic ?? '').trim();
+  if (!accessoryId || !characteristic) {
+    return res.status(400).json({ error: 'accessoryId and characteristic are required' });
+  }
+  const days = parseIntInRange(req.query.days, 30, 1, 365);
+
+  try {
+    const result = await pool.query(
+      `SELECT timestamp, old_value, new_value
+       FROM event_logs
+       WHERE accessory_id = $1
+         AND characteristic = $2
+         AND timestamp >= NOW() - ($3::int * INTERVAL '1 day')
+       ORDER BY timestamp ASC
+       LIMIT 2000`,
+      [accessoryId, characteristic, days]
+    );
+    res.json({ characteristic, days, points: result.rows });
+  } catch (err) {
+    log.error('[api] characteristic trend error:', err.message ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

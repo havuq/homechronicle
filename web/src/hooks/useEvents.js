@@ -107,6 +107,29 @@ export function useDevicePatterns() {
   });
 }
 
+export function useAccessoryAnomalies(accessoryId) {
+  return useQuery({
+    queryKey: ['accessory-anomalies', accessoryId],
+    queryFn: () => fetchJson(
+      `${BASE}/accessories/${encodeURIComponent(accessoryId)}/anomalies`
+    ),
+    enabled: Boolean(accessoryId),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useCharacteristicTrend(accessoryId, characteristic, days = 30) {
+  return useQuery({
+    queryKey: ['characteristic-trend', accessoryId, characteristic, days],
+    queryFn: () => fetchJson(
+      `${BASE}/accessories/${encodeURIComponent(accessoryId)}/characteristics/${encodeURIComponent(characteristic)}/trend?days=${days}`
+    ),
+    enabled: Boolean(accessoryId) && Boolean(characteristic),
+    staleTime: 60_000,
+  });
+}
+
 export function useAnomalies() {
   return useQuery({
     queryKey: ['stats', 'anomalies'],

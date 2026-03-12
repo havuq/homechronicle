@@ -1,0 +1,11 @@
+{
+  "terminal": {
+    "shell": {
+      "with_arguments": {
+        "program": "powershell.exe",
+        "args": [],
+        "title_override": null
+      }
+    }
+  }
+}
