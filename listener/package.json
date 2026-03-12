@@ -17,7 +17,7 @@
     "@project-chip/matter.js": "^0.16.10",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "express-rate-limit": "^8.3.0",
+    "express-rate-limit": "^8.3.1",
     "hap-controller": "^0.10.2",
     "pg": "^8.20.0"
   }
