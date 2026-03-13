@@ -5,36 +5,18 @@ import { ChevronLeft, ChevronRight, VolumeX, X, Loader2 } from 'lucide-react';
 import { useEvents, useAnomalies } from '../hooks/useEvents.js';
 import { useMutedDevices } from '../hooks/useMutedDevices.js';
 import { API_BASE, withApiAuthHeaders } from '../lib/api.js';
+import { groupIntoScenes, groupScenesIntoEpisodes } from '../lib/episodes.js';
 import { formatGap } from '../lib/icons.js';
+import EpisodeGroup from './EpisodeGroup.jsx';
 import SceneGroup from './SceneGroup.jsx';
 import FilterBar from './FilterBar.jsx';
 import TimelineHeatmap from './TimelineHeatmap.jsx';
 
-// ── Pure helpers (defined outside component for stable references in useMemo) ──
-
-const SCENE_WINDOW_MS = 5_000;
 const PAGE_SIZE = 50;
 
 function isValidTimestamp(value) {
   const date = new Date(value);
   return !Number.isNaN(date.getTime());
-}
-
-function groupIntoScenes(events) {
-  if (!events.length) return [];
-  const groups = [];
-  let current = [events[0]];
-  for (let i = 1; i < events.length; i++) {
-    const diff = new Date(events[i - 1].timestamp) - new Date(events[i].timestamp);
-    if (diff <= SCENE_WINDOW_MS) {
-      current.push(events[i]);
-    } else {
-      groups.push(current);
-      current = [events[i]];
-    }
-  }
-  groups.push(current);
-  return groups;
 }
 
 /** Groups an event array (any order) into a Map keyed by ISO start-of-day string. */
@@ -50,7 +32,7 @@ function groupByDay(events) {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function Timeline({ onSelectAccessory }) {
+export default function Timeline() {
   const [filters, setFilters]         = useState({});
   const [page, setPage]               = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -405,15 +387,27 @@ export default function Timeline({ onSelectAccessory }) {
                   {format(new Date(day), 'EEEE, MMMM d')}
                 </h2>
                 <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
-                  {groupIntoScenes(events).map((group) => (
-                    <SceneGroup
-                      key={group[0].id}
-                      events={group}
-                      eventMetaMap={eventMetaMap}
-                      hoveredCell={activeCell}
-                      onMute={mute}
-                      onSelectAccessory={onSelectAccessory}
-                    />
+                  {groupScenesIntoEpisodes(groupIntoScenes(events)).map((entry) => (
+                    entry.kind === 'episode' ? (
+                      <EpisodeGroup
+                        key={entry.scenes[0][0].id}
+                        episode={entry.episode}
+                        scenes={entry.scenes}
+                        eventMetaMap={eventMetaMap}
+                        hoveredCell={activeCell}
+                        onMute={mute}
+                      />
+                    ) : (
+                      entry.scenes.map((group) => (
+                        <SceneGroup
+                          key={group[0].id}
+                          events={group}
+                          eventMetaMap={eventMetaMap}
+                          hoveredCell={activeCell}
+                          onMute={mute}
+                        />
+                      ))
+                    )
                   ))}
                 </div>
               </div>

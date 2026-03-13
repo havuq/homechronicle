@@ -9,6 +9,16 @@
  */
 const CHANGELOG = [
   {
+    version: 'v0.1.3-beta.4',
+    date: '2026-03-13',
+    title: 'Pairing safeguard & timeline episodes',
+    items: [
+      'Fix: HomeKit pairing keys (longTermData) are now preserved during discovery rescans, preventing silent pairing loss',
+      'Timeline: related scenes are automatically grouped into episodes (arrival, departure, bedtime, room activity)',
+      'Episodes are collapsible — tap to expand individual event scenes',
+    ],
+  },
+  {
     version: 'v0.1.3-beta.3',
     date: '2026-03-13',
     title: 'Device notes, quiet hours & bug fixes',
