@@ -6,6 +6,7 @@ import {
 import clsx from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import PinHelpModal from '../PinHelpModal.jsx';
+import MatterHelpModal from '../MatterHelpModal.jsx';
 import { CATEGORY_LABELS } from './constants.js';
 
 export default function AddDevicesTab({ setup }) {
@@ -35,6 +36,7 @@ export default function AddDevicesTab({ setup }) {
   const [pinOverrides, setPinOverrides] = useState({});
   const [pairingStatus, setPairingStatus] = useState({});
   const [helpDevice, setHelpDevice] = useState(null);
+  const [matterHelpOpen, setMatterHelpOpen] = useState(false);
 
   // Matter local state
   const [matterForm, setMatterForm] = useState({
@@ -145,13 +147,16 @@ export default function AddDevicesTab({ setup }) {
   return (
     <div className="space-y-4">
 
-      {/* Help modal */}
+      {/* Help modals */}
       {helpDevice && (
         <PinHelpModal
           deviceName={helpDevice.name}
           category={helpDevice.category}
           onClose={() => setHelpDevice(null)}
         />
+      )}
+      {matterHelpOpen && (
+        <MatterHelpModal onClose={() => setMatterHelpOpen(false)} />
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -286,10 +291,9 @@ export default function AddDevicesTab({ setup }) {
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-gray-900 text-xs truncate">{acc.name}</div>
                           <div className="text-[11px] text-gray-400">
-                            {CATEGORY_LABELS[acc.category] ?? 'Unknown'}
-                            {acc.category === 2 && (
-                              <span className="text-blue-600 ml-1 font-medium">Bridge</span>
-                            )}
+                            {acc.category === 2
+                              ? <span className="text-blue-600 font-medium">Bridge</span>
+                              : CATEGORY_LABELS[acc.category] ?? 'Unknown'}
                           </div>
                         </div>
                         {!isSuccess && (
@@ -366,6 +370,7 @@ export default function AddDevicesTab({ setup }) {
           matterAdvancedOpen={matterAdvancedOpen}
           setMatterAdvancedOpen={setMatterAdvancedOpen}
           handleMatterSubmit={handleMatterSubmit}
+          onOpenHelp={() => setMatterHelpOpen(true)}
         />
       </div>
 
@@ -386,6 +391,7 @@ function MatterCard({
   matterAdvancedOpen,
   setMatterAdvancedOpen,
   handleMatterSubmit,
+  onOpenHelp,
 }) {
   const {
     commissionConfigured,
@@ -448,12 +454,25 @@ function MatterCard({
       <div>
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-gray-900">Matter</h3>
-          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">matter.js</span>
+          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">Matter</span>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">
           Scan for Matter devices in commissioning mode, then enter a setup code to start logging.
         </p>
+        <button
+          onClick={onOpenHelp}
+          className="flex items-center gap-1 mt-1.5 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+        >
+          <HelpCircle size={12} />
+          How do I pair a Matter device?
+        </button>
       </div>
+
+      <p className="text-[11px] text-gray-400 italic">
+        Supports on/off, level control, boolean state, temperature, humidity, and occupancy clusters.
+        Devices using other clusters will pair but won't produce events.{' '}
+        <button onClick={onOpenHelp} className="underline hover:text-gray-600 transition-colors">See supported devices</button>
+      </p>
 
       {/* Scan button */}
       <button
@@ -692,9 +711,6 @@ function MatterCard({
         </form>
       )}
 
-      <p className="text-[11px] text-gray-400 italic">
-        Matter support covers a fixed set of clusters. Some devices may not produce events — see limitations.
-      </p>
     </div>
   );
 }

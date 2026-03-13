@@ -61,24 +61,24 @@ export default function StatsCards() {
         label="This Week"
         value={eventsWeek != null ? eventsWeek.toLocaleString() : '…'}
         sub="last 7 days"
-        bgClass="bg-indigo-50"
-        iconClass="text-indigo-500"
+        bgClass="bg-blue-50"
+        iconClass="text-blue-500"
       />
       <Card
         icon={Activity}
         label="Top Device"
         value={topDevices ? (topDevice?.accessory_name ?? 'None') : '…'}
         sub={topDevice ? `${toInt(topDevice.event_count).toLocaleString()} events` : null}
-        bgClass="bg-violet-50"
-        iconClass="text-violet-500"
+        bgClass="bg-blue-50"
+        iconClass="text-blue-500"
       />
       <Card
         icon={MapPin}
         label="Top Room"
         value={rooms ? (topRoom?.room_name ?? 'Unknown') : '…'}
         sub={topRoom ? `${toInt(topRoom.count).toLocaleString()} events` : null}
-        bgClass="bg-emerald-50"
-        iconClass="text-emerald-500"
+        bgClass="bg-blue-50"
+        iconClass="text-blue-500"
       />
     </div>
   );

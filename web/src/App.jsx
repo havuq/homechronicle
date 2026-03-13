@@ -16,8 +16,12 @@ import AccessoryDetail from './components/AccessoryDetail.jsx';
 import Setup from './components/Setup.jsx';
 import Alerts from './components/Alerts.jsx';
 import BrandLogo from './components/BrandLogo.jsx';
+import ChangelogModal from './components/ChangelogModal.jsx';
 import { useTheme } from './hooks/useTheme.js';
 import { useSkin } from './hooks/useSkin.js';
+import { ExternalLink, Sparkles } from 'lucide-react';
+
+const CHANGELOG_VERSION_KEY = 'hc_last_seen_version';
 
 const TABS = [
   { id: 'dashboard',  label: 'Dashboard',   icon: BarChart2 },
@@ -85,6 +89,8 @@ export default function App() {
       return true;
     }
   });
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [hasNewVersion, setHasNewVersion] = useState(false);
   const { preference, resolvedTheme, setPreference } = useTheme();
   const { skin, setSkin } = useSkin();
   const isDarkTheme = resolvedTheme === 'dark';
@@ -185,6 +191,35 @@ export default function App() {
     }
   }, [syncDashboardRanges]);
 
+  // Auto-show changelog when the build version changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const lastSeen = window.localStorage.getItem(CHANGELOG_VERSION_KEY);
+      if (lastSeen !== __BUILD_VERSION__) {
+        setHasNewVersion(true);
+        // Only auto-show if user has visited before (not first ever load)
+        if (lastSeen) setShowChangelog(true);
+      }
+    } catch {
+      // Ignore storage read failures.
+    }
+  }, []);
+
+  function handleOpenChangelog() {
+    setShowChangelog(true);
+  }
+
+  function handleCloseChangelog() {
+    setShowChangelog(false);
+    setHasNewVersion(false);
+    try {
+      window.localStorage.setItem(CHANGELOG_VERSION_KEY, __BUILD_VERSION__);
+    } catch {
+      // Ignore storage write failures.
+    }
+  }
+
   return (
     <div className={clsx('min-h-screen bg-gray-50 flex flex-col', isStandalonePwa && 'hc-pwa-shell')}>
       {/* Header */}
@@ -215,7 +250,7 @@ export default function App() {
 
       {/* Content */}
       <main className={clsx('flex-1 overflow-hidden', isStandalonePwa && 'hc-pwa-main')}>
-        {tab === 'timeline' && <Timeline />}
+        {tab === 'timeline' && <Timeline onSelectAccessory={(id) => { setTab('accessories'); handleSelectAccessory(id); }} />}
 
         {tab === 'dashboard' && (
           <div className="max-w-5xl mx-auto py-4 sm:py-6 px-3 sm:px-4 space-y-4">
@@ -316,6 +351,30 @@ export default function App() {
         {tab === 'alerts' && <Alerts />}
         {tab === 'setup' && <Setup />}
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-200 bg-white/80 backdrop-blur px-4 py-2 text-center text-xs text-gray-400 flex items-center justify-center gap-3">
+        <button
+          onClick={handleOpenChangelog}
+          className="inline-flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          {hasNewVersion && <Sparkles size={11} className="text-blue-500" />}
+          <span>Build {__BUILD_VERSION__}</span>
+          {hasNewVersion && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+        </button>
+        <span className="text-gray-300">·</span>
+        <a
+          href="https://github.com/havuq/homechronicle/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <ExternalLink size={11} />
+          Report an issue
+        </a>
+      </footer>
+
+      {showChangelog && <ChangelogModal onClose={handleCloseChangelog} />}
 
       <div className="hc-fab fixed bottom-4 right-4 z-20">
         <div className="relative flex flex-col items-end gap-2">

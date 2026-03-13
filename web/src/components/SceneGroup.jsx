@@ -12,7 +12,7 @@ import EventRow from './EventRow.jsx';
  *   hoveredCell   — { accessoryName, hour } | null from TimelineHeatmap hover
  *   onMute        — fn(accessoryName) — mute a device from the timeline
  */
-export default function SceneGroup({ events, eventMetaMap = {}, hoveredCell, onMute }) {
+export default function SceneGroup({ events, eventMetaMap = {}, hoveredCell, onMute, onSelectAccessory }) {
   const [expanded, setExpanded] = useState(false);
 
   // ── Single event — render a plain EventRow ──────────────────────────────
@@ -24,6 +24,7 @@ export default function SceneGroup({ events, eventMetaMap = {}, hoveredCell, onM
           hoveredCell={hoveredCell}
           meta={eventMetaMap[events[0].id] ?? {}}
           onMute={onMute}
+          onSelectAccessory={onSelectAccessory}
         />
       </div>
     );

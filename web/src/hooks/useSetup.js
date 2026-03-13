@@ -160,6 +160,8 @@ export function useSetup() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accessories'] });
       queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['setup', 'matter', 'pairings'] });
+      queryClient.invalidateQueries({ queryKey: ['setup', 'pairings'] });
     },
   });
 
@@ -192,6 +194,7 @@ export function useSetup() {
       queryClient.invalidateQueries({ queryKey: ['setup', 'matter', 'pairings'] });
       queryClient.invalidateQueries({ queryKey: ['setup', 'matter', 'runtime'] });
       queryClient.invalidateQueries({ queryKey: ['accessories'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
 

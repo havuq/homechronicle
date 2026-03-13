@@ -1,6 +1,7 @@
 import { useWeekdayStats } from '../hooks/useEvents.js';
 import { useEffect, useState } from 'react';
 import clsx from 'clsx';
+import { useAccentRgb } from '../hooks/useAccentRgb.js';
 
 const CELL = 18; // px
 const GAP  = 2;  // px
@@ -16,16 +17,6 @@ const VALID_DAYS = new Set(WINDOWS.map((w) => w.days));
 // DOW from PostgreSQL: 0 = Sunday
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// Teal/emerald gradient so it's visually distinct from the blue ActivityChart heatmap
-function cellColor(intensity) {
-  if (intensity === 0) return 'rgba(226, 232, 240, 0.4)';
-  // low → #a7f3d0 (emerald-200), high → #065f46 (emerald-900)
-  const r = Math.round(167 - intensity * 143);
-  const g = Math.round(243 - intensity * 114);
-  const b = Math.round(208 - intensity * 138);
-  return `rgb(${r},${g},${b})`;
-}
-
 // Convert a UTC weekday/hour slot to the local weekday/hour slot.
 function utcSlotToLocalSlot(utcDow, utcH) {
   const ref = new Date(Date.UTC(2024, 0, 7 + utcDow, utcH, 0, 0));
@@ -38,6 +29,7 @@ function utcSlotToLocalSlot(utcDow, utcH) {
 const AXIS_LABELS = ['midnight', '6 am', 'noon', '6 pm', ''];
 
 export default function WeekdayHeatmap({ forcedDays = null, onDaysChange = null }) {
+  const accent = useAccentRgb();
   const [days, setDays] = useState(() => {
     if (typeof window === 'undefined') return 30;
     try {
@@ -105,7 +97,7 @@ export default function WeekdayHeatmap({ forcedDays = null, onDaysChange = null 
                 className={clsx(
                   'text-[10px] px-1.5 py-0.5 rounded-md transition-colors',
                   days === d
-                    ? 'bg-emerald-100 text-emerald-700 font-medium'
+                    ? 'bg-blue-100 text-blue-700 font-medium'
                     : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                 )}
               >
@@ -155,6 +147,9 @@ export default function WeekdayHeatmap({ forcedDays = null, onDaysChange = null 
               : h < 12   ? `${h}am`
               : h === 12 ? 'noon'
               : `${h - 12}pm`;
+            const bg = intensity === 0
+              ? 'rgba(226, 232, 240, 0.4)'
+              : `rgba(${accent[0]},${accent[1]},${accent[2]},${0.15 + intensity * 0.85})`;
             return (
               <div
                 key={h}
@@ -165,7 +160,7 @@ export default function WeekdayHeatmap({ forcedDays = null, onDaysChange = null 
                   aspectRatio:     '1 / 1',
                   justifySelf:     'center',
                   borderRadius:    3,
-                  backgroundColor: cellColor(intensity),
+                  backgroundColor: bg,
                   transition:      'background-color 0.15s, transform 0.12s',
                 }}
                 onMouseEnter={(e) => {

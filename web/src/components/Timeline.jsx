@@ -50,7 +50,7 @@ function groupByDay(events) {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function Timeline() {
+export default function Timeline({ onSelectAccessory }) {
   const [filters, setFilters]         = useState({});
   const [page, setPage]               = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -412,6 +412,7 @@ export default function Timeline() {
                       eventMetaMap={eventMetaMap}
                       hoveredCell={activeCell}
                       onMute={mute}
+                      onSelectAccessory={onSelectAccessory}
                     />
                   ))}
                 </div>

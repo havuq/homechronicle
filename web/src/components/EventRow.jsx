@@ -20,7 +20,7 @@ function ordinal(n) {
  *   meta         — { gap, marker, rank, dayTotal, anomalyLabel } (from Timeline eventMetaMap)
  *   onMute       — fn(accessoryName) — called when user clicks mute
  */
-export default function EventRow({ event, hoveredCell = null, meta = {}, onMute }) {
+export default function EventRow({ event, hoveredCell = null, meta = {}, onMute, onSelectAccessory }) {
   const Icon        = getServiceIcon(event.service_type);
   const serviceName = getServiceLabel(event.service_type);
   const ts          = new Date(event.timestamp);
@@ -48,21 +48,21 @@ export default function EventRow({ event, hoveredCell = null, meta = {}, onMute 
       }`}
       style={isHighlighted ? { boxShadow: 'inset 3px 0 0 0 #60a5fa' } : undefined}
     >
-      {/* Service icon */}
-      <div
-        className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center mt-0.5"
-        title={`${serviceName} service`}
-        aria-label={`${serviceName} service`}
-      >
-        <Icon size={18} className="text-blue-600" />
-      </div>
-
       <div className="flex-1 min-w-0">
 
         {/* ── Row 1: name · anomaly badge · mute button · relative time ── */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-            <span className="font-medium text-gray-900 truncate">{event.accessory_name}</span>
+            {onSelectAccessory && event.accessory_id ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); onSelectAccessory(event.accessory_id); }}
+                className="font-medium text-gray-900 truncate hover:text-blue-600 hover:underline transition-colors text-left"
+              >
+                {event.accessory_name}
+              </button>
+            ) : (
+              <span className="font-medium text-gray-900 truncate">{event.accessory_name}</span>
+            )}
             {anomalyLabel && (
               <span className="inline-flex items-center gap-1 text-xs text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
                 ⚠ {anomalyLabel}
@@ -88,7 +88,13 @@ export default function EventRow({ event, hoveredCell = null, meta = {}, onMute 
           </div>
         </div>
 
-        {/* ── Row 2: description · before→after · room badge ── */}
+        {/* ── Row 2: service type ── */}
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <Icon size={12} className="text-gray-400 flex-shrink-0" />
+          <span className="text-xs text-gray-400">{serviceName}</span>
+        </div>
+
+        {/* ── Row 3: description · before→after · room badge ── */}
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="text-sm text-gray-600">{description}</span>
           {beforeAfter && (

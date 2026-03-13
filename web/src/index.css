@@ -236,6 +236,10 @@ html.hc-standalone .hc-fab {
     background-color: var(--hc-accent-soft) !important;
   }
 
+  .bg-blue-100 {
+    background-color: var(--hc-accent-soft) !important;
+  }
+
   .text-blue-500,
   .text-blue-600 {
     color: var(--hc-accent-strong) !important;
@@ -355,7 +359,8 @@ html.hc-standalone .hc-fab {
     color: #f8fafc !important;
   }
 
-  html.theme-dark .bg-blue-50 {
+  html.theme-dark .bg-blue-50,
+  html.theme-dark .bg-blue-100 {
     background-color: rgba(var(--hc-accent-rgb), 0.22) !important;
   }
 

@@ -2,6 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from 'recharts';
 import { useHourlyStats } from '../hooks/useEvents.js';
+import { useAccentRgb } from '../hooks/useAccentRgb.js';
 
 // Convert the UTC-hour data from the API to local-time hours so the
 // peak bar lines up with the user's actual clock, not UTC.
@@ -25,6 +26,7 @@ function utcHoursToLocal(apiRows = []) {
 const TOOLTIP_STYLE = { fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' };
 
 export default function ActivityChart() {
+  const accent = useAccentRgb();
   const { data, isLoading, isError } = useHourlyStats();
 
   const chartData = utcHoursToLocal(data ?? []);
@@ -63,7 +65,13 @@ export default function ActivityChart() {
             {chartData.map((entry) => (
               <Cell
                 key={entry.localH}
-                fill={entry.count === maxCount ? '#2563eb' : entry.count > maxCount * 0.5 ? '#60a5fa' : '#bfdbfe'}
+                fill={
+                  entry.count === maxCount
+                    ? `rgb(${accent[0]},${accent[1]},${accent[2]})`
+                    : entry.count > maxCount * 0.5
+                      ? `rgba(${accent[0]},${accent[1]},${accent[2]},0.6)`
+                      : `rgba(${accent[0]},${accent[1]},${accent[2]},0.25)`
+                }
               />
             ))}
           </Bar>

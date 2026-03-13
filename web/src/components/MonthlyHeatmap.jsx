@@ -1,18 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useDailyStats } from '../hooks/useEvents.js';
+import { useAccentRgb } from '../hooks/useAccentRgb.js';
 
 const CELL = 11;
 const GAP = 2;
 const LABEL_W = 40;
 const AXIS_DAYS = [1, 8, 15, 22, 29];
-
-function cellColor(intensity) {
-  if (intensity <= 0) return 'rgba(226, 232, 240, 0.4)';
-  const r = Math.round(219 - intensity * 116); // down to ~103
-  const g = Math.round(234 - intensity * 64);  // down to ~170
-  const b = Math.round(254 - intensity * 40);  // down to ~214
-  return `rgb(${r},${g},${b})`;
-}
 
 function monthLabel(date) {
   return date.toLocaleString(undefined, { month: 'short' });
@@ -26,6 +19,7 @@ function toYmd(date) {
 }
 
 export default function MonthlyHeatmap() {
+  const accent = useAccentRgb();
   const { data = [], isLoading } = useDailyStats(365);
   const [hovered, setHovered] = useState(null);
 
@@ -111,7 +105,11 @@ export default function MonthlyHeatmap() {
                     marginRight: GAP,
                     flexShrink: 0,
                     borderRadius: 2,
-                    backgroundColor: cell ? cellColor(cell.count / maxCount) : 'transparent',
+                    backgroundColor: cell
+                      ? cell.count / maxCount <= 0
+                        ? 'rgba(226, 232, 240, 0.4)'
+                        : `rgba(${accent[0]},${accent[1]},${accent[2]},${0.15 + (cell.count / maxCount) * 0.85})`
+                      : 'transparent',
                     border: cell ? 'none' : '1px solid transparent',
                     transition: 'transform 0.12s, background-color 0.15s',
                     cursor: cell ? 'default' : 'inherit',

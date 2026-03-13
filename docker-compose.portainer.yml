@@ -28,7 +28,7 @@ services:
     # Host networking is recommended for HomeKit/mDNS discovery on Linux hosts.
     network_mode: ${LISTENER_NETWORK_MODE:-host}
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-homekit}:${POSTGRES_PASSWORD:-changeme}@127.0.0.1:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-homekit_events}}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://homekit:changeme@127.0.0.1:5432/homekit_events}
       API_PORT: ${API_PORT:-3001}
       NODE_ENV: ${NODE_ENV:-production}
       API_TOKEN: ${API_TOKEN:-}

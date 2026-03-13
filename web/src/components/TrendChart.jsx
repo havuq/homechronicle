@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { useDailyStats } from '../hooks/useEvents.js';
+import { useAccentRgb } from '../hooks/useAccentRgb.js';
 import clsx from 'clsx';
 
 const WINDOWS = [
@@ -17,6 +18,9 @@ const VALID_DAYS = new Set(WINDOWS.map((w) => w.days));
 const TOOLTIP_STYLE = { fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' };
 
 export default function TrendChart({ forcedDays = null, onDaysChange = null }) {
+  const accent = useAccentRgb();
+  const accentStr = `rgb(${accent[0]},${accent[1]},${accent[2]})`;
+  const gradientId = useMemo(() => `trendGradient-${accent.join('-')}`, [accent]);
   const [days, setDays] = useState(() => {
     if (typeof window === 'undefined') return 30;
     try {
@@ -88,9 +92,9 @@ export default function TrendChart({ forcedDays = null, onDaysChange = null }) {
       <ResponsiveContainer width="100%" height={180}>
         <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
           <defs>
-            <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.15} />
-              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}    />
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor={accentStr} stopOpacity={0.15} />
+              <stop offset="95%" stopColor={accentStr} stopOpacity={0}    />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
@@ -110,9 +114,9 @@ export default function TrendChart({ forcedDays = null, onDaysChange = null }) {
           <Area
             type="monotone"
             dataKey="count"
-            stroke="#3b82f6"
+            stroke={accentStr}
             strokeWidth={2}
-            fill="url(#trendGradient)"
+            fill={`url(#${gradientId})`}
             dot={false}
             activeDot={{ r: 4, strokeWidth: 0 }}
           />

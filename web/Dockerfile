@@ -9,6 +9,9 @@ COPY . .
 ARG VITE_API_BASE_URL=http://localhost:3001
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
+ARG VITE_BUILD_VERSION=unknown
+ENV VITE_BUILD_VERSION=$VITE_BUILD_VERSION
+
 RUN npm run build
 
 # Production image: serve the built files with nginx

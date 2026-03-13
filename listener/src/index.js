@@ -802,13 +802,44 @@ app.delete('/api/data/accessory', apiWriteLimiter, async (req, res) => {
   const { accessoryId } = req.body ?? {};
   if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
   try {
-    const result = await pool.query(
-      'DELETE FROM event_logs WHERE accessory_id = $1', [accessoryId]
+    // For Matter devices, derive the nodeId so we can clean up the pairing
+    // and all sibling endpoints (e.g. NODEID:1, NODEID:2, …).
+    const protocolResult = await pool.query(
+      'SELECT protocol FROM event_logs WHERE accessory_id = $1 LIMIT 1',
+      [accessoryId],
     );
-    const rooms = loadRooms();
-    delete rooms[accessoryId];
-    await saveRooms(rooms);
-    log.info(`[data] Deleted ${result.rowCount} event(s) for accessory ${accessoryId}`);
+    const isMatter = String(protocolResult.rows[0]?.protocol ?? '').toLowerCase() === 'matter';
+    const matterNodeId = isMatter ? accessoryId.split(':')[0] : null;
+
+    let result;
+    if (matterNodeId) {
+      // Delete events for this node and all its endpoints.
+      result = await pool.query(
+        'DELETE FROM event_logs WHERE accessory_id = $1 OR accessory_id LIKE $2',
+        [matterNodeId, `${matterNodeId}:%`],
+      );
+      // Clean up the pairing entry if it exists.
+      const pairings = loadPairings();
+      if (pairings[matterNodeId]) {
+        delete pairings[matterNodeId];
+        await savePairings(pairings);
+      }
+      // Clean up all rooms for this node and its endpoints.
+      const rooms = loadRooms();
+      for (const key of Object.keys(rooms)) {
+        if (key === matterNodeId || key.startsWith(`${matterNodeId}:`)) delete rooms[key];
+      }
+      await saveRooms(rooms);
+    } else {
+      result = await pool.query(
+        'DELETE FROM event_logs WHERE accessory_id = $1', [accessoryId],
+      );
+      const rooms = loadRooms();
+      delete rooms[accessoryId];
+      await saveRooms(rooms);
+    }
+
+    log.info(`[data] Deleted ${result.rowCount} event(s) for accessory ${accessoryId}${matterNodeId ? ` (Matter node ${matterNodeId})` : ''}`);
     res.json({ success: true, deleted: result.rowCount });
   } catch (err) {
     log.error('[data] /api/data/accessory error:', err.message ?? err.stack ?? err);
@@ -839,6 +870,7 @@ if (ALERTS_ENABLED) {
 let matterDiscoveryCache = [];
 app.use('/api', createMatterRouter({
   insertEvent,
+  pool,
   loadPairings,
   savePairings,
   loadRooms,
