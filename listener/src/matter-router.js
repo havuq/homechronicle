@@ -17,8 +17,12 @@ function toOptionalInt(value) {
 function normalizeNodeId(value) {
   const text = toOptionalText(value);
   if (!text) return null;
-  // Allow decimal or hex Matter node ids; store uppercase for stable keys.
-  return text.toUpperCase();
+  // Allow decimal or hex Matter node ids; convert to decimal for stable keys.
+  try {
+    return BigInt(text).toString();
+  } catch {
+    return text.toUpperCase();
+  }
 }
 
 function generateNodeId(pairings) {
@@ -48,6 +52,8 @@ export function createMatterRouter({
   savePairings,
   loadRooms,
   saveRooms,
+  loadNotes,
+  saveNotes,
   matterRuntime = null,
   getMatterDiscoveryCache = () => [],
   setMatterDiscoveryCache = () => {},
@@ -251,6 +257,12 @@ export function createMatterRouter({
       if (key === nodeId || key.startsWith(`${nodeId}:`)) delete rooms[key];
     }
     await saveRooms(rooms);
+
+    const notes = loadNotes();
+    for (const key of Object.keys(notes)) {
+      if (key === nodeId || key.startsWith(`${nodeId}:`)) delete notes[key];
+    }
+    await saveNotes(notes);
 
     // Purge all event history for this node and its endpoints.
     let deletedEvents = 0;

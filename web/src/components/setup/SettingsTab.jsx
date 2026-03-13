@@ -2,6 +2,22 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader } from 'lucide-react';
 import clsx from 'clsx';
 
+const HOURS_OPTIONS = Array.from({ length: 24 }, (_, h) => {
+  const period = h < 12 ? 'AM' : 'PM';
+  const display = h % 12 === 0 ? 12 : h % 12;
+  return { value: h, label: `${display} ${period}` };
+});
+
+function localHourToUtc(localHour) {
+  const offsetHours = -new Date().getTimezoneOffset() / 60;
+  return ((localHour - offsetHours) % 24 + 24) % 24;
+}
+
+function utcHourToLocal(utcHour) {
+  const offsetHours = -new Date().getTimezoneOffset() / 60;
+  return ((utcHour + offsetHours) % 24 + 24) % 24;
+}
+
 const LOG_LEVELS = [
   { value: 'error', label: 'Error', desc: 'Only errors' },
   { value: 'warn', label: 'Warn', desc: 'Errors + warnings' },
@@ -22,6 +38,9 @@ export default function SettingsTab({ setup }) {
   const [retentionDaysInput, setRetentionDaysInput] = useState('');
   const [staleThresholdHoursInput, setStaleThresholdHoursInput] = useState('');
   const [autoScanHomeKitInput, setAutoScanHomeKitInput] = useState(true);
+  const [quietHoursEnabledInput, setQuietHoursEnabledInput] = useState(false);
+  const [quietHoursStartInput, setQuietHoursStartInput] = useState(22);
+  const [quietHoursEndInput, setQuietHoursEndInput] = useState(6);
   const [logLevelInput, setLogLevelInput] = useState('info');
   const [dangerOpen, setDangerOpen] = useState(false);
   const [dangerPairFilter, setDangerPairFilter] = useState('all');
@@ -33,6 +52,9 @@ export default function SettingsTab({ setup }) {
   const retentionDaysCurrent = retentionConfig?.retentionDays ?? null;
   const staleThresholdHoursCurrent = retentionConfig?.staleThresholdHours ?? null;
   const autoScanHomeKit = Boolean(retentionConfig?.autoScanHomeKit ?? true);
+  const quietHoursEnabledCurrent = Boolean(retentionConfig?.quietHoursEnabled ?? false);
+  const quietHoursStartCurrent = retentionConfig?.quietHoursStart != null ? utcHourToLocal(retentionConfig.quietHoursStart) : 22;
+  const quietHoursEndCurrent = retentionConfig?.quietHoursEnd != null ? utcHourToLocal(retentionConfig.quietHoursEnd) : 6;
   const logLevelCurrent = logLevelConfig?.level ?? 'info';
   const dangerPairedCount = dbAccessories.filter((a) => Boolean(a.paired_at)).length;
   const dangerUnpairedCount = dbAccessories.length - dangerPairedCount;
@@ -57,6 +79,13 @@ export default function SettingsTab({ setup }) {
   }, [autoScanHomeKit]);
 
   useEffect(() => {
+    setQuietHoursEnabledInput(quietHoursEnabledCurrent);
+    setQuietHoursStartInput(quietHoursStartCurrent);
+    setQuietHoursEndInput(quietHoursEndCurrent);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quietHoursEnabledCurrent, quietHoursStartCurrent, quietHoursEndCurrent]);
+
+  useEffect(() => {
     setLogLevelInput(logLevelCurrent);
   }, [logLevelCurrent]);
 
@@ -72,6 +101,9 @@ export default function SettingsTab({ setup }) {
       parsedRetentionDays !== retentionDaysCurrent
       || parsedStaleThresholdHours !== staleThresholdHoursCurrent
       || autoScanHomeKitInput !== autoScanHomeKit
+      || quietHoursEnabledInput !== quietHoursEnabledCurrent
+      || quietHoursStartInput !== quietHoursStartCurrent
+      || quietHoursEndInput !== quietHoursEndCurrent
       || logLevelInput !== logLevelCurrent
     );
 
@@ -84,12 +116,18 @@ export default function SettingsTab({ setup }) {
           retentionDays: parsedRetentionDays,
           staleThresholdHours: parsedStaleThresholdHours,
           autoScanHomeKit: autoScanHomeKitInput,
+          quietHoursEnabled: quietHoursEnabledInput,
+          quietHoursStart: localHourToUtc(quietHoursStartInput),
+          quietHoursEnd: localHourToUtc(quietHoursEndInput),
         }),
         saveLogLevelMutation.mutateAsync(logLevelInput),
       ]);
       setRetentionDaysInput(String(nextRetention.retentionDays));
       setStaleThresholdHoursInput(String(nextRetention.staleThresholdHours));
       setAutoScanHomeKitInput(Boolean(nextRetention.autoScanHomeKit ?? true));
+      setQuietHoursEnabledInput(Boolean(nextRetention.quietHoursEnabled ?? false));
+      if (nextRetention.quietHoursStart != null) setQuietHoursStartInput(utcHourToLocal(nextRetention.quietHoursStart));
+      if (nextRetention.quietHoursEnd != null) setQuietHoursEndInput(utcHourToLocal(nextRetention.quietHoursEnd));
       setSaveFeedback('saved');
     } catch {
       setSaveFeedback('error');
@@ -189,6 +227,56 @@ export default function SettingsTab({ setup }) {
         </p>
       </div>
 
+      {/* Quiet hours */}
+      <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Quiet hours</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Flag device activity during this window as unexpected on the dashboard.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              className="accent-indigo-600"
+              checked={quietHoursEnabledInput}
+              onChange={(e) => { setQuietHoursEnabledInput(e.target.checked); setSaveFeedback(null); }}
+              disabled={savePending}
+            />
+            <span>{quietHoursEnabledInput ? 'On' : 'Off'}</span>
+          </label>
+        </div>
+        <div className="flex items-center gap-3 mt-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">From</span>
+            <select
+              value={quietHoursStartInput}
+              onChange={(e) => { setQuietHoursStartInput(Number(e.target.value)); setSaveFeedback(null); }}
+              disabled={savePending || !quietHoursEnabledInput}
+              className="text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {HOURS_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">to</span>
+            <select
+              value={quietHoursEndInput}
+              onChange={(e) => { setQuietHoursEndInput(Number(e.target.value)); setSaveFeedback(null); }}
+              disabled={savePending || !quietHoursEnabledInput}
+              className="text-sm border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {HOURS_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Log level */}
       <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -223,7 +311,7 @@ export default function SettingsTab({ setup }) {
       <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-xs text-gray-500">
-            Save all changes to retention, stale threshold, auto-scan, and log level.
+            Save all changes to retention, stale threshold, auto-scan, quiet hours, and log level.
           </p>
           <div className="flex items-center gap-3">
             {saveFeedback === 'saved' && (

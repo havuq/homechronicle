@@ -185,6 +185,9 @@ export default function AccessoryDetail({ accessoryId, onBack }) {
               <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-gray-900 truncate">{accessory.accessory_name}</h2>
                 <p className="text-xs text-gray-500 mt-0.5 break-all">{accessory.accessory_id}</p>
+                {accessory.device_note && (
+                  <p className="text-xs text-gray-500 mt-1 italic">{accessory.device_note}</p>
+                )}
                 <p className="text-xs text-gray-400 mt-1">
                   {accessory.room_name ?? 'No room'} · {accessory.model ?? 'Unknown model'}
                   {accessory.last_seen && ` · last seen ${formatDistanceToNow(new Date(accessory.last_seen), { addSuffix: true })}`}

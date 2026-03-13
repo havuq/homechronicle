@@ -138,3 +138,12 @@ export function useAnomalies() {
     refetchInterval: 60_000,
   });
 }
+
+export function useQuietHours() {
+  return useQuery({
+    queryKey: ['stats', 'quiet-hours'],
+    queryFn: () => fetchJson(`${BASE}/stats/quiet-hours`),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+}

@@ -9,6 +9,22 @@
  */
 const CHANGELOG = [
   {
+    version: 'v0.1.3-beta.3',
+    date: '2026-03-13',
+    title: 'Device notes, quiet hours & bug fixes',
+    items: [
+      'Device notes: add a short note or nickname to any device on the My Devices tab',
+      'Device notes are displayed on the accessory detail page',
+      'Quiet hours: define a time window (e.g. 11 PM–6 AM) and flag unexpected device activity',
+      'Quiet hours dashboard card shows devices active during your quiet window',
+      'Quiet hours configuration available in Settings with local-time hour pickers',
+      'Fix: Matter devices can now be deleted from My Devices (node ID normalization fix)',
+      'Fix: Matter device deletion errors are now shown instead of silently ignored',
+      'Setup: Matter card description condensed to one line',
+      'Setup: "See supported devices" link moved to bottom of Matter card',
+    ],
+  },
+  {
     version: 'v0.1.3-beta.2',
     date: '2026-03-13',
     title: 'Timeline cleanup, Matter improvements & changelog',

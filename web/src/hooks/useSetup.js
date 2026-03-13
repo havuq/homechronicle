@@ -20,6 +20,9 @@ export function useSetup() {
   // Room inputs (shared between MyDevicesTab + BridgeChildrenRow)
   const [roomInputs, setRoomInputs] = useState({});
 
+  // Note inputs (shared between MyDevicesTab)
+  const [noteInputs, setNoteInputs] = useState({});
+
   // ── Queries ──────────────────────────────────────────────────────────────
 
   const { data: discoveredData, isLoading: discoveredLoading } = useQuery({
@@ -38,6 +41,11 @@ export function useSetup() {
   const { data: savedRooms = {} } = useQuery({
     queryKey: ['setup', 'rooms'],
     queryFn: () => fetchJson('/api/setup/rooms'),
+  });
+
+  const { data: savedNotes = {} } = useQuery({
+    queryKey: ['setup', 'notes'],
+    queryFn: () => fetchJson('/api/setup/notes'),
   });
 
   const { data: retentionConfig } = useQuery({
@@ -123,6 +131,19 @@ export function useSetup() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accessories'] });
       queryClient.invalidateQueries({ queryKey: ['setup', 'rooms'] });
+    },
+  });
+
+  const saveNoteMutation = useMutation({
+    mutationFn: ({ accessoryId, note }) =>
+      fetchJson('/api/setup/note', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessoryId, note }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accessories'] });
+      queryClient.invalidateQueries({ queryKey: ['setup', 'notes'] });
     },
   });
 
@@ -217,6 +238,13 @@ export function useSetup() {
     saveRoomMutation.mutate({ accessoryId: deviceId, roomName });
   }
 
+  // ── Note helpers ─────────────────────────────────────────────────────────
+
+  function handleNoteBlur(deviceId) {
+    const note = noteInputs[deviceId] ?? '';
+    saveNoteMutation.mutate({ accessoryId: deviceId, note });
+  }
+
   function handleApplyBridgeRoom(bridgeId, childIds) {
     const bridgeRoom = roomInputs[bridgeId]?.trim() ?? savedRooms[bridgeId]?.trim() ?? '';
     if (!bridgeRoom || !childIds.length) return;
@@ -279,6 +307,7 @@ export function useSetup() {
     discoveredData,
     discoveredLoading,
     savedRooms,
+    savedNotes,
     retentionConfig,
     logLevelConfig,
     matterRuntime,
@@ -305,6 +334,7 @@ export function useSetup() {
     matterScanMutation,
     deletePairingMutation,
     saveRoomMutation,
+    saveNoteMutation,
     saveRetentionMutation,
     saveLogLevelMutation,
     deleteAccessoryMutation,
@@ -321,6 +351,11 @@ export function useSetup() {
     setRoomInputs,
     handleRoomBlur,
     handleApplyBridgeRoom,
+
+    // Note editing
+    noteInputs,
+    setNoteInputs,
+    handleNoteBlur,
 
     // Pairing
     pairOne,

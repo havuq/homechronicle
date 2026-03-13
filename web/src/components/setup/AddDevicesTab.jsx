@@ -457,7 +457,7 @@ function MatterCard({
           <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">Matter</span>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">
-          Scan for Matter devices in commissioning mode, then enter a setup code to start logging.
+          Pair Matter devices using a setup code from Apple Home.
         </p>
         <button
           onClick={onOpenHelp}
@@ -467,12 +467,6 @@ function MatterCard({
           How do I pair a Matter device?
         </button>
       </div>
-
-      <p className="text-[11px] text-gray-400 italic">
-        Supports on/off, level control, boolean state, temperature, humidity, and occupancy clusters.
-        Devices using other clusters will pair but won't produce events.{' '}
-        <button onClick={onOpenHelp} className="underline hover:text-gray-600 transition-colors">See supported devices</button>
-      </p>
 
       {/* Scan button */}
       <button
@@ -624,6 +618,12 @@ function MatterCard({
       >
         {matterAdvancedOpen ? 'Hide manual setup' : 'Add manually\u2026'}
       </button>
+
+      <p className="text-[11px] text-gray-400 italic">
+        Supports on/off, level control, boolean state, temperature, humidity, and occupancy clusters.
+        Devices using other clusters will pair but won't produce events.{' '}
+        <button onClick={onOpenHelp} className="underline hover:text-gray-600 transition-colors">See supported devices</button>
+      </p>
 
       {matterAdvancedOpen && (
         <form onSubmit={handleMatterSubmit} className="space-y-2 bg-gray-50 rounded-lg p-2.5">

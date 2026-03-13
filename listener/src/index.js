@@ -34,6 +34,8 @@ const PAIRINGS_FILE = process.env.PAIRINGS_FILE
 
 const ROOMS_FILE = process.env.ROOMS_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/rooms.json' : './data/rooms.json');
+const NOTES_FILE = process.env.NOTES_FILE
+  || (process.env.NODE_ENV === 'production' ? '/app/data/notes.json' : './data/notes.json');
 const RETENTION_FILE = process.env.RETENTION_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/retention.json' : './data/retention.json');
 
@@ -68,6 +70,7 @@ if (IS_PRODUCTION && !API_TOKEN) {
 
 const pairingsStore = new JsonObjectStore(PAIRINGS_FILE, {});
 const roomsStore = new JsonObjectStore(ROOMS_FILE, {});
+const notesStore = new JsonObjectStore(NOTES_FILE, {});
 const retentionStore = new JsonObjectStore(RETENTION_FILE, {
   retentionDays: RETENTION_DAYS_DEFAULT,
   archiveBeforeDelete: RETENTION_ARCHIVE_DEFAULT,
@@ -141,7 +144,12 @@ function normalizeRetentionSettings(input = {}) {
   const autoScanHomeKit = input.autoScanHomeKit === undefined
     ? DISCOVERY_SCAN_ENABLED
     : Boolean(input.autoScanHomeKit);
-  return { retentionDays, archiveBeforeDelete, staleThresholdHours, autoScanHomeKit };
+  const quietHoursEnabled = input.quietHoursEnabled === undefined ? false : Boolean(input.quietHoursEnabled);
+  const qhStart = Number.parseInt(String(input.quietHoursStart ?? ''), 10);
+  const quietHoursStart = Number.isFinite(qhStart) && qhStart >= 0 && qhStart <= 23 ? qhStart : 23;
+  const qhEnd = Number.parseInt(String(input.quietHoursEnd ?? ''), 10);
+  const quietHoursEnd = Number.isFinite(qhEnd) && qhEnd >= 0 && qhEnd <= 23 ? qhEnd : 6;
+  return { retentionDays, archiveBeforeDelete, staleThresholdHours, autoScanHomeKit, quietHoursEnabled, quietHoursStart, quietHoursEnd };
 }
 
 function isLoopbackHostname(hostname) {
@@ -223,6 +231,14 @@ async function saveRooms(rooms) {
   await roomsStore.write(rooms);
 }
 
+function loadNotes() {
+  return notesStore.getSnapshot();
+}
+
+async function saveNotes(notes) {
+  await notesStore.write(notes);
+}
+
 function loadRetentionSettings() {
   return normalizeRetentionSettings(retentionStore.getSnapshot());
 }
@@ -254,6 +270,7 @@ const DISCOVER_IFACE = (() => {
 await migrateDb();
 await pairingsStore.init();
 await roomsStore.init();
+await notesStore.init();
 await retentionStore.init();
 await initMatterController();
 matterRuntime = createMatterRuntime({
@@ -277,6 +294,9 @@ if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5
     }
     void roomsStore.refresh().catch((err) => {
       log.warn('[store] rooms refresh failed:', err.message ?? err.stack ?? err);
+    });
+    void notesStore.refresh().catch((err) => {
+      log.warn('[store] notes refresh failed:', err.message ?? err.stack ?? err);
     });
     void retentionStore.refresh()
       .then(() => { retentionSettings = loadRetentionSettings(); })
@@ -717,6 +737,24 @@ app.get('/api/setup/rooms', (_req, res) => {
   res.json(loadRooms());
 });
 
+app.patch('/api/setup/note', async (req, res) => {
+  const { accessoryId, note } = req.body ?? {};
+  if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
+  const notes = loadNotes();
+  if (note && note.trim()) {
+    notes[accessoryId] = note.trim();
+  } else {
+    delete notes[accessoryId];
+  }
+  await saveNotes(notes);
+  log.info(`[setup] Note for ${accessoryId} set to ${note?.trim() || '(cleared)'}`);
+  res.json({ success: true });
+});
+
+app.get('/api/setup/notes', (_req, res) => {
+  res.json(loadNotes());
+});
+
 app.get('/api/setup/retention', (_req, res) => {
   res.json({
     retentionDays: retentionSettings.retentionDays,
@@ -724,6 +762,9 @@ app.get('/api/setup/retention', (_req, res) => {
     staleThresholdHours: retentionSettings.staleThresholdHours,
     autoScanHomeKit: retentionSettings.autoScanHomeKit,
     sweepMs: RETENTION_SWEEP_MS,
+    quietHoursEnabled: retentionSettings.quietHoursEnabled,
+    quietHoursStart: retentionSettings.quietHoursStart,
+    quietHoursEnd: retentionSettings.quietHoursEnd,
   });
 });
 
@@ -761,6 +802,26 @@ app.patch('/api/setup/retention', async (req, res) => {
     updates.archiveBeforeDelete = body.archiveBeforeDelete;
   }
 
+  if (body.quietHoursEnabled !== undefined) {
+    updates.quietHoursEnabled = Boolean(body.quietHoursEnabled);
+  }
+
+  if (body.quietHoursStart !== undefined) {
+    const nextQhStart = Number.parseInt(String(body.quietHoursStart ?? ''), 10);
+    if (!Number.isFinite(nextQhStart) || nextQhStart < 0 || nextQhStart > 23) {
+      return res.status(400).json({ error: 'quietHoursStart must be an integer between 0 and 23.' });
+    }
+    updates.quietHoursStart = nextQhStart;
+  }
+
+  if (body.quietHoursEnd !== undefined) {
+    const nextQhEnd = Number.parseInt(String(body.quietHoursEnd ?? ''), 10);
+    if (!Number.isFinite(nextQhEnd) || nextQhEnd < 0 || nextQhEnd > 23) {
+      return res.status(400).json({ error: 'quietHoursEnd must be an integer between 0 and 23.' });
+    }
+    updates.quietHoursEnd = nextQhEnd;
+  }
+
   if (!Object.keys(updates).length) {
     return res.status(400).json({ error: 'No supported settings provided.' });
   }
@@ -778,6 +839,9 @@ app.patch('/api/setup/retention', async (req, res) => {
     staleThresholdHours: retentionSettings.staleThresholdHours,
     autoScanHomeKit: retentionSettings.autoScanHomeKit,
     sweepMs: RETENTION_SWEEP_MS,
+    quietHoursEnabled: retentionSettings.quietHoursEnabled,
+    quietHoursStart: retentionSettings.quietHoursStart,
+    quietHoursEnd: retentionSettings.quietHoursEnd,
   });
 });
 
@@ -830,6 +894,12 @@ app.delete('/api/data/accessory', apiWriteLimiter, async (req, res) => {
         if (key === matterNodeId || key.startsWith(`${matterNodeId}:`)) delete rooms[key];
       }
       await saveRooms(rooms);
+      // Clean up all notes for this node and its endpoints.
+      const notesMap = loadNotes();
+      for (const key of Object.keys(notesMap)) {
+        if (key === matterNodeId || key.startsWith(`${matterNodeId}:`)) delete notesMap[key];
+      }
+      await saveNotes(notesMap);
     } else {
       result = await pool.query(
         'DELETE FROM event_logs WHERE accessory_id = $1', [accessoryId],
@@ -837,6 +907,9 @@ app.delete('/api/data/accessory', apiWriteLimiter, async (req, res) => {
       const rooms = loadRooms();
       delete rooms[accessoryId];
       await saveRooms(rooms);
+      const notesMap = loadNotes();
+      delete notesMap[accessoryId];
+      await saveNotes(notesMap);
     }
 
     log.info(`[data] Deleted ${result.rowCount} event(s) for accessory ${accessoryId}${matterNodeId ? ` (Matter node ${matterNodeId})` : ''}`);
@@ -851,6 +924,7 @@ app.delete('/api/data/all', apiWriteLimiter, async (_req, res) => {
   try {
     const result = await pool.query('DELETE FROM event_logs');
     await saveRooms({});
+    await saveNotes({});
     log.info(`[data] Wiped all data — ${result.rowCount} event(s) deleted`);
     res.json({ success: true, deleted: result.rowCount });
   } catch (err) {
@@ -875,6 +949,8 @@ app.use('/api', createMatterRouter({
   savePairings,
   loadRooms,
   saveRooms,
+  loadNotes,
+  saveNotes,
   matterRuntime,
   getMatterDiscoveryCache: () => matterDiscoveryCache,
   setMatterDiscoveryCache: (cache) => { matterDiscoveryCache = cache; },
@@ -949,6 +1025,7 @@ app.get('/api/accessories', apiStatsReadLimiter, async (_req, res) => {
     `);
 
     const rooms = loadRooms();
+    const notes = loadNotes();
     const currentPairings = loadPairings();
     const now = Date.now();
     const heartbeatById = Object.fromEntries(
@@ -980,6 +1057,7 @@ app.get('/api/accessories', apiStatsReadLimiter, async (_req, res) => {
         ...r,
         protocol,
         room_name: rooms[r.accessory_id] ?? r.room_name,
+        device_note: notes[r.accessory_id] ?? null,
         address: bridgePairing?.address ?? null,
         paired_at: bridgePairing?.pairedAt ?? null,
         manufacturer: identity?.manufacturer ?? null,
@@ -1005,6 +1083,7 @@ app.get('/api/accessories', apiStatsReadLimiter, async (_req, res) => {
           accessory_name: p.name,
           protocol: p.protocol ?? 'homekit',
           room_name: rooms[id] ?? null,
+          device_note: notes[id] ?? null,
           service_type: null,
           category: p.category ?? null,
           last_seen: null,
@@ -1045,6 +1124,7 @@ app.get('/api/accessories/:accessoryId/detail', apiStatsReadLimiter, async (req,
 
   try {
     const rooms = loadRooms();
+    const notes = loadNotes();
     const currentPairings = loadPairings();
     const now = Date.now();
 
@@ -1170,6 +1250,7 @@ app.get('/api/accessories/:accessoryId/detail', apiStatsReadLimiter, async (req,
       accessory_id: accessoryId,
       accessory_name: latest.accessory_name ?? bridgePairing?.name ?? accessoryId,
       room_name: rooms[accessoryId] ?? latest.room_name ?? null,
+      device_note: notes[accessoryId] ?? null,
       service_type: latest.service_type ?? null,
       protocol,
       transport: latest.transport ?? null,
@@ -1597,6 +1678,48 @@ app.get('/api/stats/anomalies', apiStatsReadLimiter, async (_req, res) => {
     });
   } catch (err) {
     log.error('[api] /api/stats/anomalies error:', err.message ?? err.stack ?? err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/stats/quiet-hours', apiStatsReadLimiter, async (_req, res) => {
+  const { quietHoursEnabled, quietHoursStart, quietHoursEnd } = retentionSettings;
+  if (!quietHoursEnabled) {
+    return res.json({ enabled: false, events: [] });
+  }
+
+  try {
+    const hourFilter = quietHoursStart <= quietHoursEnd
+      ? `EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC') >= ${quietHoursStart} AND EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC') < ${quietHoursEnd}`
+      : `EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC') >= ${quietHoursStart} OR EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC') < ${quietHoursEnd}`;
+
+    const result = await pool.query(`
+      SELECT
+        accessory_id,
+        accessory_name,
+        room_name,
+        COUNT(*)::int AS count,
+        MAX(timestamp) AS last_seen_at
+      FROM event_logs
+      WHERE timestamp >= NOW() - INTERVAL '24 hours'
+        AND (${hourFilter})
+      GROUP BY accessory_id, accessory_name, room_name
+      ORDER BY count DESC
+      LIMIT 20
+    `);
+
+    const rooms = loadRooms();
+    const events = result.rows.map((r) => ({
+      accessoryId: r.accessory_id,
+      accessoryName: r.accessory_name,
+      room: rooms[r.accessory_id] ?? rooms[parentBridgeId(r.accessory_id)] ?? r.room_name ?? null,
+      count: r.count,
+      lastSeenAt: r.last_seen_at,
+    }));
+
+    res.json({ enabled: true, quietHoursStart, quietHoursEnd, events });
+  } catch (err) {
+    log.error('[api] /api/stats/quiet-hours error:', err.message ?? err.stack ?? err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

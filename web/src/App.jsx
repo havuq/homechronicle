@@ -11,6 +11,7 @@ import WeekdayHeatmap from './components/WeekdayHeatmap.jsx';
 import MonthlyHeatmap from './components/MonthlyHeatmap.jsx';
 import AnomalyPanel from './components/AnomalyPanel.jsx';
 import StaleDevicesPanel from './components/StaleDevicesPanel.jsx';
+import QuietHoursPanel from './components/QuietHoursPanel.jsx';
 import AccessoryList from './components/AccessoryList.jsx';
 import AccessoryDetail from './components/AccessoryDetail.jsx';
 import Setup from './components/Setup.jsx';
@@ -328,6 +329,11 @@ export default function App() {
                   <MonthlyHeatmap />
                 </div>
               </div>
+            </div>
+
+            {/* Quiet hours */}
+            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
+              <QuietHoursPanel />
             </div>
 
             {/* 2-col: active outliers + stale devices */}

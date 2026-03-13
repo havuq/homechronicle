@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle, Trash2, ChevronDown, MapPin } from 'lucide-react';
+import { CheckCircle, Trash2, ChevronDown, MapPin, FileText } from 'lucide-react';
 import clsx from 'clsx';
 import { CATEGORY_LABELS } from './constants.js';
 import BridgeChildrenRow from './BridgeChildrenRow.jsx';
@@ -21,6 +21,10 @@ export default function MyDevicesTab({ setup }) {
     setRoomInputs,
     handleRoomBlur,
     handleApplyBridgeRoom,
+    savedNotes,
+    noteInputs,
+    setNoteInputs,
+    handleNoteBlur,
     deletePairingMutation,
     deleteMatterPairingMutation,
     matterRuntime,
@@ -28,6 +32,7 @@ export default function MyDevicesTab({ setup }) {
 
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteMatter, setConfirmDeleteMatter] = useState(null);
+  const [matterDeleteError, setMatterDeleteError] = useState({});
   const [expandedBridges, setExpandedBridges] = useState(new Set());
   const [expandedMatterEndpoints, setExpandedMatterEndpoints] = useState(new Set());
   const [expandedMatterErrors, setExpandedMatterErrors] = useState(new Set());
@@ -85,6 +90,18 @@ export default function MyDevicesTab({ setup }) {
                       onBlur={() => handleRoomBlur(acc.id)}
                       onKeyDown={(e) => e.key === 'Enter' && handleRoomBlur(acc.id)}
                       className="text-xs border border-gray-200 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <FileText size={10} className="text-gray-300 flex-shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Add note..."
+                      value={noteInputs[acc.id] ?? savedNotes[acc.id] ?? ''}
+                      onChange={(e) => setNoteInputs((n) => ({ ...n, [acc.id]: e.target.value }))}
+                      onBlur={() => handleNoteBlur(acc.id)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleNoteBlur(acc.id)}
+                      className="text-xs border border-gray-200 rounded px-2 py-0.5 w-48 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
                     />
                   </div>
                   {acc.category === 2 && roomVal && (
@@ -204,6 +221,18 @@ export default function MyDevicesTab({ setup }) {
                       className="text-xs border border-gray-200 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
                     />
                   </div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <FileText size={10} className="text-gray-300 flex-shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Add note..."
+                      value={noteInputs[nodeId] ?? savedNotes[nodeId] ?? ''}
+                      onChange={(e) => setNoteInputs((n) => ({ ...n, [nodeId]: e.target.value }))}
+                      onBlur={() => handleNoteBlur(nodeId)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleNoteBlur(nodeId)}
+                      className="text-xs border border-gray-200 rounded px-2 py-0.5 w-48 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                    />
+                  </div>
                   {nodeStatus && (
                     <div className="text-xs text-gray-400 mt-0.5">
                       {nodeStatus.active
@@ -266,10 +295,16 @@ export default function MyDevicesTab({ setup }) {
                 {isConfirming ? (
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
-                      onClick={() => deleteMatterPairingMutation.mutate(nodeId, {
-                        onSuccess: () => setConfirmDeleteMatter(null),
-                        onError: () => setConfirmDeleteMatter(null),
-                      })}
+                      onClick={() => {
+                        setMatterDeleteError((s) => ({ ...s, [nodeId]: null }));
+                        deleteMatterPairingMutation.mutate(nodeId, {
+                          onSuccess: () => setConfirmDeleteMatter(null),
+                          onError: (err) => {
+                            setConfirmDeleteMatter(null);
+                            setMatterDeleteError((s) => ({ ...s, [nodeId]: err.message ?? 'Could not remove device.' }));
+                          },
+                        });
+                      }}
                       disabled={isDeleting}
                       className="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 transition-colors"
                     >
@@ -296,6 +331,11 @@ export default function MyDevicesTab({ setup }) {
                   </div>
                 )}
               </div>
+              {matterDeleteError[nodeId] && (
+                <div className="mt-1.5 ml-6 bg-red-50 border border-red-100 rounded px-2 py-1">
+                  <p className="text-xs text-red-700">{matterDeleteError[nodeId]}</p>
+                </div>
+              )}
               {isEndpointsExpanded && endpointRows.length > 0 && (
                 <div className="mt-2 pl-8 space-y-2">
                   {endpointRows.map((row) => {
