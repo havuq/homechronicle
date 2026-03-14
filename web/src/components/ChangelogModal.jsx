@@ -26,9 +26,9 @@ export default function ChangelogModal({ onClose }) {
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
           {CHANGELOG.map((entry, i) => (
             <div key={entry.version + i}>
-              <div className="flex items-baseline gap-2 mb-1.5">
-                <span className="text-sm font-semibold text-gray-900">{entry.title}</span>
-                <span className="text-xs text-gray-400 whitespace-nowrap">{entry.date}</span>
+              <div className="mb-1.5">
+                <span className="inline-block text-xs font-mono font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded mb-1">{entry.version}</span>
+                <div className="text-sm font-semibold text-gray-900">{entry.title}</div>
               </div>
               <ul className="space-y-1 list-none">
                 {entry.items.map((item, j) => (
