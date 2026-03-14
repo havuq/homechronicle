@@ -368,7 +368,7 @@ export default function App() {
           className="inline-flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors"
         >
           {hasNewVersion && <Sparkles size={11} className="text-blue-500" />}
-          <span>Build {__BUILD_VERSION__.length > 12 ? __BUILD_VERSION__.slice(0, 7) + '\u2026' : __BUILD_VERSION__}</span>
+          <span>{__BUILD_VERSION__}</span>
           {hasNewVersion && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
         </button>
         {availableUpdate && (

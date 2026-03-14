@@ -168,7 +168,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VITE_BUILD_VERSION=${{ github.event.release.tag_name }}+${{ github.sha }}
+            VITE_BUILD_VERSION=${{ github.event.release.tag_name }}
           # Keep cache scope per service, but export minimally to avoid cache bloat.
           cache-from: type=gha,scope=release-${{ matrix.service }}
           cache-to: type=gha,mode=min,scope=release-${{ matrix.service }},ignore-error=true
