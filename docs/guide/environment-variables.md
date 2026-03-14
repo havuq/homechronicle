@@ -61,6 +61,7 @@ Keep `API_PORT` and `LISTENER_PORT` aligned (default `3001`) or `/api` requests 
 | `CORS_ALLOW_LOCALHOST` | `true` | Allow localhost/loopback origins |
 | `DISCOVER_IFACE` | auto | Network interface for mDNS (e.g., `en0`, `eth0`) |
 | `DISCOVERY_SCAN_ENABLED` | `true` | Enable periodic background discovery |
+| `NOTES_FILE` | `/app/data/notes.json` | Device notes JSON storage path |
 | `STORE_REFRESH_INTERVAL_MS` | `30000` | JSON store refresh interval |
 
 ## Rate Limits

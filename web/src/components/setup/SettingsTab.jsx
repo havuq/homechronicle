@@ -37,6 +37,7 @@ export default function SettingsTab({ setup }) {
 
   const [retentionDaysInput, setRetentionDaysInput] = useState('');
   const [staleThresholdHoursInput, setStaleThresholdHoursInput] = useState('');
+  const [archiveBeforeDeleteInput, setArchiveBeforeDeleteInput] = useState(true);
   const [autoScanHomeKitInput, setAutoScanHomeKitInput] = useState(true);
   const [quietHoursEnabledInput, setQuietHoursEnabledInput] = useState(false);
   const [quietHoursStartInput, setQuietHoursStartInput] = useState(22);
@@ -51,6 +52,7 @@ export default function SettingsTab({ setup }) {
 
   const retentionDaysCurrent = retentionConfig?.retentionDays ?? null;
   const staleThresholdHoursCurrent = retentionConfig?.staleThresholdHours ?? null;
+  const archiveBeforeDeleteCurrent = Boolean(retentionConfig?.archiveBeforeDelete ?? true);
   const autoScanHomeKit = Boolean(retentionConfig?.autoScanHomeKit ?? true);
   const quietHoursEnabledCurrent = Boolean(retentionConfig?.quietHoursEnabled ?? false);
   const quietHoursStartCurrent = retentionConfig?.quietHoursStart != null ? utcHourToLocal(retentionConfig.quietHoursStart) : 22;
@@ -73,6 +75,10 @@ export default function SettingsTab({ setup }) {
     if (staleThresholdHoursCurrent === null) return;
     setStaleThresholdHoursInput((prev) => (prev.trim() ? prev : String(staleThresholdHoursCurrent)));
   }, [staleThresholdHoursCurrent]);
+
+  useEffect(() => {
+    setArchiveBeforeDeleteInput(archiveBeforeDeleteCurrent);
+  }, [archiveBeforeDeleteCurrent]);
 
   useEffect(() => {
     setAutoScanHomeKitInput(autoScanHomeKit);
@@ -100,6 +106,7 @@ export default function SettingsTab({ setup }) {
     && (
       parsedRetentionDays !== retentionDaysCurrent
       || parsedStaleThresholdHours !== staleThresholdHoursCurrent
+      || archiveBeforeDeleteInput !== archiveBeforeDeleteCurrent
       || autoScanHomeKitInput !== autoScanHomeKit
       || quietHoursEnabledInput !== quietHoursEnabledCurrent
       || quietHoursStartInput !== quietHoursStartCurrent
@@ -115,6 +122,7 @@ export default function SettingsTab({ setup }) {
         saveRetentionMutation.mutateAsync({
           retentionDays: parsedRetentionDays,
           staleThresholdHours: parsedStaleThresholdHours,
+          archiveBeforeDelete: archiveBeforeDeleteInput,
           autoScanHomeKit: autoScanHomeKitInput,
           quietHoursEnabled: quietHoursEnabledInput,
           quietHoursStart: localHourToUtc(quietHoursStartInput),
@@ -124,6 +132,7 @@ export default function SettingsTab({ setup }) {
       ]);
       setRetentionDaysInput(String(nextRetention.retentionDays));
       setStaleThresholdHoursInput(String(nextRetention.staleThresholdHours));
+      setArchiveBeforeDeleteInput(Boolean(nextRetention.archiveBeforeDelete ?? true));
       setAutoScanHomeKitInput(Boolean(nextRetention.autoScanHomeKit ?? true));
       setQuietHoursEnabledInput(Boolean(nextRetention.quietHoursEnabled ?? false));
       if (nextRetention.quietHoursStart != null) setQuietHoursStartInput(utcHourToLocal(nextRetention.quietHoursStart));
@@ -175,6 +184,30 @@ export default function SettingsTab({ setup }) {
         </div>
         <p className="text-[11px] text-gray-400 mt-2">
           Changes apply without restart. Sweep interval is every 24 hours by default.
+        </p>
+      </div>
+
+      {/* Archive before delete */}
+      <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Archive before delete</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Copy expired events to the archive table before removing them from the main table.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={archiveBeforeDeleteInput}
+              onChange={(e) => { setArchiveBeforeDeleteInput(e.target.checked); setSaveFeedback(null); }}
+              disabled={savePending}
+            />
+            <span>{archiveBeforeDeleteInput ? 'On' : 'Off'}</span>
+          </label>
+        </div>
+        <p className="text-[11px] text-gray-400 mt-2">
+          When off, expired events are permanently deleted during retention sweep.
         </p>
       </div>
 
@@ -309,7 +342,7 @@ export default function SettingsTab({ setup }) {
       <div className="bg-white border border-gray-200 rounded-lg px-4 py-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-xs text-gray-500">
-            Save all changes to retention, stale threshold, auto-scan, quiet hours, and log level.
+            Save all changes to retention, archival, stale threshold, auto-scan, quiet hours, and log level.
           </p>
           <div className="flex items-center gap-3">
             {saveFeedback === 'saved' && (

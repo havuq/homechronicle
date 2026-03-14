@@ -297,6 +297,24 @@ Assign a room to an accessory.
 
 Get all room assignments as `{ accessoryId: roomName }`.
 
+### `PATCH /api/setup/note`
+
+Set or clear a note for an accessory.
+
+**Body:**
+```json
+{
+  "accessoryId": "AA:BB:CC:DD:EE:FF",
+  "note": "Firmware updated 2025-01"
+}
+```
+
+Send an empty or missing `note` to clear.
+
+### `GET /api/setup/notes`
+
+Get all device notes as `{ accessoryId: note }`.
+
 ### `GET /api/setup/pairings`
 
 List all pairings (HomeKit and Matter).

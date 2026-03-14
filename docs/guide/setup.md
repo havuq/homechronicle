@@ -138,6 +138,7 @@ The database schema is migrated automatically on startup.
 |------|----------|-------|
 | `listener/data/pairings.json` | Device pairing keys | Never commit this file |
 | `listener/data/rooms.json` | Room assignments | Created via API/UI |
+| `listener/data/notes.json` | Device notes | Created via API/UI |
 | `listener/data/retention.json` | Retention settings | Created via API/UI |
 | PostgreSQL volume | All event data | Named volume `postgres-data` by default |
 

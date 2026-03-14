@@ -63,6 +63,7 @@ Use `.env.example` for a minimal setup, then add only what you need from this re
 | `CORS_ALLOW_LOCALHOST` | `true` | listener | If allow-list is empty, allow localhost/loopback browser origins. |
 | `PAIRINGS_FILE` | `/app/data/pairings.json` in prod | listener | Pairings JSON storage path. |
 | `ROOMS_FILE` | `/app/data/rooms.json` in prod | listener | Rooms JSON storage path. |
+| `NOTES_FILE` | `/app/data/notes.json` in prod | listener | Device notes JSON storage path. |
 | `RETENTION_FILE` | `/app/data/retention.json` in prod | listener | Retention settings JSON storage path. |
 | `STORE_REFRESH_INTERVAL_MS` | `30000` | listener | Refresh interval for JSON stores. |
 | `DISCOVERY_SCAN_ENABLED` | `true` | listener | Enable periodic HomeKit discovery scans. |
@@ -152,10 +153,13 @@ Do not use a generic token value (for example `changeme` or `token123`).
   - `GET /api/setup/discovered`
   - `POST /api/setup/scan`
   - `POST /api/setup/pair`
+- Device notes endpoints:
+  - `GET /api/setup/notes` returns all saved notes as a `{ accessoryId: note }` object.
+  - `PATCH /api/setup/note` accepts `{ accessoryId, note }` to set or clear a note.
 - Retention settings endpoint:
   - `GET /api/setup/retention` returns `retentionDays`, `staleThresholdHours`, `autoScanHomeKit`, and `archiveBeforeDelete`.
   - `PATCH /api/setup/retention` accepts the same fields; all are optional.
-  - `archiveBeforeDelete` controls whether old events are copied into `events_archive` before they are removed by retention sweep (`true`), or deleted directly without archival (`false`).
+  - `archiveBeforeDelete` controls whether old events are copied into `event_logs_archive` before they are removed by retention sweep (`true`), or deleted directly without archival (`false`). Configurable from the Settings tab in the web UI.
 - If `API_TOKEN` is configured, include one of these headers on write calls:
   - `X-API-Token: <token>`
   - `Authorization: Bearer <token>`

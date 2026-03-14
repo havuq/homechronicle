@@ -12,15 +12,11 @@
 const CHANGELOG = [
   {
     version: 'v0.1.3-beta',
-    title: 'Bridge grouping, display names, dark mode polish & fixes',
+    title: 'Archive toggle, device notes backend & settings improvements',
     items: [
-      'Accessories tab: bridge devices are now hidden \u2014 their children appear as top-level devices, visually grouped under a bridge banner',
-      'My Devices: editable display names for all devices (inline rename)',
-      'My Devices: warning banner when devices are missing room assignments',
-      'My Devices: device notes now supported on bridge children and Matter endpoints',
-      'Fix: quiet hours settings now persist correctly when saved',
-      'Dark mode: theme/skin picker buttons follow dark theme',
-      'Dark mode: timeline episodes styled for dark backgrounds',
+      'Settings: archive before delete toggle \u2014 control whether expired events are copied to the archive table or permanently removed',
+      'Fix: device notes now persist to the backend (previously the API endpoints were missing)',
+      'Bridge grouping, display names, dark mode polish & fixes from earlier betas',
     ],
   },
   {

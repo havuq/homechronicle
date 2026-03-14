@@ -36,6 +36,8 @@ const ROOMS_FILE = process.env.ROOMS_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/rooms.json' : './data/rooms.json');
 const DISPLAY_NAMES_FILE = process.env.DISPLAY_NAMES_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/display-names.json' : './data/display-names.json');
+const NOTES_FILE = process.env.NOTES_FILE
+  || (process.env.NODE_ENV === 'production' ? '/app/data/notes.json' : './data/notes.json');
 const RETENTION_FILE = process.env.RETENTION_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/retention.json' : './data/retention.json');
 
@@ -71,6 +73,7 @@ if (IS_PRODUCTION && !API_TOKEN) {
 const pairingsStore = new JsonObjectStore(PAIRINGS_FILE, {});
 const roomsStore = new JsonObjectStore(ROOMS_FILE, {});
 const displayNamesStore = new JsonObjectStore(DISPLAY_NAMES_FILE, {});
+const notesStore = new JsonObjectStore(NOTES_FILE, {});
 const retentionStore = new JsonObjectStore(RETENTION_FILE, {
   retentionDays: RETENTION_DAYS_DEFAULT,
   archiveBeforeDelete: RETENTION_ARCHIVE_DEFAULT,
@@ -252,6 +255,14 @@ async function saveDisplayNames(names) {
   await displayNamesStore.write(names);
 }
 
+function loadNotes() {
+  return notesStore.getSnapshot();
+}
+
+async function saveNotes(notes) {
+  await notesStore.write(notes);
+}
+
 function loadRetentionSettings() {
   return normalizeRetentionSettings(retentionStore.getSnapshot());
 }
@@ -284,6 +295,7 @@ await migrateDb();
 await pairingsStore.init();
 await roomsStore.init();
 await displayNamesStore.init();
+await notesStore.init();
 await retentionStore.init();
 await initMatterController();
 matterRuntime = createMatterRuntime({
@@ -310,6 +322,9 @@ if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5
     });
     void displayNamesStore.refresh().catch((err) => {
       log.warn('[store] display-names refresh failed:', err.message ?? err.stack ?? err);
+    });
+    void notesStore.refresh().catch((err) => {
+      log.warn('[store] notes refresh failed:', err.message ?? err.stack ?? err);
     });
     void retentionStore.refresh()
       .then(() => { retentionSettings = loadRetentionSettings(); })
@@ -775,6 +790,25 @@ app.get('/api/setup/display-names', (_req, res) => {
   res.json(loadDisplayNames());
 });
 
+app.patch('/api/setup/note', async (req, res) => {
+  const { accessoryId, note } = req.body ?? {};
+  if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
+
+  const notes = loadNotes();
+  if (note && note.trim()) {
+    notes[accessoryId] = note.trim();
+  } else {
+    delete notes[accessoryId];
+  }
+  await saveNotes(notes);
+  log.info(`[setup] Note for ${accessoryId} set to ${note?.trim() || '(cleared)'}`);
+  res.json({ success: true });
+});
+
+app.get('/api/setup/notes', (_req, res) => {
+  res.json(loadNotes());
+});
+
 app.get('/api/setup/retention', (_req, res) => {
   res.json({
     retentionDays: retentionSettings.retentionDays,
@@ -927,6 +961,8 @@ app.use('/api', createMatterRouter({
   savePairings,
   loadRooms,
   saveRooms,
+  loadNotes,
+  saveNotes,
   matterRuntime,
   getMatterDiscoveryCache: () => matterDiscoveryCache,
   setMatterDiscoveryCache: (cache) => { matterDiscoveryCache = cache; },
