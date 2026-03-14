@@ -26,17 +26,17 @@ export default function EpisodeGroup({ episode, scenes, eventMetaMap, hoveredCel
     <div data-scene-id={events[0].id} className="border-b border-gray-100 last:border-b-0">
       <button
         onClick={() => setExpanded((value) => !value)}
-        className="w-full text-left px-4 py-3.5 bg-amber-50/70 hover:bg-amber-50 transition-colors"
+        className="hc-episode w-full text-left px-4 py-3.5 bg-amber-50/70 hover:bg-amber-50 transition-colors"
       >
         <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mt-0.5">
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 hc-episode-icon flex items-center justify-center mt-0.5">
             <Icon size={17} className="text-amber-700" />
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-semibold text-gray-900">{episode.title}</span>
-              <span className="text-[11px] uppercase tracking-[0.18em] text-amber-700 font-semibold">
+              <span className="text-[11px] uppercase tracking-[0.18em] text-amber-700 hc-episode-label font-semibold">
                 Episode
               </span>
             </div>
@@ -59,7 +59,7 @@ export default function EpisodeGroup({ episode, scenes, eventMetaMap, hoveredCel
       </button>
 
       {expanded && (
-        <div className="border-t border-amber-100 bg-amber-50/20">
+        <div className="border-t border-amber-100 hc-episode-expanded bg-amber-50/20">
           {scenes.map((scene) => (
             <SceneGroup
               key={scene[0].id}

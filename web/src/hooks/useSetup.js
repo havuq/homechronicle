@@ -23,6 +23,9 @@ export function useSetup() {
   // Note inputs (shared between MyDevicesTab)
   const [noteInputs, setNoteInputs] = useState({});
 
+  // Display name inputs
+  const [displayNameInputs, setDisplayNameInputs] = useState({});
+
   // ── Queries ──────────────────────────────────────────────────────────────
 
   const { data: discoveredData, isLoading: discoveredLoading } = useQuery({
@@ -46,6 +49,11 @@ export function useSetup() {
   const { data: savedNotes = {} } = useQuery({
     queryKey: ['setup', 'notes'],
     queryFn: () => fetchJson('/api/setup/notes'),
+  });
+
+  const { data: savedDisplayNames = {} } = useQuery({
+    queryKey: ['setup', 'display-names'],
+    queryFn: () => fetchJson('/api/setup/display-names'),
   });
 
   const { data: retentionConfig } = useQuery({
@@ -144,6 +152,18 @@ export function useSetup() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accessories'] });
       queryClient.invalidateQueries({ queryKey: ['setup', 'notes'] });
+    },
+  });
+
+  const saveDisplayNameMutation = useMutation({
+    mutationFn: ({ accessoryId, displayName }) =>
+      fetchJson('/api/setup/display-name', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessoryId, displayName }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'display-names'] });
     },
   });
 
@@ -252,15 +272,11 @@ export function useSetup() {
     saveNoteMutation.mutate({ accessoryId: deviceId, note });
   }
 
-  function handleApplyBridgeRoom(bridgeId, childIds) {
-    const bridgeRoom = roomInputs[bridgeId]?.trim() ?? savedRooms[bridgeId]?.trim() ?? '';
-    if (!bridgeRoom || !childIds.length) return;
-    setRoomInputs((prev) => {
-      const next = { ...prev };
-      childIds.forEach((id) => { next[id] = bridgeRoom; });
-      return next;
-    });
-    childIds.forEach((id) => saveRoomMutation.mutate({ accessoryId: id, roomName: bridgeRoom }));
+  // ── Display name helpers ─────────────────────────────────────────────────
+
+  function handleDisplayNameBlur(deviceId) {
+    const displayName = displayNameInputs[deviceId] ?? '';
+    saveDisplayNameMutation.mutate({ accessoryId: deviceId, displayName });
   }
 
   // ── Pairing helpers ──────────────────────────────────────────────────────
@@ -315,6 +331,7 @@ export function useSetup() {
     discoveredLoading,
     savedRooms,
     savedNotes,
+    savedDisplayNames,
     retentionConfig,
     logLevelConfig,
     matterRuntime,
@@ -358,12 +375,16 @@ export function useSetup() {
     roomInputs,
     setRoomInputs,
     handleRoomBlur,
-    handleApplyBridgeRoom,
-
     // Note editing
     noteInputs,
     setNoteInputs,
     handleNoteBlur,
+
+    // Display name editing
+    displayNameInputs,
+    setDisplayNameInputs,
+    savedDisplayNames,
+    handleDisplayNameBlur,
 
     // Pairing
     pairOne,

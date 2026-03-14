@@ -34,6 +34,8 @@ const PAIRINGS_FILE = process.env.PAIRINGS_FILE
 
 const ROOMS_FILE = process.env.ROOMS_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/rooms.json' : './data/rooms.json');
+const DISPLAY_NAMES_FILE = process.env.DISPLAY_NAMES_FILE
+  || (process.env.NODE_ENV === 'production' ? '/app/data/display-names.json' : './data/display-names.json');
 const RETENTION_FILE = process.env.RETENTION_FILE
   || (process.env.NODE_ENV === 'production' ? '/app/data/retention.json' : './data/retention.json');
 
@@ -68,6 +70,7 @@ if (IS_PRODUCTION && !API_TOKEN) {
 
 const pairingsStore = new JsonObjectStore(PAIRINGS_FILE, {});
 const roomsStore = new JsonObjectStore(ROOMS_FILE, {});
+const displayNamesStore = new JsonObjectStore(DISPLAY_NAMES_FILE, {});
 const retentionStore = new JsonObjectStore(RETENTION_FILE, {
   retentionDays: RETENTION_DAYS_DEFAULT,
   archiveBeforeDelete: RETENTION_ARCHIVE_DEFAULT,
@@ -141,7 +144,12 @@ function normalizeRetentionSettings(input = {}) {
   const autoScanHomeKit = input.autoScanHomeKit === undefined
     ? DISCOVERY_SCAN_ENABLED
     : Boolean(input.autoScanHomeKit);
-  return { retentionDays, archiveBeforeDelete, staleThresholdHours, autoScanHomeKit };
+  const quietHoursEnabled = Boolean(input.quietHoursEnabled ?? false);
+  const qhStart = Number.parseInt(String(input.quietHoursStart ?? ''), 10);
+  const quietHoursStart = Number.isFinite(qhStart) && qhStart >= 0 && qhStart <= 23 ? qhStart : 23;
+  const qhEnd = Number.parseInt(String(input.quietHoursEnd ?? ''), 10);
+  const quietHoursEnd = Number.isFinite(qhEnd) && qhEnd >= 0 && qhEnd <= 23 ? qhEnd : 6;
+  return { retentionDays, archiveBeforeDelete, staleThresholdHours, autoScanHomeKit, quietHoursEnabled, quietHoursStart, quietHoursEnd };
 }
 
 function isLoopbackHostname(hostname) {
@@ -236,6 +244,14 @@ async function saveRooms(rooms) {
   await roomsStore.write(rooms);
 }
 
+function loadDisplayNames() {
+  return displayNamesStore.getSnapshot();
+}
+
+async function saveDisplayNames(names) {
+  await displayNamesStore.write(names);
+}
+
 function loadRetentionSettings() {
   return normalizeRetentionSettings(retentionStore.getSnapshot());
 }
@@ -267,6 +283,7 @@ const DISCOVER_IFACE = (() => {
 await migrateDb();
 await pairingsStore.init();
 await roomsStore.init();
+await displayNamesStore.init();
 await retentionStore.init();
 await initMatterController();
 matterRuntime = createMatterRuntime({
@@ -290,6 +307,9 @@ if (Number.isFinite(STORE_REFRESH_INTERVAL_MS) && STORE_REFRESH_INTERVAL_MS >= 5
     }
     void roomsStore.refresh().catch((err) => {
       log.warn('[store] rooms refresh failed:', err.message ?? err.stack ?? err);
+    });
+    void displayNamesStore.refresh().catch((err) => {
+      log.warn('[store] display-names refresh failed:', err.message ?? err.stack ?? err);
     });
     void retentionStore.refresh()
       .then(() => { retentionSettings = loadRetentionSettings(); })
@@ -736,12 +756,34 @@ app.get('/api/setup/rooms', (_req, res) => {
   res.json(loadRooms());
 });
 
+app.patch('/api/setup/display-name', async (req, res) => {
+  const { accessoryId, displayName } = req.body ?? {};
+  if (!accessoryId) return res.status(400).json({ error: 'accessoryId is required' });
+
+  const names = loadDisplayNames();
+  if (displayName && displayName.trim()) {
+    names[accessoryId] = displayName.trim();
+  } else {
+    delete names[accessoryId];
+  }
+  await saveDisplayNames(names);
+  log.info(`[setup] Display name for ${accessoryId} set to ${displayName?.trim() || '(cleared)'}`);
+  res.json({ success: true });
+});
+
+app.get('/api/setup/display-names', (_req, res) => {
+  res.json(loadDisplayNames());
+});
+
 app.get('/api/setup/retention', (_req, res) => {
   res.json({
     retentionDays: retentionSettings.retentionDays,
     archiveBeforeDelete: retentionSettings.archiveBeforeDelete,
     staleThresholdHours: retentionSettings.staleThresholdHours,
     autoScanHomeKit: retentionSettings.autoScanHomeKit,
+    quietHoursEnabled: retentionSettings.quietHoursEnabled,
+    quietHoursStart: retentionSettings.quietHoursStart,
+    quietHoursEnd: retentionSettings.quietHoursEnd,
     sweepMs: RETENTION_SWEEP_MS,
   });
 });
@@ -780,6 +822,26 @@ app.patch('/api/setup/retention', async (req, res) => {
     updates.archiveBeforeDelete = body.archiveBeforeDelete;
   }
 
+  if (body.quietHoursEnabled !== undefined) {
+    updates.quietHoursEnabled = Boolean(body.quietHoursEnabled);
+  }
+
+  if (body.quietHoursStart !== undefined) {
+    const h = Number.parseInt(String(body.quietHoursStart), 10);
+    if (!Number.isFinite(h) || h < 0 || h > 23) {
+      return res.status(400).json({ error: 'quietHoursStart must be an integer 0–23.' });
+    }
+    updates.quietHoursStart = h;
+  }
+
+  if (body.quietHoursEnd !== undefined) {
+    const h = Number.parseInt(String(body.quietHoursEnd), 10);
+    if (!Number.isFinite(h) || h < 0 || h > 23) {
+      return res.status(400).json({ error: 'quietHoursEnd must be an integer 0–23.' });
+    }
+    updates.quietHoursEnd = h;
+  }
+
   if (!Object.keys(updates).length) {
     return res.status(400).json({ error: 'No supported settings provided.' });
   }
@@ -796,6 +858,9 @@ app.patch('/api/setup/retention', async (req, res) => {
     archiveBeforeDelete: retentionSettings.archiveBeforeDelete,
     staleThresholdHours: retentionSettings.staleThresholdHours,
     autoScanHomeKit: retentionSettings.autoScanHomeKit,
+    quietHoursEnabled: retentionSettings.quietHoursEnabled,
+    quietHoursStart: retentionSettings.quietHoursStart,
+    quietHoursEnd: retentionSettings.quietHoursEnd,
     sweepMs: RETENTION_SWEEP_MS,
   });
 });

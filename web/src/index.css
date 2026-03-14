@@ -380,6 +380,31 @@ html.hc-standalone .hc-fab {
     color: rgba(var(--hc-accent-rgb), 0.95) !important;
   }
 
+  html.theme-dark .hc-episode {
+    background-color: rgba(120, 83, 20, 0.25) !important;
+  }
+
+  html.theme-dark .hc-episode:hover {
+    background-color: rgba(120, 83, 20, 0.35) !important;
+  }
+
+  html.theme-dark .hc-episode-icon {
+    background-color: rgba(120, 83, 20, 0.45) !important;
+  }
+
+  html.theme-dark .hc-episode-icon .text-amber-700 {
+    color: #fbbf24 !important;
+  }
+
+  html.theme-dark .hc-episode-label {
+    color: #fbbf24 !important;
+  }
+
+  html.theme-dark .hc-episode-expanded {
+    background-color: rgba(120, 83, 20, 0.1) !important;
+    border-color: rgba(120, 83, 20, 0.3) !important;
+  }
+
   html.theme-dark .hc-footer {
     background-color: var(--hc-panel);
     border-color: var(--hc-panel-border) !important;

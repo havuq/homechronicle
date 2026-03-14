@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle, Trash2, ChevronDown, MapPin, FileText } from 'lucide-react';
+import { CheckCircle, Trash2, ChevronDown, MapPin, FileText, AlertCircle, Pencil } from 'lucide-react';
 import clsx from 'clsx';
 import { CATEGORY_LABELS } from './constants.js';
 import BridgeChildrenRow from './BridgeChildrenRow.jsx';
@@ -20,11 +20,14 @@ export default function MyDevicesTab({ setup }) {
     roomInputs,
     setRoomInputs,
     handleRoomBlur,
-    handleApplyBridgeRoom,
     savedNotes,
     noteInputs,
     setNoteInputs,
     handleNoteBlur,
+    savedDisplayNames,
+    displayNameInputs,
+    setDisplayNameInputs,
+    handleDisplayNameBlur,
     deletePairingMutation,
     deleteMatterPairingMutation,
     matterRuntime,
@@ -40,6 +43,11 @@ export default function MyDevicesTab({ setup }) {
   const totalCount = paired.length + matterPairings.length;
   const matterNodes = Array.isArray(matterRuntime?.nodes) ? matterRuntime.nodes : [];
   const accessories = Array.isArray(dbAccessories) ? dbAccessories : [];
+
+  const devicesWithoutRoom = [
+    ...paired.filter((acc) => !savedRooms[acc.id]?.trim()),
+    ...matterPairings.filter((p) => !savedRooms[p.nodeId ?? p.id]?.trim()),
+  ];
 
   if (totalCount === 0) {
     return (
@@ -59,6 +67,18 @@ export default function MyDevicesTab({ setup }) {
         {totalCount} device{totalCount !== 1 ? 's' : ''}
       </p>
 
+      {devicesWithoutRoom.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
+          <AlertCircle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800">
+            {devicesWithoutRoom.length === 1
+              ? '1 device doesn\u2019t have a room assigned yet.'
+              : `${devicesWithoutRoom.length} devices don\u2019t have rooms assigned yet.`}{' '}
+            Set a room name below so events are grouped correctly.
+          </p>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
 
         {/* HomeKit paired devices */}
@@ -72,7 +92,18 @@ export default function MyDevicesTab({ setup }) {
                 <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900 truncate">{acc.name}</span>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Pencil size={10} className="text-gray-300 flex-shrink-0" />
+                      <input
+                        type="text"
+                        placeholder={acc.name}
+                        value={displayNameInputs[acc.id] ?? savedDisplayNames[acc.id] ?? ''}
+                        onChange={(e) => setDisplayNameInputs((d) => ({ ...d, [acc.id]: e.target.value }))}
+                        onBlur={() => handleDisplayNameBlur(acc.id)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleDisplayNameBlur(acc.id)}
+                        className="font-medium text-gray-900 text-sm bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none px-0 py-0 w-full truncate placeholder-gray-400"
+                      />
+                    </div>
                     <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 flex-shrink-0">
                       HomeKit
                     </span>
@@ -92,18 +123,20 @@ export default function MyDevicesTab({ setup }) {
                       className="text-xs border border-gray-200 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
                     />
                   </div>
-                  <div className="flex items-center gap-1 mt-1">
-                    <FileText size={10} className="text-gray-300 flex-shrink-0" />
-                    <input
-                      type="text"
-                      placeholder="Add note..."
-                      value={noteInputs[acc.id] ?? savedNotes[acc.id] ?? ''}
-                      onChange={(e) => setNoteInputs((n) => ({ ...n, [acc.id]: e.target.value }))}
-                      onBlur={() => handleNoteBlur(acc.id)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleNoteBlur(acc.id)}
-                      className="text-xs border border-gray-200 rounded px-2 py-0.5 w-48 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
-                    />
-                  </div>
+                  {acc.category !== 2 && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <FileText size={10} className="text-gray-300 flex-shrink-0" />
+                      <input
+                        type="text"
+                        placeholder="Add note..."
+                        value={noteInputs[acc.id] ?? savedNotes[acc.id] ?? ''}
+                        onChange={(e) => setNoteInputs((n) => ({ ...n, [acc.id]: e.target.value }))}
+                        onBlur={() => handleNoteBlur(acc.id)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleNoteBlur(acc.id)}
+                        className="text-xs border border-gray-200 rounded px-2 py-0.5 w-48 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                      />
+                    </div>
+                  )}
                   {acc.category === 2 && roomVal && (
                     <p className="text-[10px] text-gray-400 mt-0.5 ml-3.5">
                       Children without their own room inherit this.
@@ -170,7 +203,10 @@ export default function MyDevicesTab({ setup }) {
                   bridgeRoom={roomInputs[acc.id]?.trim() ?? savedRooms[acc.id]?.trim() ?? ''}
                   onRoomChange={(id, val) => setRoomInputs((r) => ({ ...r, [id]: val }))}
                   onRoomBlur={handleRoomBlur}
-                  onApplyBridgeRoom={handleApplyBridgeRoom}
+                  noteInputs={noteInputs}
+                  savedNotes={savedNotes}
+                  onNoteChange={(id, val) => setNoteInputs((n) => ({ ...n, [id]: val }))}
+                  onNoteBlur={handleNoteBlur}
                 />
               )}
             </div>
@@ -199,7 +235,18 @@ export default function MyDevicesTab({ setup }) {
                 <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900 truncate">{pairing.name ?? nodeId}</span>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Pencil size={10} className="text-gray-300 flex-shrink-0" />
+                      <input
+                        type="text"
+                        placeholder={pairing.name ?? nodeId}
+                        value={displayNameInputs[nodeId] ?? savedDisplayNames[nodeId] ?? ''}
+                        onChange={(e) => setDisplayNameInputs((d) => ({ ...d, [nodeId]: e.target.value }))}
+                        onBlur={() => handleDisplayNameBlur(nodeId)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleDisplayNameBlur(nodeId)}
+                        className="font-medium text-gray-900 text-sm bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-blue-400 focus:outline-none px-0 py-0 w-full truncate placeholder-gray-400"
+                      />
+                    </div>
                     <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">
                       Matter
                     </span>
@@ -221,18 +268,20 @@ export default function MyDevicesTab({ setup }) {
                       className="text-xs border border-gray-200 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
                     />
                   </div>
-                  <div className="flex items-center gap-1 mt-1">
-                    <FileText size={10} className="text-gray-300 flex-shrink-0" />
-                    <input
-                      type="text"
-                      placeholder="Add note..."
-                      value={noteInputs[nodeId] ?? savedNotes[nodeId] ?? ''}
-                      onChange={(e) => setNoteInputs((n) => ({ ...n, [nodeId]: e.target.value }))}
-                      onBlur={() => handleNoteBlur(nodeId)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleNoteBlur(nodeId)}
-                      className="text-xs border border-gray-200 rounded px-2 py-0.5 w-48 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
-                    />
-                  </div>
+                  {endpointCount === 0 && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <FileText size={10} className="text-gray-300 flex-shrink-0" />
+                      <input
+                        type="text"
+                        placeholder="Add note..."
+                        value={noteInputs[nodeId] ?? savedNotes[nodeId] ?? ''}
+                        onChange={(e) => setNoteInputs((n) => ({ ...n, [nodeId]: e.target.value }))}
+                        onBlur={() => handleNoteBlur(nodeId)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleNoteBlur(nodeId)}
+                        className="text-xs border border-gray-200 rounded px-2 py-0.5 w-48 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                      />
+                    </div>
+                  )}
                   {nodeStatus && (
                     <div className="text-xs text-gray-400 mt-0.5">
                       {nodeStatus.active
@@ -342,20 +391,34 @@ export default function MyDevicesTab({ setup }) {
                     const endpointId = row.accessory_id;
                     const endpointRoom = roomInputs[endpointId] ?? savedRooms[endpointId] ?? '';
                     return (
-                      <div key={endpointId} className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 w-28 truncate">
-                          {endpointId.split(':').slice(-1)[0]} {row.accessory_name ? `· ${row.accessory_name}` : ''}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <MapPin size={10} className="text-gray-300 flex-shrink-0" />
+                      <div key={endpointId} className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 w-28 truncate">
+                            {endpointId.split(':').slice(-1)[0]} {row.accessory_name ? `· ${row.accessory_name}` : ''}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <MapPin size={10} className="text-gray-300 flex-shrink-0" />
+                            <input
+                              type="text"
+                              placeholder="Add room name..."
+                              value={endpointRoom}
+                              onChange={(e) => setRoomInputs((r) => ({ ...r, [endpointId]: e.target.value }))}
+                              onBlur={() => handleRoomBlur(endpointId)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleRoomBlur(endpointId)}
+                              className="text-xs border border-gray-200 rounded px-2 py-0.5 w-40 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 ml-[7.5rem]">
+                          <FileText size={9} className="text-gray-300 flex-shrink-0" />
                           <input
                             type="text"
-                            placeholder="Add room name..."
-                            value={endpointRoom}
-                            onChange={(e) => setRoomInputs((r) => ({ ...r, [endpointId]: e.target.value }))}
-                            onBlur={() => handleRoomBlur(endpointId)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleRoomBlur(endpointId)}
-                            className="text-xs border border-gray-200 rounded px-2 py-0.5 w-40 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                            placeholder="Add note..."
+                            value={noteInputs[endpointId] ?? savedNotes[endpointId] ?? ''}
+                            onChange={(e) => setNoteInputs((n) => ({ ...n, [endpointId]: e.target.value }))}
+                            onBlur={() => handleNoteBlur(endpointId)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleNoteBlur(endpointId)}
+                            className="text-xs border border-gray-200 rounded px-2 py-0.5 w-44 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
                           />
                         </div>
                       </div>

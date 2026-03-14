@@ -3,6 +3,7 @@ import { useAccessories } from '../hooks/useEvents.js';
 import { getServiceIcon } from '../lib/icons.js';
 import { getRoomColor } from '../lib/roomColors.js';
 import { AlertTriangle, ChevronDown, ChevronRight, Network } from 'lucide-react';
+import clsx from 'clsx';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -75,22 +76,39 @@ export default function AccessoryList({ onSelectAccessory }) {
     );
   }
 
-  // Build a map of bridgeId → bridge name for "via …" labels on child accessories
-  const bridgeMap = accessories.reduce((m, a) => {
-    if (a.accessory_id.split(':').length === 6) m[a.accessory_id] = a.accessory_name;
-    return m;
-  }, {});
+  // Build a map of bridgeId → bridge accessory for bridge banners
+  const bridgeMap = {};
+  const nonBridgeAccessories = [];
+  for (const a of accessories) {
+    const parts = a.accessory_id.split(':');
+    const isBridge = parts.length === 6 && (a.category === 2 || !a.last_seen);
+    if (isBridge) {
+      bridgeMap[a.accessory_id] = a;
+    } else {
+      nonBridgeAccessories.push(a);
+    }
+  }
 
-  // Group by room, sort within each room by last_seen desc (never-seen at bottom)
-  const byRoom = accessories.reduce((acc, a) => {
+  // Group non-bridge accessories by room
+  const byRoom = nonBridgeAccessories.reduce((acc, a) => {
     const room = a.room_name ?? 'No room';
     if (!acc[room]) acc[room] = [];
     acc[room].push(a);
     return acc;
   }, {});
 
+  // Within each room, sort: group children by bridge first, then standalone,
+  // and within each group sort by last_seen desc
   for (const items of Object.values(byRoom)) {
     items.sort((a, b) => {
+      const aBridge = parentId(a.accessory_id) ?? '';
+      const bBridge = parentId(b.accessory_id) ?? '';
+      // Bridge children before standalone devices
+      if (aBridge && !bBridge) return -1;
+      if (!aBridge && bBridge) return 1;
+      // Group by same bridge
+      if (aBridge !== bBridge) return aBridge.localeCompare(bBridge);
+      // Within same group, sort by last_seen desc
       if (!a.last_seen && !b.last_seen) return 0;
       if (!a.last_seen) return 1;
       if (!b.last_seen) return -1;
@@ -119,13 +137,7 @@ export default function AccessoryList({ onSelectAccessory }) {
                 <span className="w-7 h-7 rounded-full flex items-center justify-center bg-blue-50">
                   <span className="w-3.5 h-3.5 rounded-full bg-blue-200" />
                 </span>
-                <span>Theme-accent service icon: accessory type (light, switch, sensor, lock, and others)</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-gray-600">
-                <span className="w-7 h-7 rounded-full flex items-center justify-center bg-blue-50">
-                  <Network size={14} className="text-blue-600" />
-                </span>
-                <span>Theme-accent network icon: bridge device</span>
+                <span>Service icon: accessory type (light, switch, sensor, lock, and others)</span>
               </div>
             </div>
           </div>
@@ -161,6 +173,20 @@ export default function AccessoryList({ onSelectAccessory }) {
         })
         .map(([room, items]) => {
         const roomColor = getRoomColor(room === 'No room' ? null : room);
+
+        // Build ordered list of rows with bridge banners inserted
+        const rows = [];
+        let lastBridgeId = null;
+        for (const accessory of items) {
+          const bridgeId = parentId(accessory.accessory_id);
+          if (bridgeId && bridgeId !== lastBridgeId) {
+            const bridge = bridgeMap[bridgeId];
+            rows.push({ type: 'bridge-banner', bridgeId, bridgeName: bridge?.accessory_name ?? bridgeId });
+          }
+          lastBridgeId = bridgeId;
+          rows.push({ type: 'accessory', accessory });
+        }
+
         return (
         <div key={room}>
           <div className="flex items-center gap-2 mb-2">
@@ -178,26 +204,40 @@ export default function AccessoryList({ onSelectAccessory }) {
             className="bg-white rounded-xl shadow-sm divide-y divide-gray-100 overflow-hidden"
             style={roomColor ? { borderLeft: `3px solid ${roomColor.dot}` } : {}}
           >
-            {items.map((accessory) => {
-              const parts      = accessory.accessory_id.split(':');
-              const isBridge   = parts.length === 6 && (accessory.category === 2 || !accessory.last_seen);
-              const childOf    = parentId(accessory.accessory_id);
-              const bridgeName = childOf ? bridgeMap[childOf] : null;
-              const Icon       = isBridge ? Network : getServiceIcon(accessory.service_type);
+            {rows.map((row) => {
+              if (row.type === 'bridge-banner') {
+                return (
+                  <div
+                    key={`bridge:${row.bridgeId}`}
+                    className="flex items-center gap-2 px-4 py-1.5 bg-gray-50/80"
+                  >
+                    <Network size={12} className="text-gray-400" />
+                    <span className="text-[11px] font-medium text-gray-400 tracking-wide">{row.bridgeName}</span>
+                  </div>
+                );
+              }
+
+              const accessory = row.accessory;
+              const Icon       = getServiceIcon(accessory.service_type);
               const dot        = activityDot(accessory.last_seen);
               const health     = accessory.health ?? {};
               const offlineFor = formatSeconds(health.offlineDurationSeconds);
               const heartbeatFor = formatSeconds(health.heartbeatSeconds);
-              const showStale = Boolean(health.isStale) && !isBridge;
+              const showStale = Boolean(health.isStale);
               const metadata = metadataSummary(accessory);
               const reliability = reliabilitySummary(accessory);
+              const bridgeId = parentId(accessory.accessory_id);
+              const isChild = Boolean(bridgeId);
 
               return (
                 <button
                   key={accessory.accessory_id}
                   type="button"
                   onClick={() => onSelectAccessory?.(accessory.accessory_id)}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                  className={clsx(
+                    'w-full flex items-center gap-3 py-3 text-left hover:bg-gray-50 transition-colors',
+                    isChild ? 'pl-6 pr-4' : 'px-4',
+                  )}
                 >
                   {/* Activity dot */}
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
@@ -211,73 +251,50 @@ export default function AccessoryList({ onSelectAccessory }) {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-900 truncate">{accessory.accessory_name}</div>
                     <div className="text-xs text-gray-400 mt-0.5 flex flex-wrap gap-x-1.5">
-                      {isBridge ? (
-                        // Bridge row: show IP + paired time
+                      {accessory.service_type
+                        ? <span>{accessory.service_type}</span>
+                        : <span className="italic">waiting for first event</span>
+                      }
+                      {accessory.last_seen && (
+                        <><span className="text-gray-300">·</span>
+                        <span>last seen {formatDistanceToNow(new Date(accessory.last_seen), { addSuffix: true })}</span></>
+                      )}
+                      {health.status && health.status !== 'online' && (
+                        <><span className="text-gray-300">·</span>
+                        <span>{health.status}</span></>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-gray-400 mt-0.5 flex flex-wrap gap-x-1.5">
+                      {metadata && (
+                        <span>{metadata}</span>
+                      )}
+                      {offlineFor && health.status !== 'online' && (
                         <>
-                          <span>Bridge</span>
-                          {accessory.address && (
-                            <><span className="text-gray-300">·</span><span>{accessory.address}</span></>
-                          )}
-                          {accessory.paired_at && (
-                            <><span className="text-gray-300">·</span>
-                            <span>paired {formatDistanceToNow(new Date(accessory.paired_at), { addSuffix: true })}</span></>
-                          )}
+                          {metadata && <span className="text-gray-300">·</span>}
+                          <span>offline for {offlineFor}</span>
                         </>
-                      ) : (
-                        // Child / standalone row
+                      )}
+                      {Number.isFinite(health.missedHeartbeats) && health.missedHeartbeats > 0 && (
                         <>
-                          {accessory.service_type
-                            ? <span>{accessory.service_type}</span>
-                            : <span className="italic">waiting for first event</span>
-                          }
-                          {bridgeName && (
-                            <><span className="text-gray-300">·</span>
-                            <span>via {bridgeName}</span></>
-                          )}
-                          {accessory.last_seen && (
-                            <><span className="text-gray-300">·</span>
-                            <span>last seen {formatDistanceToNow(new Date(accessory.last_seen), { addSuffix: true })}</span></>
-                          )}
-                          {health.status && health.status !== 'online' && (
-                            <><span className="text-gray-300">·</span>
-                            <span>{health.status}</span></>
-                          )}
+                          <span className="text-gray-300">·</span>
+                          <span>
+                            missed {health.missedHeartbeats} heartbeat{health.missedHeartbeats === 1 ? '' : 's'}
+                          </span>
+                        </>
+                      )}
+                      {heartbeatFor && (
+                        <>
+                          <span className="text-gray-300">·</span>
+                          <span>heartbeat ~{heartbeatFor}</span>
+                        </>
+                      )}
+                      {reliability && (
+                        <>
+                          <span className="text-gray-300">·</span>
+                          <span>{reliability}</span>
                         </>
                       )}
                     </div>
-                    {!isBridge && (
-                      <div className="text-[11px] text-gray-400 mt-0.5 flex flex-wrap gap-x-1.5">
-                        {metadata && (
-                          <span>{metadata}</span>
-                        )}
-                        {offlineFor && health.status !== 'online' && (
-                          <>
-                            {metadata && <span className="text-gray-300">·</span>}
-                            <span>offline for {offlineFor}</span>
-                          </>
-                        )}
-                        {Number.isFinite(health.missedHeartbeats) && health.missedHeartbeats > 0 && (
-                          <>
-                            <span className="text-gray-300">·</span>
-                            <span>
-                              missed {health.missedHeartbeats} heartbeat{health.missedHeartbeats === 1 ? '' : 's'}
-                            </span>
-                          </>
-                        )}
-                        {heartbeatFor && (
-                          <>
-                            <span className="text-gray-300">·</span>
-                            <span>heartbeat ~{heartbeatFor}</span>
-                          </>
-                        )}
-                        {reliability && (
-                          <>
-                            <span className="text-gray-300">·</span>
-                            <span>{reliability}</span>
-                          </>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                   {/* Event count badge */}

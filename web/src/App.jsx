@@ -448,7 +448,12 @@ export default function App() {
           <button
             type="button"
             onClick={() => setPreference(nextPreference)}
-            className="z-30 inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-500 shadow-sm backdrop-blur transition-all duration-200 hover:text-gray-700 hover:bg-gray-50"
+            className={clsx(
+              'z-30 inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm backdrop-blur transition-all duration-200',
+              isDarkTheme
+                ? 'border-gray-600 bg-gray-800/90 text-gray-300 hover:text-gray-100 hover:bg-gray-700/90'
+                : 'border-gray-200 bg-white/95 text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            )}
             aria-label={`Theme mode: ${preference}. Click to switch to ${nextPreference}.`}
             title={`Theme mode: ${preference}`}
           >
@@ -460,10 +465,13 @@ export default function App() {
             type="button"
             onClick={() => setIsSkinPickerOpen((current) => !current)}
             className={clsx(
-              'relative z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-500 shadow-sm backdrop-blur transition-all duration-200',
+              'relative z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm backdrop-blur transition-all duration-200',
+              isDarkTheme
+                ? 'border-gray-600 bg-gray-800/90 text-gray-300'
+                : 'border-gray-200 bg-white/95 text-gray-500',
               isSkinPickerOpen
-                ? 'text-blue-600 border-blue-300'
-                : 'hover:text-gray-700 hover:bg-gray-50'
+                ? isDarkTheme ? 'text-blue-400 border-blue-500' : 'text-blue-600 border-blue-300'
+                : isDarkTheme ? 'hover:text-gray-100 hover:bg-gray-700/90' : 'hover:text-gray-700 hover:bg-gray-50'
             )}
             aria-label={isSkinPickerOpen ? 'Hide color themes' : 'Show color themes'}
             aria-expanded={isSkinPickerOpen}
