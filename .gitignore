@@ -3,6 +3,8 @@
 .claude/
 .zed
 
+CLAUDE.md
+
 # HomeKit local runtime data — never commit these
 listener/data/
 
