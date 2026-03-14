@@ -285,7 +285,7 @@ export default function PinHelpModal({ deviceName, category, onClose }) {
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+      <div className="hc-modal bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between px-5 pt-5 pb-3 border-b border-gray-100">
           <div>
