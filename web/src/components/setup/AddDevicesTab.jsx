@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   RefreshCw, CheckCircle, Circle, Loader, Lock, ChevronsRight,
-  HelpCircle, Wifi,
+  HelpCircle, Wifi, X,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
@@ -9,7 +9,7 @@ import PinHelpModal from '../PinHelpModal.jsx';
 import MatterHelpModal from '../MatterHelpModal.jsx';
 import { CATEGORY_LABELS } from './constants.js';
 
-export default function AddDevicesTab({ setup }) {
+export default function AddDevicesTab({ setup, onSwitchTab }) {
   const {
     discoveredData,
     discoveredLoading,
@@ -17,6 +17,7 @@ export default function AddDevicesTab({ setup }) {
     scanMutation,
     savedPins,
     savePin,
+    clearPin,
     resolvePin,
     pairOne,
     pairSelectedIds,
@@ -298,21 +299,36 @@ export default function AddDevicesTab({ setup }) {
                         </div>
                         {!isSuccess && (
                           <div className="flex flex-col items-end gap-1">
-                            <input
-                              type="text"
-                              placeholder={hasSavedPin ? '(saved)' : 'PIN'}
-                              value={pinOverrides[acc.id] ?? ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setPinOverrides((p) => ({ ...p, [acc.id]: val }));
-                                if (val.trim()) savePin(acc.id, val.trim());
-                              }}
-                              disabled={isPairing}
-                              className={clsx(
-                                'w-28 px-2 py-0.5 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 placeholder-gray-300',
-                                hasSavedPin ? 'border-green-300 bg-green-50 placeholder-green-400' : 'border-gray-200',
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                placeholder={hasSavedPin ? '(saved)' : 'PIN'}
+                                value={pinOverrides[acc.id] ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setPinOverrides((p) => ({ ...p, [acc.id]: val }));
+                                  if (val.trim()) savePin(acc.id, val.trim());
+                                  else clearPin(acc.id);
+                                }}
+                                disabled={isPairing}
+                                className={clsx(
+                                  'w-28 px-2 py-0.5 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 placeholder-gray-300',
+                                  hasSavedPin ? 'border-green-300 bg-green-50 placeholder-green-400' : 'border-gray-200',
+                                )}
+                              />
+                              {hasSavedPin && !isPairing && (
+                                <button
+                                  onClick={() => {
+                                    clearPin(acc.id);
+                                    setPinOverrides((p) => ({ ...p, [acc.id]: '' }));
+                                  }}
+                                  title="Clear saved PIN"
+                                  className="p-0.5 text-gray-400 hover:text-red-500 transition-colors"
+                                >
+                                  <X size={12} />
+                                </button>
                               )}
-                            />
+                            </div>
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => setHelpDevice({ name: acc.name, category: acc.category })}
@@ -333,7 +349,18 @@ export default function AddDevicesTab({ setup }) {
                         )}
                       </div>
                       {isSuccess && (
-                        <p className="mt-1 ml-6 text-xs text-green-600">{status.message}</p>
+                        <div className="mt-1 ml-6">
+                          <p className="text-xs text-green-600">{status.message}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5">
+                            Assign a room in{' '}
+                            <button
+                              onClick={() => onSwitchTab('devices')}
+                              className="text-blue-600 hover:underline"
+                            >
+                              My Devices
+                            </button>
+                          </p>
+                        </div>
                       )}
                       {isError && (
                         <div className="mt-1 ml-6 bg-red-50 border border-red-100 rounded px-2 py-1">
@@ -371,6 +398,7 @@ export default function AddDevicesTab({ setup }) {
           setMatterAdvancedOpen={setMatterAdvancedOpen}
           handleMatterSubmit={handleMatterSubmit}
           onOpenHelp={() => setMatterHelpOpen(true)}
+          onSwitchTab={onSwitchTab}
         />
       </div>
 
@@ -392,6 +420,7 @@ function MatterCard({
   setMatterAdvancedOpen,
   handleMatterSubmit,
   onOpenHelp,
+  onSwitchTab,
 }) {
   const {
     commissionConfigured,
@@ -574,7 +603,18 @@ function MatterCard({
                     </div>
                   )}
                   {isSuccess && (
-                    <p className="ml-6 text-xs text-green-600">{status.message}</p>
+                    <div className="ml-6">
+                      <p className="text-xs text-green-600">{status.message}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        Assign a room in{' '}
+                        <button
+                          onClick={() => onSwitchTab('devices')}
+                          className="text-blue-600 hover:underline"
+                        >
+                          My Devices
+                        </button>
+                      </p>
+                    </div>
                   )}
                   {isError && (
                     <div className="ml-6 bg-red-50 border border-red-100 rounded px-2 py-1">
@@ -608,6 +648,17 @@ function MatterCard({
           )}
         >
           {matterFeedback.message}
+          {matterFeedback.type === 'success' && (
+            <p className="text-[11px] text-gray-500 mt-1">
+              Assign a room in{' '}
+              <button
+                onClick={() => onSwitchTab('devices')}
+                className="text-blue-600 hover:underline"
+              >
+                My Devices
+              </button>
+            </p>
+          )}
         </div>
       )}
 

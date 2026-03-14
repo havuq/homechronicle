@@ -598,16 +598,22 @@ app.post('/api/setup/pair', async (req, res) => {
     log.error(`[setup] Pairing failed for ${deviceId}:`, err.message ?? err.stack ?? err);
     const msg = err.message ?? '';
     let friendly = 'Pairing failed: ' + err.message;
-    if (msg.includes('0x02') || /authentication/i.test(msg))
+    // hap-controller reports TLV errors as "M<step>: Error: <code>" (decimal)
+    // or older hex forms like 0x02. Match both.
+    if (msg.includes('0x02') || /Error:\s*2\b/.test(msg) || /authentication/i.test(msg))
       friendly = 'Wrong PIN — double-check the code on the device label and try again.';
-    else if (msg.includes('0x04') || /maxpeers/i.test(msg))
+    else if (msg.includes('0x03') || /Error:\s*3\b/.test(msg) || /backoff/i.test(msg))
+      friendly = 'Device asked to slow down (backoff) — wait 30 seconds and try again.';
+    else if (msg.includes('0x04') || /Error:\s*4\b/.test(msg) || /maxpeers/i.test(msg))
       friendly = 'This device has reached its pairing limit. In Apple Home, long-press the accessory -> remove it, then re-add it to free a slot, then try pairing here again.';
-    else if (msg.includes('0x05') || /maxtries/i.test(msg))
+    else if (msg.includes('0x05') || /Error:\s*5\b/.test(msg) || /maxtries/i.test(msg))
       friendly = 'Too many failed attempts — wait a few minutes before trying again.';
-    else if (msg.includes('0x06') || /unavailable/i.test(msg))
+    else if (msg.includes('0x06') || /Error:\s*6\b/.test(msg) || /unavailable/i.test(msg))
       friendly = 'Device is unavailable. Make sure it\'s powered on and on the same network, then try again.';
-    else if (msg.includes('0x07') || /busy/i.test(msg))
+    else if (msg.includes('0x07') || /Error:\s*7\b/.test(msg) || /busy/i.test(msg))
       friendly = 'Device is busy — wait a moment and try again.';
+    else if (msg.includes('0x01') || /Error:\s*1\b/.test(msg))
+      friendly = 'Device returned an unknown error. Try again — if it persists, restart the device.';
     else if (/ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(msg))
       friendly = 'Could not reach the device. Run a new scan to refresh its address, then try again.';
     res.status(400).json({ error: friendly });

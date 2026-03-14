@@ -379,4 +379,13 @@ html.hc-standalone .hc-fab {
   html.theme-dark .text-blue-800 {
     color: rgba(var(--hc-accent-rgb), 0.95) !important;
   }
+
+  html.theme-dark .hc-footer {
+    background-color: var(--hc-panel);
+    border-color: var(--hc-panel-border) !important;
+  }
+
+  html.theme-dark .hc-footer .text-gray-300 {
+    color: #475569 !important;
+  }
 }

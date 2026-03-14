@@ -227,6 +227,13 @@ export function useSetup() {
     localStorage.setItem('hc_pins', JSON.stringify(next));
   }
 
+  function clearPin(id) {
+    const next = { ...savedPins };
+    delete next[id];
+    setSavedPins(next);
+    localStorage.setItem('hc_pins', JSON.stringify(next));
+  }
+
   function resolvePin(id) {
     return savedPins[id]?.trim() || '';
   }
@@ -344,6 +351,7 @@ export function useSetup() {
     // PIN vault
     savedPins,
     savePin,
+    clearPin,
     resolvePin,
 
     // Room editing

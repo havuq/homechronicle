@@ -29,7 +29,7 @@ export default function SetupTabs() {
         ))}
       </nav>
 
-      {activeTab === 'add' && <AddDevicesTab setup={setup} />}
+      {activeTab === 'add' && <AddDevicesTab setup={setup} onSwitchTab={setActiveTab} />}
       {activeTab === 'devices' && <MyDevicesTab setup={setup} />}
       {activeTab === 'settings' && <SettingsTab setup={setup} />}
     </div>
