@@ -107,7 +107,7 @@ export default function EventRow({ event, hoveredCell = null, meta = {}, onMute,
               className="text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0"
               style={roomColor
                 ? { backgroundColor: roomColor.bg, color: roomColor.text }
-                : { color: '#9ca3af' }}
+                : { color: 'var(--hc-room-fallback)' }}
             >
               {event.room_name}
             </span>

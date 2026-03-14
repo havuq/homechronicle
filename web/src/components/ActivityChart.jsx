@@ -23,7 +23,7 @@ function utcHoursToLocal(apiRows = []) {
   });
 }
 
-const TOOLTIP_STYLE = { fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' };
+const TOOLTIP_STYLE = { fontSize: 12, borderRadius: 8, border: '1px solid var(--hc-tooltip-border)', backgroundColor: 'var(--hc-tooltip-bg)', color: 'var(--hc-tooltip-text)' };
 
 export default function ActivityChart() {
   const accent = useAccentRgb();
@@ -47,15 +47,15 @@ export default function ActivityChart() {
       </div>
       <ResponsiveContainer width="100%" height={180}>
         <BarChart data={chartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--hc-chart-grid)" vertical={false} />
           <XAxis
             dataKey="hour"
-            tick={{ fontSize: 10, fill: '#9ca3af' }}
+            tick={{ fontSize: 10, fill: 'var(--hc-chart-tick)' }}
             interval={5}
             tickLine={false}
             axisLine={false}
           />
-          <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 10, fill: 'var(--hc-chart-tick)' }} tickLine={false} axisLine={false} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
             formatter={(val) => [val, 'events']}

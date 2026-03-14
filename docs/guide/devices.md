@@ -124,6 +124,25 @@ MATTER_SUBSCRIBE_ENABLED=false
 - Relative Humidity Measurement
 - Occupancy Sensing
 
+## Device Notes
+
+You can attach a free-text note to any accessory. Notes are visible on the device detail page and useful for recording PIN codes, firmware versions, physical location, or other reminders.
+
+**From the Web UI:**
+- Go to **Accessories** > click a device > edit the **Notes** field
+
+**From the API:**
+```bash
+curl -X PATCH http://localhost:3001/api/setup/note \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: <token>" \
+  -d '{"accessoryId": "<id>", "note": "PIN: 111-22-333, mounted above garage door"}'
+```
+
+To clear a note, send an empty string or `null` for the `note` field.
+
+Notes are stored in `listener/data/notes.json`.
+
 ## Event Subscriptions
 
 Once paired, the listener maintains persistent connections to all HomeKit accessories. For each state change (light on/off, temperature reading, motion detected, etc.), the listener:

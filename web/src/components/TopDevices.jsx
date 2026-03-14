@@ -101,7 +101,7 @@ export default function TopDevices({ forcedDays = null, onDaysChange = null }) {
                     className="text-[10px] px-1 py-px rounded-full font-medium"
                     style={roomColor
                       ? { backgroundColor: roomColor.bg, color: roomColor.text }
-                      : { color: '#9ca3af' }}
+                      : { color: 'var(--hc-room-fallback)' }}
                   >
                     {device.room_name}
                   </span>

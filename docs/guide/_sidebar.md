@@ -5,6 +5,7 @@
 - **Reference**
   - [API Reference](api-reference.md)
   - [Architecture](architecture.md)
+  - [Appearance](appearance.md)
   - [Environment Variables](environment-variables.md)
 - **Help**
   - [Troubleshooting](troubleshooting.md)

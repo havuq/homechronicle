@@ -87,7 +87,7 @@ export default function MonthlyHeatmap() {
                   width: LABEL_W,
                   flexShrink: 0,
                   fontSize: 10,
-                  color: '#6b7280',
+                  color: 'var(--hc-chart-label)',
                   textAlign: 'right',
                   paddingRight: 6,
                   lineHeight: `${CELL}px`,
@@ -136,7 +136,7 @@ export default function MonthlyHeatmap() {
                   width: CELL + GAP,
                   flexShrink: 0,
                   fontSize: 9,
-                  color: '#94a3b8',
+                  color: 'var(--hc-chart-sublabel)',
                   textAlign: 'left',
                 }}
               >

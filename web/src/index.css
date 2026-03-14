@@ -21,6 +21,15 @@ input[type="checkbox"] {
 
     --hc-glow-1: rgba(37, 99, 235, 0.14);
     --hc-glow-2: rgba(14, 165, 233, 0.11);
+
+    --hc-chart-grid: #f3f4f6;
+    --hc-chart-tick: #9ca3af;
+    --hc-chart-label: #6b7280;
+    --hc-chart-sublabel: #94a3b8;
+    --hc-tooltip-bg: #ffffff;
+    --hc-tooltip-border: #e5e7eb;
+    --hc-tooltip-text: #1f2937;
+    --hc-room-fallback: #9ca3af;
   }
 
   html,
@@ -53,6 +62,15 @@ input[type="checkbox"] {
     --hc-panel-soft: #111827;
     --hc-panel-border: #1e293b;
     --hc-shadow: 0 12px 24px -16px rgba(2, 6, 23, 0.75);
+
+    --hc-chart-grid: #1e293b;
+    --hc-chart-tick: #64748b;
+    --hc-chart-label: #94a3b8;
+    --hc-chart-sublabel: #64748b;
+    --hc-tooltip-bg: #1e293b;
+    --hc-tooltip-border: #334155;
+    --hc-tooltip-text: #e2e8f0;
+    --hc-room-fallback: #64748b;
   }
 
   html[data-skin='ocean'] {
@@ -544,6 +562,46 @@ html.hc-standalone .hc-fab {
   html.theme-dark .hc-modal .hover\:bg-gray-700:hover {
     background-color: #cbd5e1 !important;
     color: #0f172a !important;
+  }
+
+  /* ── Amber badges & panels ── */
+  html.theme-dark .bg-amber-50,
+  html.theme-dark .bg-amber-50\/70 {
+    background-color: rgba(180, 83, 9, 0.15) !important;
+  }
+  html.theme-dark .border-amber-100,
+  html.theme-dark .border-amber-200 {
+    border-color: rgba(180, 83, 9, 0.3) !important;
+  }
+  html.theme-dark .text-amber-600,
+  html.theme-dark .text-amber-700 {
+    color: #fbbf24 !important;
+  }
+
+  /* ── Emerald badges ── */
+  html.theme-dark .bg-emerald-50 {
+    background-color: rgba(16, 185, 129, 0.12) !important;
+  }
+  html.theme-dark .border-emerald-100,
+  html.theme-dark .border-emerald-200 {
+    border-color: rgba(16, 185, 129, 0.25) !important;
+  }
+  html.theme-dark .text-emerald-600,
+  html.theme-dark .text-emerald-700 {
+    color: #6ee7b7 !important;
+  }
+
+  /* ── Sky dot (AccessoryList "never seen") ── */
+  html.theme-dark .bg-sky-300 {
+    background-color: #38bdf8 !important;
+  }
+
+  /* ── Hover tints with opacity ── */
+  html.theme-dark .hover\:bg-blue-50\/60:hover {
+    background-color: rgba(var(--hc-accent-rgb), 0.14) !important;
+  }
+  html.theme-dark .hover\:bg-emerald-50\/60:hover {
+    background-color: rgba(16, 185, 129, 0.14) !important;
   }
 
   html.theme-dark .hc-footer {

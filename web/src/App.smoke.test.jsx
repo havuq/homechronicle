@@ -7,6 +7,7 @@ vi.mock('./components/ActivityChart.jsx', () => ({ default: () => <div>Activity 
 vi.mock('./components/TrendChart.jsx', () => ({ default: () => <div>Trend Chart</div> }));
 vi.mock('./components/TopDevices.jsx', () => ({ default: () => <div>Top Devices</div> }));
 vi.mock('./components/AnomalyPanel.jsx', () => ({ default: () => <div>Anomaly Panel</div> }));
+vi.mock('./components/QuietHoursPanel.jsx', () => ({ default: () => <div>Quiet Hours Panel</div> }));
 vi.mock('./components/HeatmapLane.jsx', () => ({ default: () => <div>Heatmap Lane</div> }));
 vi.mock('./components/RoomChart.jsx', () => ({ default: () => <div>Room Chart</div> }));
 vi.mock('./components/WeekdayHeatmap.jsx', () => ({ default: () => <div>Weekday Heatmap</div> }));

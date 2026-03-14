@@ -105,7 +105,7 @@ function HeatmapGrid({ data, onHoverCell, onHoverEnd, onClickCell, lockedCell })
           {devices.map(([name, hours]) => (
             <div key={name} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
               <div
-                style={{ width: LABEL, flexShrink: 0, paddingRight: 8, textAlign: 'right', fontSize: 10, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: `${CELL}px` }}
+                style={{ width: LABEL, flexShrink: 0, paddingRight: 8, textAlign: 'right', fontSize: 10, color: 'var(--hc-chart-label)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: `${CELL}px` }}
                 title={name}
               >
                 {name}
@@ -157,7 +157,7 @@ function HeatmapGrid({ data, onHoverCell, onHoverEnd, onClickCell, lockedCell })
           {/* Time-of-day axis */}
           <div style={{ display: 'flex', marginLeft: LABEL, marginTop: 3 }}>
             {['midnight', '6 am', 'noon', '6 pm', ''].map((label, i) => (
-              <div key={i} style={{ width: 6 * (CELL + GAP), flexShrink: 0, fontSize: 9, color: '#94a3b8' }}>
+              <div key={i} style={{ width: 6 * (CELL + GAP), flexShrink: 0, fontSize: 9, color: 'var(--hc-chart-sublabel)' }}>
                 {label}
               </div>
             ))}

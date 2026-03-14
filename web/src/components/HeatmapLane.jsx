@@ -81,7 +81,7 @@ export default function HeatmapLane() {
                   paddingRight: 10,
                   textAlign:    'right',
                   fontSize:     11,
-                  color:        '#4b5563',
+                  color:        'var(--hc-chart-label)',
                   overflow:     'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace:   'nowrap',
@@ -131,7 +131,7 @@ export default function HeatmapLane() {
                   width:      6 * (CELL + GAP),
                   flexShrink: 0,
                   fontSize:   10,
-                  color:      '#94a3b8',
+                  color:      'var(--hc-chart-sublabel)',
                 }}
               >
                 {label}

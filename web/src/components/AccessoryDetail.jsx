@@ -17,7 +17,7 @@ const WINDOWS = [
   { label: '30d', days: 30 },
   { label: '90d', days: 90 },
 ];
-const TOOLTIP_STYLE = { fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' };
+const TOOLTIP_STYLE = { fontSize: 12, borderRadius: 8, border: '1px solid var(--hc-tooltip-border)', backgroundColor: 'var(--hc-tooltip-bg)', color: 'var(--hc-tooltip-text)' };
 
 function formatSeconds(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return 'n/a';
@@ -76,16 +76,16 @@ function CharacteristicTrend({ accessoryId, characteristic, days }) {
     <div className="mt-3">
       <ResponsiveContainer width="100%" height={130}>
         <LineChart data={chartData.values} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--hc-chart-grid)" vertical={false} />
           <XAxis
             dataKey="time"
-            tick={{ fontSize: 9, fill: '#9ca3af' }}
+            tick={{ fontSize: 9, fill: 'var(--hc-chart-tick)' }}
             interval="preserveStartEnd"
             tickLine={false}
             axisLine={false}
           />
           <YAxis
-            tick={{ fontSize: 9, fill: '#9ca3af' }}
+            tick={{ fontSize: 9, fill: 'var(--hc-chart-tick)' }}
             tickLine={false}
             axisLine={false}
             domain={chartData.isNumeric ? ['auto', 'auto'] : [0, 1]}
@@ -407,15 +407,15 @@ export default function AccessoryDetail({ accessoryId, onBack }) {
                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.01} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--hc-chart-grid)" vertical={false} />
                 <XAxis
                   dataKey="day"
-                  tick={{ fontSize: 10, fill: '#9ca3af' }}
+                  tick={{ fontSize: 10, fill: 'var(--hc-chart-tick)' }}
                   interval={days <= 14 ? 0 : days <= 30 ? 6 : 13}
                   tickLine={false}
                   axisLine={false}
                 />
-                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--hc-chart-tick)' }} tickLine={false} axisLine={false} />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   formatter={(value) => [value, 'events']}

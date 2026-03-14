@@ -96,7 +96,7 @@ export default function RoomChart({ forcedDays = null, onDaysChange = null }) {
                   style={
                     roomColor
                       ? { backgroundColor: roomColor.bg, color: roomColor.text }
-                      : { color: '#9ca3af' }
+                      : { color: 'var(--hc-room-fallback)' }
                   }
                 >
                   {row.room_name || 'Unknown'}

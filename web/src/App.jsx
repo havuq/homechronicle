@@ -415,7 +415,7 @@ export default function App() {
                 ? 'translate-x-0 opacity-100 pointer-events-auto'
                 : 'translate-x-8 opacity-0 pointer-events-none'
             )}
-            style={isDarkTheme ? { backgroundColor: 'rgba(255,255,255,0.92)', borderColor: 'rgba(148,163,184,0.55)' } : undefined}
+            style={isDarkTheme ? { backgroundColor: 'rgba(30,41,59,0.95)', borderColor: 'rgba(71,85,105,0.7)' } : undefined}
             aria-hidden={!isSkinPickerOpen}
           >
             {STYLES.map((style) => (
@@ -431,7 +431,7 @@ export default function App() {
                       ? 'ring-1 ring-slate-300 hover:ring-slate-400'
                       : 'ring-1 ring-gray-300 hover:ring-gray-400'
                 )}
-                style={isDarkTheme ? { backgroundColor: 'rgba(255,255,255,0.86)' } : undefined}
+                style={isDarkTheme ? { backgroundColor: 'rgba(30,41,59,0.8)' } : undefined}
                 aria-label={`Use ${style.label} color theme`}
                 title={style.label}
               >
@@ -440,7 +440,7 @@ export default function App() {
                     'block h-full w-full rounded-full bg-gradient-to-br',
                     isDarkTheme ? SKIN_SWATCH_DARK[style.id] : SKIN_SWATCH[style.id]
                   )}
-                  style={isDarkTheme ? { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.52)' } : undefined}
+                  style={isDarkTheme ? { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.15)' } : undefined}
                 />
               </button>
             ))}

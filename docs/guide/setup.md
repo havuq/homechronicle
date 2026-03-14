@@ -60,6 +60,37 @@ Edit `.env` with at minimum:
 
 For the full list, see [Environment Variables](environment-variables.md).
 
+### Event Retention & Archiving
+
+By default, events older than `RETENTION_DAYS` (365) are swept daily. Before deletion, expired events are copied to the `event_logs_archive` table so historical data is preserved.
+
+You can toggle archiving from **Manage** > **Settings** > **Archive before delete**, or via the API:
+
+```bash
+curl -X PATCH http://localhost:3001/api/setup/retention \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: <token>" \
+  -d '{"archiveBeforeDelete": false}'
+```
+
+When disabled, expired events are permanently deleted — this saves disk space but the data cannot be recovered.
+
+### Quiet Hours
+
+Quiet hours flag unexpected device activity during a time window you define (e.g., 11 PM – 6 AM). Events that fire during quiet hours are highlighted on the dashboard and timeline.
+
+Enable from **Manage** > **Settings**, or via the API:
+
+```bash
+curl -X PATCH http://localhost:3001/api/setup/retention \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: <token>" \
+  -d '{"quietHoursEnabled": true, "quietHoursStart": 23, "quietHoursEnd": 6}'
+```
+
+- `quietHoursStart` and `quietHoursEnd` are hours in UTC (0–23)
+- The dashboard shows a **Quiet Hours** panel when enabled, listing any activity during the window
+
 ## Networking
 
 ### Host Mode (Recommended)
