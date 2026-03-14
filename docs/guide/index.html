@@ -220,21 +220,34 @@
     }
 
     .markdown-section table {
-      font-size: 14px;
+      font-size: 13px;
       border-collapse: collapse;
       width: 100%;
+      table-layout: auto;
     }
 
     .markdown-section table th {
-      font-weight: 700;
+      font-weight: 600;
       text-align: left;
       background: var(--bg-alt);
+      white-space: nowrap;
     }
 
     .markdown-section table td,
     .markdown-section table th {
-      padding: 10px 14px;
+      padding: 6px 10px;
       border: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .markdown-section table td:first-child {
+      white-space: nowrap;
+    }
+
+    .markdown-section table td code,
+    .markdown-section table th code {
+      font-size: 12px;
+      padding: 1px 5px;
     }
 
     .markdown-section code {
