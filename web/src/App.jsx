@@ -20,7 +20,8 @@ import BrandLogo from './components/BrandLogo.jsx';
 import ChangelogModal from './components/ChangelogModal.jsx';
 import { useTheme } from './hooks/useTheme.js';
 import { useSkin } from './hooks/useSkin.js';
-import { ExternalLink, Sparkles } from 'lucide-react';
+import { useUpdateCheck } from './hooks/useUpdateCheck.js';
+import { ExternalLink, Sparkles, ArrowUpCircle } from 'lucide-react';
 
 const CHANGELOG_VERSION_KEY = 'hc_last_seen_version';
 
@@ -94,6 +95,7 @@ export default function App() {
   const [hasNewVersion, setHasNewVersion] = useState(false);
   const { preference, resolvedTheme, setPreference } = useTheme();
   const { skin, setSkin } = useSkin();
+  const { update: availableUpdate, dismiss: dismissUpdate } = useUpdateCheck(__BUILD_VERSION__);
   const isDarkTheme = resolvedTheme === 'dark';
   const nextPreference =
     preference === 'system' ? 'light' :
@@ -369,6 +371,27 @@ export default function App() {
           <span>Build {__BUILD_VERSION__.length > 12 ? __BUILD_VERSION__.slice(0, 7) + '\u2026' : __BUILD_VERSION__}</span>
           {hasNewVersion && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
         </button>
+        {availableUpdate && (
+          <>
+            <span className="text-gray-300">·</span>
+            <a
+              href={availableUpdate.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hc-update-badge inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-700 hover:bg-green-100 transition-colors"
+            >
+              <ArrowUpCircle size={11} />
+              <span>{availableUpdate.tag} available</span>
+            </a>
+            <button
+              onClick={dismissUpdate}
+              title="Dismiss update notice"
+              className="text-gray-300 hover:text-gray-500 transition-colors"
+            >
+              &times;
+            </button>
+          </>
+        )}
         <span className="text-gray-300">·</span>
         <a
           href="https://github.com/havuq/homechronicle/issues"
