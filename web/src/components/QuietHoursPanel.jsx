@@ -20,18 +20,28 @@ function formatLastSeen(ts) {
 export default function QuietHoursPanel() {
   const { data, isLoading, isError } = useQuietHours();
 
+  const header = (
+    <div className="flex items-center gap-2 mb-3">
+      <Moon size={14} className="text-indigo-400" />
+      <h3 className="text-sm font-semibold text-gray-700">Quiet Hours</h3>
+    </div>
+  );
+
   if (isLoading) {
-    return <div className="text-sm text-gray-400">Checking quiet hours…</div>;
+    return <div>{header}<p className="text-sm text-gray-400">Checking quiet hours…</p></div>;
   }
   if (isError) {
-    return <div className="text-sm text-red-500">Failed to load quiet hours data.</div>;
+    return <div>{header}<p className="text-sm text-gray-400">Unable to load quiet hours data.</p></div>;
   }
 
   if (data?.enabled === false) {
     return (
-      <p className="text-sm text-gray-400">
-        Configure quiet hours in Settings to flag unexpected nighttime activity.
-      </p>
+      <div>
+        {header}
+        <p className="text-sm text-gray-400">
+          Configure quiet hours in Settings to flag unexpected nighttime activity.
+        </p>
+      </div>
     );
   }
 
@@ -41,9 +51,12 @@ export default function QuietHoursPanel() {
 
   if (!events.length) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
-        <span>No unexpected activity during quiet hours ({startLocal} – {endLocal})</span>
+      <div>
+        {header}
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
+          <span>No unexpected activity during quiet hours ({startLocal} – {endLocal})</span>
+        </div>
       </div>
     );
   }
@@ -51,7 +64,10 @@ export default function QuietHoursPanel() {
   return (
     <div>
       <div className="flex items-baseline justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">Quiet Hours Activity</h3>
+        <div className="flex items-center gap-2">
+          <Moon size={14} className="text-indigo-400" />
+          <h3 className="text-sm font-semibold text-gray-700">Quiet Hours Activity</h3>
+        </div>
         <span className="text-xs text-gray-400">{startLocal} – {endLocal}</span>
       </div>
       <div className="space-y-2">

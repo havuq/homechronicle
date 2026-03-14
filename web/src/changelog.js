@@ -9,6 +9,15 @@
  */
 const CHANGELOG = [
   {
+    version: 'v0.1.3-beta.5',
+    date: '2026-03-13',
+    title: 'Quiet hours card polish',
+    items: [
+      'Quiet hours card now always shows a header with icon, matching other dashboard cards',
+      'Quiet hours error state softened to a neutral message instead of alarming red text',
+    ],
+  },
+  {
     version: 'v0.1.3-beta.4',
     date: '2026-03-13',
     title: 'Pairing safeguard & timeline episodes',
