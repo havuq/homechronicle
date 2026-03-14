@@ -534,6 +534,15 @@ html.hc-standalone .hc-fab {
     color: #64748b !important;
   }
 
+  /* X close button — override .text-gray-400 to stay visible on dark panels */
+  html.theme-dark .hc-modal .hc-modal-close {
+    color: #94a3b8 !important;
+  }
+  html.theme-dark .hc-modal .hc-modal-close:hover {
+    color: #e2e8f0 !important;
+    background-color: #334155 !important;
+  }
+
   /* Code blocks inside modals */
   html.theme-dark .hc-modal code {
     background-color: rgba(30, 41, 59, 0.8) !important;

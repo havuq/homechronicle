@@ -9,6 +9,7 @@ on:
 
 jobs:
   build:
+    name: Build ${{ matrix.service }}
     runs-on: ubuntu-latest
     env:
       # Keep GA locked by default; set repository variable GA_RELEASES_ENABLED=true after GA sign-off.

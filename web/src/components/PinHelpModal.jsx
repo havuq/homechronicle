@@ -296,7 +296,7 @@ export default function PinHelpModal({ deviceName, category, onClose }) {
           </div>
           <button
             onClick={onClose}
-            className="ml-3 flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            className="hc-modal-close ml-3 flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
           >
             <X size={18} />
           </button>
