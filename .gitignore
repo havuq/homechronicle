@@ -4,6 +4,7 @@
 .zed
 
 CLAUDE.md
+.mailmap
 
 # HomeKit local runtime data — never commit these
 listener/data/
