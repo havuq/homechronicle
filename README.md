@@ -1,6 +1,6 @@
-# HomeChronicle
+# homechronicle
 
-HomeChronicle is a self-hosted event log for Apple HomeKit.
+homechronicle is a self-hosted event log for Apple HomeKit.
 It shows what happened in your home over time, not just the current state.
 
 ## What You Get
