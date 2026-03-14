@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>homechronicle docs</title>
+  <meta name="description" content="Documentation for homechronicle — self-hosted event logging for Apple HomeKit and Matter devices.">
+  <link rel="icon" href="../assets/icon.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple.css">
+  <style>
+    /* ── Landing-page design tokens ── */
+    :root {
+      --primary: #4f46e5;
+      --primary-light: #6366f1;
+      --primary-dark: #3730a3;
+      --bg: #ffffff;
+      --bg-alt: #f8fafc;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --text-light: #94a3b8;
+      --border: #e2e8f0;
+
+      /* Docsify overrides */
+      --base-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --base-font-size: 15px;
+      --base-line-height: 1.7;
+      --base-color: var(--text);
+      --theme-color: var(--primary);
+      --sidebar-width: 260px;
+      --sidebar-background: var(--bg-alt);
+      --sidebar-border-color: var(--border);
+      --sidebar-border-width: 1px;
+      --sidebar-nav-link-color: var(--text-secondary);
+      --sidebar-nav-link-color--active: var(--primary);
+      --sidebar-nav-link-border-color--active: var(--primary);
+      --sidebar-nav-link-font-weight--active: 600;
+      --sidebar-name-font-weight: 700;
+      --link-color: var(--primary);
+      --link-color--hover: var(--primary-light);
+      --heading-color: var(--text);
+      --heading-font-weight: 800;
+      --code-theme-background: var(--bg-alt);
+      --code-inline-background: #f1f5f9;
+      --code-inline-color: var(--primary-dark);
+      --blockquote-border-color: var(--primary);
+      --notice-tip-border-color: var(--primary);
+      --table-head-background: var(--bg-alt);
+      --table-cell-border-color: var(--border);
+    }
+
+    /* ── Brand header bar (matches landing page nav) ── */
+    .brand-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 200;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 0;
+    }
+
+    .brand-header-inner {
+      margin: 0;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand-header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-header a.brand-logo {
+      display: inline-flex;
+      align-items: baseline;
+      text-decoration: none;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .brand-header a.brand-logo .brand-home { color: #0f172a; }
+    .brand-header a.brand-logo .brand-chronicle { color: #1d4ed8; }
+    .brand-header a.brand-logo:hover .brand-chronicle { color: var(--primary-light); }
+
+    /* ── Sidebar "Documentation" heading ── */
+    .sidebar .app-name-link {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-light) !important;
+      padding: 0 24px;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .brand-header-right {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+
+    .brand-header-right a {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .brand-header-right a:hover { color: var(--text); }
+
+    .brand-header-right .github-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      background: var(--text);
+      color: white !important;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .brand-header-right .github-link:hover {
+      background: var(--primary);
+      color: white !important;
+    }
+
+    .brand-header-right .github-link svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    /* ── Push Docsify below the header ── */
+    body {
+      padding-top: 60px;
+    }
+
+    /* Sidebar starts below header */
+    body .sidebar {
+      padding-top: 16px;
+      top: 60px;
+      height: calc(100vh - 60px);
+    }
+
+    /* Main content starts below header */
+    body .content {
+      padding-top: 24px;
+    }
+
+    /* ── Sidebar refinements ── */
+    .sidebar .sidebar-nav {
+      padding: 0 16px;
+    }
+
+    .sidebar .sidebar-nav li a {
+      font-size: 14px;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    .sidebar .sidebar-nav li a:hover {
+      background: var(--border);
+    }
+
+    .sidebar .sidebar-nav > ul > li > p {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-light);
+      margin-top: 16px;
+      margin-bottom: 4px;
+      padding: 0 8px;
+    }
+
+    /* Style the Docsify sidebar name as a section label */
+    .sidebar .app-name {
+      padding: 0 16px;
+      margin-bottom: 4px;
+    }
+
+    /* ── Typography to match landing page ── */
+    .markdown-section h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      border-bottom: none;
+      margin-top: 0;
+      padding-bottom: 0;
+    }
+
+    .markdown-section h2 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      border-bottom: 2px solid var(--bg-alt);
+      padding-bottom: 8px;
+      margin-top: 40px;
+    }
+
+    .markdown-section h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 28px;
+    }
+
+    .markdown-section table {
+      font-size: 14px;
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    .markdown-section table th {
+      font-weight: 700;
+      text-align: left;
+      background: var(--bg-alt);
+    }
+
+    .markdown-section table td,
+    .markdown-section table th {
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+    }
+
+    .markdown-section code {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Menlo', monospace;
+      font-size: 13px;
+    }
+
+    .markdown-section pre {
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    /* ── Search in nav bar ── */
+    #nav-search-slot {
+      position: relative;
+    }
+
+    #nav-search-slot .search {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 220px;
+    }
+
+    #nav-search-slot .search .input-wrap {
+      position: relative !important;
+      display: flex !important;
+      align-items: center !important;
+    }
+
+    #nav-search-slot .search .input-wrap input {
+      font-family: 'Inter', sans-serif !important;
+      border-radius: 6px !important;
+      border: 1px solid var(--border) !important;
+      background: var(--bg-alt) !important;
+      font-size: 13px !important;
+      padding: 7px 32px 7px 12px !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      outline: none !important;
+    }
+
+    #nav-search-slot .search .input-wrap input:focus {
+      border-color: var(--primary) !important;
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.1) !important;
+      background: var(--bg) !important;
+    }
+
+    #nav-search-slot .search .input-wrap .clear-button {
+      position: absolute !important;
+      right: 6px !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
+    }
+
+    #nav-search-slot .search .input-wrap .clear-button svg {
+      width: 16px !important;
+      height: 14px !important;
+    }
+
+    #nav-search-slot .search .results-panel {
+      position: absolute !important;
+      top: 100% !important;
+      right: 0 !important;
+      width: 400px !important;
+      max-height: 60vh !important;
+      overflow-y: auto !important;
+      background: var(--bg) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 8px !important;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.12) !important;
+      margin-top: 6px !important;
+      z-index: 300 !important;
+    }
+
+    /* Hide the original search in sidebar */
+    .sidebar > .search {
+      display: none !important;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .brand-header-right a:not(.github-link) { display: none; }
+      #nav-search-slot { display: none; }
+
+      .brand-header { padding: 10px 0; }
+      .brand-header-inner { padding: 0 16px; }
+
+      .brand-header a.brand-logo { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- ── Brand header matching landing page ── -->
+  <header class="brand-header">
+    <div class="brand-header-inner">
+      <div class="brand-header-left">
+        <a href="../" class="brand-logo">
+          <span class="brand-home">home</span><span class="brand-chronicle">chronicle</span>
+        </a>
+      </div>
+      <div class="brand-header-right">
+        <div id="nav-search-slot"></div>
+        <a href="../">Home</a>
+        <a href="https://github.com/havuq/homechronicle/issues">Issues</a>
+        <a href="https://github.com/havuq/homechronicle" class="github-link">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div id="app"></div>
+
+  <script>
+    window.$docsify = {
+      name: 'Documentation',
+      nameLink: '#/',
+      loadSidebar: true,
+      subMaxLevel: 3,
+      search: {
+        placeholder: 'Search docs...',
+        noData: 'No results.',
+        depth: 3
+      },
+      auto2top: true,
+      homepage: 'README.md'
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-sql.min.js"></script>
+  <script>
+    // Move Docsify search box from sidebar into the nav header
+    (function () {
+      var attempts = 0;
+      var timer = setInterval(function () {
+        var search = document.querySelector('.sidebar > .search');
+        var slot = document.getElementById('nav-search-slot');
+        if (search && slot) {
+          slot.appendChild(search);
+          search.style.display = '';
+          clearInterval(timer);
+        }
+        if (++attempts > 50) clearInterval(timer);
+      }, 100);
+    })();
+  </script>
+</body>
+</html>

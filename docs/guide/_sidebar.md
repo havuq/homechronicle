@@ -1,0 +1,12 @@
+- [Home](README.md)
+- **Getting Started**
+  - [Setup Guide](setup.md)
+  - [Device Setup](devices.md)
+- **Reference**
+  - [API Reference](api-reference.md)
+  - [Architecture](architecture.md)
+  - [Environment Variables](environment-variables.md)
+- **Help**
+  - [Troubleshooting](troubleshooting.md)
+  - [Mobile Install (PWA)](mobile-install.md)
+  - [Portainer Deployment](portainer.md)
