@@ -214,7 +214,6 @@ export default function SettingsTab({ setup }) {
           <label className="inline-flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
-              className="accent-blue-600"
               checked={autoScanHomeKitInput}
               onChange={(e) => { setAutoScanHomeKitInput(e.target.checked); setSaveFeedback(null); }}
               disabled={savePending}
@@ -239,7 +238,6 @@ export default function SettingsTab({ setup }) {
           <label className="inline-flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
-              className="accent-indigo-600"
               checked={quietHoursEnabledInput}
               onChange={(e) => { setQuietHoursEnabledInput(e.target.checked); setSaveFeedback(null); }}
               disabled={savePending}

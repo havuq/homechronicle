@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+input[type="checkbox"] {
+  accent-color: rgb(var(--hc-accent-rgb));
+}
+
 @layer base {
   :root {
     --hc-bg: #f8fafc;
